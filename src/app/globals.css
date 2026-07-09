@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0b0c0e;
+  --surface: #111317;
+  --panel: #16191f;
+  --panel-2: #1c2028;
+  --foreground: #f2efe8;
+  --muted: #9a9488;
+  --border: #2a2f38;
+  --brass: #c9a45c;
+  --brass-soft: #e0c07a;
+  --teal: #6fafa0;
+  --teal-soft: #8fc4b7;
+  --success: #4ecf9a;
+  --danger: #e86a72;
+  --warning: #e6a23c;
+  --info: #7aa2ff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-brass: var(--brass);
+  --color-brass-soft: var(--brass-soft);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --font-sans: var(--font-outfit);
+  --font-display: var(--font-instrument);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brass) 35%, transparent);
+}
+
+@keyframes cerebro-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cerebro-pulse-soft {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes cerebro-bar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-fade-up {
+  animation: cerebro-fade-up 0.55s ease-out both;
+}
+
+.animate-fade-up-delay-1 {
+  animation: cerebro-fade-up 0.55s ease-out 0.08s both;
+}
+
+.animate-fade-up-delay-2 {
+  animation: cerebro-fade-up 0.55s ease-out 0.16s both;
+}
+
+.animate-fade-up-delay-3 {
+  animation: cerebro-fade-up 0.55s ease-out 0.24s both;
+}
+
+.animate-pulse-soft {
+  animation: cerebro-pulse-soft 2.4s ease-in-out infinite;
+}
+
+.progress-fill {
+  transform-origin: left center;
+  animation: cerebro-bar 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
