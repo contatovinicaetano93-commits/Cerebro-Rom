@@ -95,15 +95,36 @@ function buildUnit(
   const today = last30[last30.length - 1]!
   const mtdDays = last30.slice(-Math.min(9, last30.length))
 
+  const capacityNext2h = Math.max(1, Math.round((capacity / 8) * 2))
+  const appointmentsNext2h = Math.min(
+    capacityNext2h,
+    Math.round(capacityNext2h * (0.55 + seeded(slug === 'rom-brasil' ? 3 : 9) * 0.4)),
+  )
+  const mixBase = today.newClients + today.returningClients
+
   return {
     unit: UNITS[slug],
     today,
+    opsP0: {
+      openSlotsToday: Math.max(0, capacity - today.appointments),
+      appointmentsNext2h,
+      capacityNext2h,
+      openSlotsNext2h: Math.max(0, capacityNext2h - appointmentsNext2h),
+      cancelledToday: today.cancelled,
+      noShowsToday: today.noShows,
+      newClientsToday: today.newClients,
+      returningClientsToday: today.returningClients,
+      newShare: mixBase > 0 ? today.newClients / mixBase : 0,
+      cancelSource: 'Avec 0052',
+    },
     mtd: {
       revenue: sumField(mtdDays, 'revenue'),
       attended: sumField(mtdDays, 'attended'),
       noShows: sumField(mtdDays, 'noShows'),
       appointments: sumField(mtdDays, 'appointments'),
       newClients: sumField(mtdDays, 'newClients'),
+      returningClients: sumField(mtdDays, 'returningClients'),
+      cancelled: sumField(mtdDays, 'cancelled'),
       goal: monthlyGoal,
     },
     last30,
@@ -164,6 +185,7 @@ export function buildMockOverview(): CerebroOverview {
   const noShows = units.reduce((a, u) => a + u.today.noShows, 0)
   const capacity = units.reduce((a, u) => a + u.today.capacity, 0)
   const newClients = units.reduce((a, u) => a + u.today.newClients, 0)
+  const returningClients = units.reduce((a, u) => a + u.today.returningClients, 0)
   const leads = units.reduce((a, u) => a + u.today.leads, 0)
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
   const ticketAvg =
@@ -172,6 +194,10 @@ export function buildMockOverview(): CerebroOverview {
     (a, u) => a + u.today.noShows * u.today.ticketAvg,
     0,
   )
+  const openSlotsToday = units.reduce((a, u) => a + u.opsP0.openSlotsToday, 0)
+  const openSlotsNext2h = units.reduce((a, u) => a + u.opsP0.openSlotsNext2h, 0)
+  const cancelledToday = units.reduce((a, u) => a + u.opsP0.cancelledToday, 0)
+  const mixBase = newClients + returningClients
 
   const trend30 = brasil.last30.map((row, idx) => {
     const other = iguatemi.last30[idx]!
@@ -254,6 +280,12 @@ export function buildMockOverview(): CerebroOverview {
       revenueAtRisk,
       newClients,
       conversionRate: rate(converted, leads),
+      openSlotsToday,
+      openSlotsNext2h,
+      cancelledToday,
+      noShowsToday: noShows,
+      returningClients,
+      newShare: mixBase > 0 ? newClients / mixBase : 0,
     },
     units,
     comparison: {

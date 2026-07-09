@@ -56,6 +56,28 @@ function buildAlerts(units: UnitSnapshot[], todayGoal: number, todayRevenue: num
       })
     }
 
+    if (u.opsP0.cancelledToday > 0) {
+      alerts.push({
+        id: `cancel-${u.unit.slug}`,
+        severity: u.opsP0.cancelledToday >= 3 ? 'warning' : 'info',
+        unit: u.unit.slug,
+        title: `Cancelamentos em ${u.unit.short}`,
+        detail: `${u.opsP0.cancelledToday} cancelamento(s) hoje (Avec 0052).`,
+        action: 'Oferecer encaixe na lista de espera / WhatsApp',
+      })
+    }
+
+    if (u.opsP0.openSlotsNext2h >= 2) {
+      alerts.push({
+        id: `slots-${u.unit.slug}`,
+        severity: 'info',
+        unit: u.unit.slug,
+        title: `Vagas nas próximas 2h — ${u.unit.short}`,
+        detail: `${u.opsP0.openSlotsNext2h} horário(s) livres estimados · ${u.opsP0.appointmentsNext2h} já agendados.`,
+        action: 'Campanha rápida de encaixe',
+      })
+    }
+
     const sparse =
       u.today.revenue === 0 &&
       u.mtd.revenue === 0 &&
@@ -139,10 +161,15 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const noShows = units.reduce((a, u) => a + u.today.noShows, 0)
   const capacity = units.reduce((a, u) => a + u.today.capacity, 0)
   const newClients = units.reduce((a, u) => a + u.today.newClients, 0)
+  const returningClients = units.reduce((a, u) => a + u.today.returningClients, 0)
   const leads = units.reduce((a, u) => a + u.today.leads, 0)
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
   const ticketAvg = attended > 0 ? Math.round(todayRevenue / attended) : 0
   const revenueAtRisk = units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0)
+  const openSlotsToday = units.reduce((a, u) => a + u.opsP0.openSlotsToday, 0)
+  const openSlotsNext2h = units.reduce((a, u) => a + u.opsP0.openSlotsNext2h, 0)
+  const cancelledToday = units.reduce((a, u) => a + u.opsP0.cancelledToday, 0)
+  const mixBase = newClients + returningClients
 
   return {
     todayRevenue,
@@ -158,6 +185,12 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     revenueAtRisk,
     newClients,
     conversionRate: rate(converted, leads),
+    openSlotsToday,
+    openSlotsNext2h,
+    cancelledToday,
+    noShowsToday: noShows,
+    returningClients,
+    newShare: mixBase > 0 ? newClients / mixBase : 0,
   }
 }
 

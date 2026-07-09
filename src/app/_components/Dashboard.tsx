@@ -29,6 +29,7 @@ import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
 
 type SectionKey =
+  | 'ops'
   | 'trend'
   | 'leaders'
   | 'brasil'
@@ -37,6 +38,7 @@ type SectionKey =
   | 'decisions'
 
 const DEFAULT_OPEN: Record<SectionKey, boolean> = {
+  ops: true,
   trend: false,
   leaders: false,
   brasil: false,
@@ -169,6 +171,7 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
 
   function expandAll() {
     setOpenMap({
+      ops: true,
       trend: true,
       leaders: true,
       brasil: true,
@@ -180,6 +183,7 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
 
   function collapseSecondary() {
     setOpenMap({
+      ops: false,
       trend: false,
       leaders: false,
       brasil: false,
@@ -309,7 +313,79 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
           </p>
         ) : null}
 
-        <section className="mt-6 grid gap-4 lg:grid-cols-5">
+        <section className="mt-6">
+          <CollapsibleSection
+            eyebrow="P0 · Operação"
+            title="Ação do dia"
+            subtitle="Vagas, cancelamentos e mix novos/recorrentes — Avec 0051 / 0052 / 0002."
+            summary={`${c.openSlotsToday} vagas hoje · ${c.openSlotsNext2h} nas 2h · ${c.cancelledToday} cancel. · novos ${formatPct(c.newShare)}`}
+            open={openMap.ops}
+            onOpenChange={(v) => setSection('ops', v)}
+          >
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-border/60 bg-panel-2/60 px-3 py-3">
+                <KpiStat
+                  label="Vagas hoje"
+                  value={String(c.openSlotsToday)}
+                  hint="Capacidade − agendados (0051)"
+                  tone={c.openSlotsToday >= 4 ? 'warn' : 'default'}
+                />
+              </div>
+              <div className="rounded-xl border border-border/60 bg-panel-2/60 px-3 py-3">
+                <KpiStat
+                  label="Vagas nas próximas 2h"
+                  value={String(c.openSlotsNext2h)}
+                  hint="Encaixe imediato"
+                  tone={c.openSlotsNext2h >= 2 ? 'warn' : 'good'}
+                />
+              </div>
+              <div className="rounded-xl border border-border/60 bg-panel-2/60 px-3 py-3">
+                <KpiStat
+                  label="Cancel. · No-show"
+                  value={`${c.cancelledToday} · ${c.noShowsToday}`}
+                  hint="Avec 0052 + métricas do dia"
+                  tone={c.cancelledToday + c.noShowsToday > 0 ? 'warn' : 'good'}
+                />
+              </div>
+              <div className="rounded-xl border border-border/60 bg-panel-2/60 px-3 py-3">
+                <KpiStat
+                  label="Novos vs recorrentes"
+                  value={`${c.newClients} · ${c.returningClients}`}
+                  hint={`Share novos ${formatPct(c.newShare)}`}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {data.units.map((u) => (
+                <div
+                  key={u.unit.slug}
+                  className="rounded-xl border border-border/60 bg-panel-2/40 px-4 py-3"
+                >
+                  <p className={`text-[0.65rem] uppercase tracking-[0.18em] ${unitAccent(u.unit.slug)}`}>
+                    {u.unit.short}
+                  </p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+                    <div>
+                      <p className="text-muted">Vagas 2h</p>
+                      <p className="mt-0.5 text-sm font-medium">{u.opsP0.openSlotsNext2h}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted">Cancel.</p>
+                      <p className="mt-0.5 text-sm font-medium">{u.opsP0.cancelledToday}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted">Novos %</p>
+                      <p className="mt-0.5 text-sm font-medium">{formatPct(u.opsP0.newShare)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+        </section>
+
+        <section className="mt-4 grid gap-4 lg:grid-cols-5">
           <CollapsibleSection
             className="lg:col-span-3"
             eyebrow="Tendência"

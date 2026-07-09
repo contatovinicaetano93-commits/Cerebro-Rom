@@ -5,7 +5,7 @@ import {
   todayIsoSaoPaulo,
   type UnitRuntimeConfig,
 } from '@/lib/unit-config'
-import type { DayMetrics, UnitSnapshot } from '@/lib/types'
+import type { DayMetrics, OpsP0, UnitSnapshot } from '@/lib/types'
 
 function n(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -22,11 +22,7 @@ function isoDaysBackFrom(today: string, back: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-function emptyDay(
-  day: string,
-  capacity: number,
-  dailyGoal: number,
-): DayMetrics {
+function emptyDay(day: string, capacity: number, dailyGoal: number): DayMetrics {
   return {
     day,
     revenue: 0,
@@ -41,6 +37,27 @@ function emptyDay(
     dailyGoal,
     leads: 0,
     converted: 0,
+  }
+}
+
+function buildOpsP0(today: DayMetrics, appointmentsNext2h: number): OpsP0 {
+  const openSlotsToday = Math.max(0, today.capacity - today.appointments)
+  const capacityNext2h = Math.max(1, Math.round((today.capacity / 8) * 2))
+  const openSlotsNext2h = Math.max(0, capacityNext2h - appointmentsNext2h)
+  const mixBase = today.newClients + today.returningClients
+  const newShare = mixBase > 0 ? today.newClients / mixBase : 0
+
+  return {
+    openSlotsToday,
+    appointmentsNext2h,
+    capacityNext2h,
+    openSlotsNext2h,
+    cancelledToday: today.cancelled,
+    noShowsToday: today.noShows,
+    newClientsToday: today.newClients,
+    returningClientsToday: today.returningClients,
+    newShare,
+    cancelSource: 'Avec 0052',
   }
 }
 
@@ -74,7 +91,8 @@ function rowToDay(
   if (!row) return emptyDay(day, capacity, dailyGoal)
   const attended = n(row.attended)
   const revenue = n(row.revenue)
-  const ticketAvg = row.ticket_avg != null ? n(row.ticket_avg) : attended > 0 ? revenue / attended : 0
+  const ticketAvg =
+    row.ticket_avg != null ? n(row.ticket_avg) : attended > 0 ? revenue / attended : 0
   return {
     day,
     revenue,
@@ -122,7 +140,6 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
 
   let leadsToday = 0
   let convertedToday = 0
-  let conversionRate = 0
   try {
     const leadRows = (await sql`
       select
@@ -133,13 +150,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     `) as { leads: number; converted: number }[]
     leadsToday = n(leadRows[0]?.leads)
     convertedToday = n(leadRows[0]?.converted)
-
-    const conv = (await sql`select conversion_rate from v_kpi_conversion limit 1`) as {
-      conversion_rate: unknown
-    }[]
-    conversionRate = n(conv[0]?.conversion_rate)
   } catch {
-    // views/tabelas de contato podem faltar em unidade nova
+    // ok
   }
 
   const last30: DayMetrics[] = []
@@ -158,8 +170,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     )
   }
 
-  // Se hoje não tem linha mas há agenda em client_services, completa appointments
   const todayMetrics = last30[last30.length - 1]!
+  let appointmentsNext2h = 0
   try {
     const appt = (await sql`
       select count(*)::int as n
@@ -172,12 +184,18 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     if (scheduled > todayMetrics.appointments) {
       todayMetrics.appointments = scheduled
     }
+
+    const next2h = (await sql`
+      select count(*)::int as n
+      from client_services
+      where active = true
+        and scheduled_at is not null
+        and scheduled_at >= now()
+        and scheduled_at < now() + interval '2 hours'
+    `) as { n: number }[]
+    appointmentsNext2h = n(next2h[0]?.n)
   } catch {
     // ok
-  }
-
-  if (conversionRate > 0 && todayMetrics.leads === 0) {
-    // mantém conversão global só no consolidado via leads/converted do dia
   }
 
   const mtdRows = last30.filter((d) => d.day >= monthStart)
@@ -187,8 +205,12 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     noShows: mtdRows.reduce((a, d) => a + d.noShows, 0),
     appointments: mtdRows.reduce((a, d) => a + d.appointments, 0),
     newClients: mtdRows.reduce((a, d) => a + d.newClients, 0),
+    returningClients: mtdRows.reduce((a, d) => a + d.returningClients, 0),
+    cancelled: mtdRows.reduce((a, d) => a + d.cancelled, 0),
     goal: config.dailyGoal * dayOfMonth(today),
   }
+
+  const opsP0 = buildOpsP0(todayMetrics, appointmentsNext2h)
 
   let topProfessionals: UnitSnapshot['topProfessionals'] = []
   if (await tableExists(sql, 'professionals')) {
@@ -266,11 +288,9 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
       const ageMs = Date.now() - new Date(last.created_at).getTime()
       const ageH = ageMs / 3_600_000
       const missingTokenHint =
-        !last.error ||
-        /AVEC_API_TOKEN|não configurado|nao configurado/i.test(last.error)
+        !last.error || /AVEC_API_TOKEN|não configurado|nao configurado/i.test(last.error)
 
       if (last.status === 'error' && ageH <= 24) {
-        // Erro recente: crítico. Erro antigo de schema (já corrigido) vira stale.
         sync = {
           status: ageH > 6 ? 'stale' : 'error',
           lastSyncAt,
@@ -302,12 +322,13 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
       }
     }
   } catch {
-    // tabela pode não existir
+    // ok
   }
 
   return {
     unit: config.meta,
     today: todayMetrics,
+    opsP0,
     mtd,
     last30,
     topProfessionals,
