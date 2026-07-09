@@ -12,6 +12,13 @@ export function formatPct(value: number | null | undefined, digits = 0): string 
   return `${(value * 100).toFixed(digits)}%`
 }
 
+export function formatSignedPct(value: number | null | undefined, digits = 0): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const pct = value * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(digits)}%`
+}
+
 export function formatNumber(value: number | null | undefined): string {
   const n = typeof value === 'number' && Number.isFinite(value) ? value : 0
   return new Intl.NumberFormat('pt-BR').format(n)

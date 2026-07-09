@@ -11,8 +11,8 @@ Projeto Vercel: `cerebro-rom` · SSO da Vercel desligado (login é só o do app)
 
 | Campo | Valor |
 |-------|-------|
-| Usuário | `waltter` |
-| Senha | `O7Kl6YjLqzEG4ZR7` |
+| Usuário | `waltter` (ou o valor de `CEREBRO_ADMIN_USER` na Vercel) |
+| Senha | Definida em `CEREBRO_ADMIN_PASSWORD` na Vercel — **não compartilhe por WhatsApp ou docs** |
 
 ## No celular (atalho)
 
@@ -47,7 +47,7 @@ Waltter, seu painel Cérebro ROM:
 https://cerebro-rom.vercel.app
 
 Usuário: waltter
-Senha: O7Kl6YjLqzEG4ZR7
+Senha: (enviada em canal privado — não colar em grupo)
 
 Sugestão: abra no Safari → Adicionar à Tela de Início.
 Manhã: meta, ocupação e alertas. É o consolidado Brasil + Iguatemi.

@@ -95,7 +95,7 @@ export interface DecisionInsight {
 
 export interface CerebroOverview {
   generatedAt: string
-  mode: 'mock' | 'live'
+  mode: 'mock' | 'live' | 'fallback'
   periodLabel: string
   consolidated: {
     todayRevenue: number

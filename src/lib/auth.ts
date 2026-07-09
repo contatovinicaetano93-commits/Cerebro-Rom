@@ -22,6 +22,11 @@ export function isAuthEnabled() {
   return Boolean(getAdminPassword())
 }
 
+/** Em produção, auth é obrigatório mesmo que a senha não esteja configurada (fail-closed). */
+export function isAuthRequired() {
+  return process.env.NODE_ENV === 'production' || isAuthEnabled()
+}
+
 /** HMAC-SHA256 compatível com Edge Runtime (Web Crypto). */
 export async function createSessionToken() {
   const password = getAdminPassword()

@@ -3,11 +3,20 @@ import type { NextRequest } from 'next/server'
 import { isAuthorized, isAuthEnabled } from '@/lib/auth'
 
 export async function middleware(req: NextRequest) {
-  if (!isAuthEnabled()) return NextResponse.next()
-
   const { pathname } = req.nextUrl
 
   if (pathname === '/login' || pathname.startsWith('/api/auth/')) {
+    return NextResponse.next()
+  }
+
+  if (!isAuthEnabled()) {
+    if (process.env.NODE_ENV === 'production') {
+      const msg = 'Auth não configurado — defina CEREBRO_ADMIN_PASSWORD na Vercel'
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: msg }, { status: 503 })
+      }
+      return new NextResponse(msg, { status: 503 })
+    }
     return NextResponse.next()
   }
 
@@ -23,5 +32,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/login', '/api/:path*'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

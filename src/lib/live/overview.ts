@@ -112,7 +112,8 @@ function buildAlerts(units: UnitSnapshot[], todayGoal: number, todayRevenue: num
 }
 
 function buildDecisions(units: UnitSnapshot[], deltaRevenuePct: number): DecisionInsight[] {
-  const [brasil, iguatemi] = units
+  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
+  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
   const decisions: DecisionInsight[] = []
 
   if (brasil && iguatemi) {
@@ -247,12 +248,16 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
         ? 1
         : 0
 
-  const days = brasil?.last30 ?? iguatemi?.last30 ?? []
-  const trend30 = days.map((row, idx) => {
-    const b = brasil?.last30[idx]?.revenue ?? 0
-    const i = iguatemi?.last30[idx]?.revenue ?? 0
+  const brasilByDay = new Map(brasil?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  const iguatemiByDay = new Map(iguatemi?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  const allDays = [
+    ...new Set([...brasilByDay.keys(), ...iguatemiByDay.keys()]),
+  ].sort()
+  const trend30 = allDays.map((day) => {
+    const b = brasilByDay.get(day) ?? 0
+    const i = iguatemiByDay.get(day) ?? 0
     return {
-      day: row.day.slice(5),
+      day: day.slice(5),
       brasil: b,
       iguatemi: i,
       total: b + i,
@@ -302,14 +307,15 @@ export async function buildOverview(): Promise<CerebroOverview> {
     return await buildLiveOverview()
   } catch (err) {
     const mock = buildMockOverview()
+    mock.mode = 'fallback'
     mock.alerts = [
       {
         id: 'live-fallback',
         severity: 'critical',
         unit: 'both',
-        title: 'Live falhou — exibindo mock',
+        title: 'Live falhou — dados abaixo são mock (não use para decisão)',
         detail: String(err instanceof Error ? err.message : err),
-        action: 'Checar NEON_*_DATABASE_URL e conectividade',
+        action: 'Checar NEON_*_DATABASE_URL e conectividade antes de agir',
       },
       ...mock.alerts,
     ]

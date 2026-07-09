@@ -1,7 +1,9 @@
 import { getSql } from '@/lib/db'
 import {
   dayOfMonth,
+  isoDaysBackFrom,
   monthStartIso,
+  SALON_HOURS_PER_DAY,
   todayIsoSaoPaulo,
   type UnitRuntimeConfig,
 } from '@/lib/unit-config'
@@ -14,12 +16,6 @@ function n(v: unknown): number {
     return Number.isFinite(x) ? x : 0
   }
   return 0
-}
-
-function isoDaysBackFrom(today: string, back: number): string {
-  const d = new Date(`${today}T12:00:00`)
-  d.setDate(d.getDate() - back)
-  return d.toISOString().slice(0, 10)
 }
 
 function emptyDay(day: string, capacity: number, dailyGoal: number): DayMetrics {
@@ -42,7 +38,7 @@ function emptyDay(day: string, capacity: number, dailyGoal: number): DayMetrics 
 
 function buildOpsP0(today: DayMetrics, appointmentsNext2h: number): OpsP0 {
   const openSlotsToday = Math.max(0, today.capacity - today.appointments)
-  const capacityNext2h = Math.max(1, Math.round((today.capacity / 8) * 2))
+  const capacityNext2h = Math.max(1, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
   const openSlotsNext2h = Math.max(0, capacityNext2h - appointmentsNext2h)
   const mixBase = today.newClients + today.returningClients
   const newShare = mixBase > 0 ? today.newClients / mixBase : 0
