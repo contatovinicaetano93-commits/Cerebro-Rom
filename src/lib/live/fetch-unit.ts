@@ -186,8 +186,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
       from client_services
       where active = true
         and scheduled_at is not null
-        and scheduled_at >= (now() at time zone 'America/Sao_Paulo')
-        and scheduled_at < (now() at time zone 'America/Sao_Paulo') + interval '2 hours'
+        and scheduled_at >= now()
+        and scheduled_at < now() + interval '2 hours'
     `) as { n: number }[]
     appointmentsNext2h = n(next2h[0]?.n)
   } catch {
