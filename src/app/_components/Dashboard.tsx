@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -23,8 +24,26 @@ import {
 } from 'lucide-react'
 import type { CerebroOverview, UnitSnapshot } from '@/lib/types'
 import { formatCurrency, formatDateTime, formatNumber, formatPct } from '@/lib/format'
-import { KpiStat, Panel, ProgressBar, SectionTitle } from './ui'
+import { KpiStat, Panel, ProgressBar } from './ui'
+import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
+
+type SectionKey =
+  | 'trend'
+  | 'leaders'
+  | 'brasil'
+  | 'iguatemi'
+  | 'alerts'
+  | 'decisions'
+
+const DEFAULT_OPEN: Record<SectionKey, boolean> = {
+  trend: false,
+  leaders: false,
+  brasil: false,
+  iguatemi: false,
+  alerts: true,
+  decisions: false,
+}
 
 function severityStyles(severity: 'critical' | 'warning' | 'info') {
   if (severity === 'critical') return 'border-danger/40 bg-danger/10 text-danger'
@@ -36,7 +55,7 @@ function unitAccent(slug: string) {
   return slug === 'rom-brasil' ? 'text-brass' : 'text-teal'
 }
 
-function UnitCard({ unit }: { unit: UnitSnapshot }) {
+function UnitBody({ unit }: { unit: UnitSnapshot }) {
   const occupancy = unit.today.appointments / Math.max(1, unit.today.capacity)
   const attendance = unit.today.attended / Math.max(1, unit.today.appointments)
   const goalProgress = unit.today.revenue / Math.max(1, unit.today.dailyGoal)
@@ -44,28 +63,8 @@ function UnitCard({ unit }: { unit: UnitSnapshot }) {
   const accentBar = unit.unit.slug === 'rom-brasil' ? 'brass' : 'teal'
 
   return (
-    <Panel className="animate-fade-up-delay-2">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`text-[0.65rem] uppercase tracking-[0.2em] ${unitAccent(unit.unit.slug)}`}>
-            Unidade
-          </p>
-          <h3 className="mt-1 font-display text-2xl tracking-tight">{unit.unit.name}</h3>
-        </div>
-        <div
-          className={`rounded-full border px-2.5 py-1 text-[0.65rem] uppercase tracking-wider ${
-            unit.sync.status === 'ok'
-              ? 'border-success/40 text-success'
-              : unit.sync.status === 'stale'
-                ? 'border-warning/40 text-warning'
-                : 'border-danger/40 text-danger'
-          }`}
-        >
-          {unit.sync.status === 'ok' ? 'Sync OK' : unit.sync.status === 'stale' ? 'Sync atrasado' : 'Erro'}
-        </div>
-      </div>
-
-      <div className="mt-5 grid grid-cols-2 gap-4">
+    <>
+      <div className="grid grid-cols-2 gap-4">
         <KpiStat
           label="Faturamento hoje"
           value={formatCurrency(unit.today.revenue)}
@@ -113,22 +112,30 @@ function UnitCard({ unit }: { unit: UnitSnapshot }) {
       </div>
 
       <div className="mt-5">
-        <p className="text-[0.65rem] uppercase tracking-[0.18em] text-muted">Top profissionais (MTD)</p>
+        <p className="text-[0.65rem] uppercase tracking-[0.18em] text-muted">
+          Top profissionais (MTD)
+        </p>
         <ul className="mt-2 space-y-2">
-          {unit.topProfessionals.map((p) => (
-            <li
-              key={p.id}
-              className="flex items-center justify-between gap-3 rounded-xl bg-panel-2/80 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{p.name}</p>
-                <p className="text-xs text-muted">
-                  {formatNumber(p.attended)} atend. · ocup. {formatPct(p.occupancy)}
-                </p>
-              </div>
-              <p className="shrink-0 text-sm text-brass-soft">{formatCurrency(p.revenue)}</p>
+          {unit.topProfessionals.length === 0 ? (
+            <li className="rounded-xl bg-panel-2/80 px-3 py-2 text-xs text-muted">
+              Sem ranking ainda — aguardando métricas por profissional.
             </li>
-          ))}
+          ) : (
+            unit.topProfessionals.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between gap-3 rounded-xl bg-panel-2/80 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{p.name}</p>
+                  <p className="text-xs text-muted">
+                    {formatNumber(p.attended)} atend. · ocup. {formatPct(p.occupancy)}
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm text-brass-soft">{formatCurrency(p.revenue)}</p>
+              </li>
+            ))
+          )}
         </ul>
       </div>
 
@@ -136,7 +143,7 @@ function UnitCard({ unit }: { unit: UnitSnapshot }) {
         <Clock3 size={12} />
         {unit.sync.label}
       </p>
-    </Panel>
+    </>
   )
 }
 
@@ -144,6 +151,47 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
   const c = data.consolidated
   const goalTone =
     c.todayGoalProgress >= 1 ? 'good' : c.todayGoalProgress >= 0.7 ? 'default' : 'warn'
+
+  const [openMap, setOpenMap] = useState<Record<SectionKey, boolean>>(DEFAULT_OPEN)
+
+  const allOpen = useMemo(
+    () => (Object.keys(DEFAULT_OPEN) as SectionKey[]).every((k) => openMap[k]),
+    [openMap],
+  )
+  const anySecondaryOpen = useMemo(
+    () => (Object.keys(DEFAULT_OPEN) as SectionKey[]).some((k) => openMap[k]),
+    [openMap],
+  )
+
+  function setSection(key: SectionKey, open: boolean) {
+    setOpenMap((prev) => ({ ...prev, [key]: open }))
+  }
+
+  function expandAll() {
+    setOpenMap({
+      trend: true,
+      leaders: true,
+      brasil: true,
+      iguatemi: true,
+      alerts: true,
+      decisions: true,
+    })
+  }
+
+  function collapseSecondary() {
+    setOpenMap({
+      trend: false,
+      leaders: false,
+      brasil: false,
+      iguatemi: false,
+      alerts: false,
+      decisions: false,
+    })
+  }
+
+  const brasil = data.units.find((u) => u.unit.slug === 'rom-brasil')
+  const iguatemi = data.units.find((u) => u.unit.slug === 'rom-iguatemi')
+  const criticalAlerts = data.alerts.filter((a) => a.severity === 'critical').length
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -191,17 +239,27 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
       </header>
 
       <main className="relative mx-auto w-full max-w-[1400px] px-5 py-6 sm:px-8 sm:py-8">
-        <section className="animate-fade-up">
-          <p className="text-[0.65rem] uppercase tracking-[0.25em] text-brass">Visão consolidada</p>
-          <h1 className="mt-2 max-w-3xl font-display text-3xl leading-tight tracking-tight sm:text-5xl">
-            Duas unidades. Um comando. Números para decidir.
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm text-muted sm:text-base">
-            KPIs de receita, ocupação, comparecimento e risco — lado a lado — para conduzir o
-            negócio com precisão.
-          </p>
+        <section className="animate-fade-up flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-brass">
+              Visão consolidada
+            </p>
+            <h1 className="mt-2 max-w-3xl font-display text-3xl leading-tight tracking-tight sm:text-5xl">
+              Duas unidades. Um comando.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm text-muted sm:text-base">
+              Resumo sempre aberto. Detalhes em abas — abra só o que precisa.
+            </p>
+          </div>
+          <SectionControls
+            allOpen={allOpen}
+            anyOpen={anySecondaryOpen}
+            onExpandAll={expandAll}
+            onCollapseAll={collapseSecondary}
+          />
         </section>
 
+        {/* Sempre visível — comando do dia */}
         <section className="animate-fade-up-delay-1 mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Panel>
             <KpiStat
@@ -244,13 +302,23 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
           </Panel>
         </section>
 
-        <section className="mt-8 grid gap-4 lg:grid-cols-5">
-          <Panel className="animate-fade-up-delay-2 lg:col-span-3">
-            <SectionTitle
-              eyebrow="Tendência"
-              title="Receita 30 dias"
-              subtitle="Brasil vs Iguatemi — onde o consolidado está sendo construído."
-            />
+        {!anySecondaryOpen ? (
+          <p className="mt-4 text-xs text-muted">
+            Painel limpo — use <span className="text-brass">Abrir</span> nas abas abaixo ou{' '}
+            <span className="text-brass">Abrir tudo</span>.
+          </p>
+        ) : null}
+
+        <section className="mt-6 grid gap-4 lg:grid-cols-5">
+          <CollapsibleSection
+            className="lg:col-span-3"
+            eyebrow="Tendência"
+            title="Receita 30 dias"
+            subtitle="Brasil vs Iguatemi — onde o consolidado está sendo construído."
+            summary="Gráfico consolidado · abrir para detalhar"
+            open={openMap.trend}
+            onOpenChange={(v) => setSection('trend', v)}
+          >
             <div className="h-64 w-full sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={data.trend30} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -307,14 +375,17 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </Panel>
+          </CollapsibleSection>
 
-          <Panel className="animate-fade-up-delay-3 lg:col-span-2">
-            <SectionTitle
-              eyebrow="Comparativo"
-              title="Quem lidera"
-              subtitle="Sinais rápidos para alocar atenção."
-            />
+          <CollapsibleSection
+            className="lg:col-span-2"
+            eyebrow="Comparativo"
+            title="Quem lidera"
+            subtitle="Sinais rápidos para alocar atenção."
+            summary={`Receita: ${data.comparison.revenueLeader === 'rom-brasil' ? 'Brasil' : 'Iguatemi'}`}
+            open={openMap.leaders}
+            onOpenChange={(v) => setSection('leaders', v)}
+          >
             <ul className="space-y-3">
               {[
                 {
@@ -339,8 +410,7 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                 },
               ].map((row) => {
                 const Icon = row.icon
-                const name =
-                  row.leader === 'rom-brasil' ? 'ROM Brasil' : 'ROM Iguatemi'
+                const name = row.leader === 'rom-brasil' ? 'ROM Brasil' : 'ROM Iguatemi'
                 return (
                   <li
                     key={row.label}
@@ -362,22 +432,49 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                 {formatPct(Math.abs(data.comparison.deltaRevenuePct))}
               </span>
             </p>
-          </Panel>
+          </CollapsibleSection>
         </section>
 
-        <section className="mt-8 grid gap-4 lg:grid-cols-2">
-          {data.units.map((unit) => (
-            <UnitCard key={unit.unit.slug} unit={unit} />
-          ))}
+        <section className="mt-4 grid gap-4 lg:grid-cols-2">
+          {brasil ? (
+            <CollapsibleSection
+              eyebrow="Unidade"
+              title={brasil.unit.name}
+              subtitle={brasil.sync.label}
+              summary={`${formatCurrency(brasil.today.revenue)} hoje · ${brasil.today.appointments} agend. · sync ${brasil.sync.status}`}
+              open={openMap.brasil}
+              onOpenChange={(v) => setSection('brasil', v)}
+            >
+              <UnitBody unit={brasil} />
+            </CollapsibleSection>
+          ) : null}
+          {iguatemi ? (
+            <CollapsibleSection
+              eyebrow="Unidade"
+              title={iguatemi.unit.name}
+              subtitle={iguatemi.sync.label}
+              summary={`${formatCurrency(iguatemi.today.revenue)} hoje · ${iguatemi.today.appointments} agend. · sync ${iguatemi.sync.status}`}
+              open={openMap.iguatemi}
+              onOpenChange={(v) => setSection('iguatemi', v)}
+            >
+              <UnitBody unit={iguatemi} />
+            </CollapsibleSection>
+          ) : null}
         </section>
 
-        <section className="mt-8 grid gap-4 lg:grid-cols-2">
-          <Panel className="animate-fade-up-delay-2">
-            <SectionTitle
-              eyebrow="Alertas"
-              title="O que exige ação agora"
-              subtitle="Prioridade para não perder receita nem qualidade de dado."
-            />
+        <section className="mt-4 grid gap-4 lg:grid-cols-2">
+          <CollapsibleSection
+            eyebrow="Alertas"
+            title="O que exige ação agora"
+            subtitle="Prioridade para não perder receita nem qualidade de dado."
+            summary={
+              data.alerts.length === 0
+                ? 'Nenhum alerta'
+                : `${data.alerts.length} alerta(s)${criticalAlerts ? ` · ${criticalAlerts} crítico(s)` : ''}`
+            }
+            open={openMap.alerts}
+            onOpenChange={(v) => setSection('alerts', v)}
+          >
             <ul className="space-y-3">
               {data.alerts.map((alert) => (
                 <li
@@ -398,14 +495,16 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                 </li>
               ))}
             </ul>
-          </Panel>
+          </CollapsibleSection>
 
-          <Panel className="animate-fade-up-delay-3">
-            <SectionTitle
-              eyebrow="Direção"
-              title="Leituras para decidir"
-              subtitle="Insights gerados a partir dos KPIs — o que mover primeiro."
-            />
+          <CollapsibleSection
+            eyebrow="Direção"
+            title="Leituras para decidir"
+            subtitle="Insights gerados a partir dos KPIs — o que mover primeiro."
+            summary={`${data.decisions.length} leitura(s) de decisão`}
+            open={openMap.decisions}
+            onOpenChange={(v) => setSection('decisions', v)}
+          >
             <ul className="space-y-3">
               {data.decisions.map((d) => (
                 <li
@@ -423,7 +522,7 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                 </li>
               ))}
             </ul>
-          </Panel>
+          </CollapsibleSection>
         </section>
 
         <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-5 text-xs text-muted">
@@ -435,7 +534,7 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
           </p>
           <p className="flex items-center gap-1.5">
             <RefreshCw size={12} />
-            Cérebro v0.2 · {data.mode}
+            Cérebro v0.3 · {data.mode}
           </p>
         </footer>
       </main>
