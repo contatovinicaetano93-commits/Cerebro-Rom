@@ -12,11 +12,24 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false
     fetch('/api/overview', { cache: 'no-store' })
-      .then((r) => r.json())
+      .then(async (res) => {
+        if (res.status === 401) {
+          window.location.href = '/login?next=/'
+          return null
+        }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(
+            typeof body?.error === 'string' ? body.error : `Erro ao carregar (${res.status})`,
+          )
+        }
+        return res.json() as Promise<{ data?: CerebroOverview; error?: string }>
+      })
       .then((json) => {
-        if (cancelled) return
+        if (cancelled || json == null) return
         if (json.error) setError(json.error)
-        else setData(json.data)
+        else if (json.data) setData(json.data)
+        else setError('Resposta vazia')
       })
       .catch((e) => {
         if (!cancelled) setError(String(e))

@@ -23,7 +23,7 @@ import {
   Users,
 } from 'lucide-react'
 import type { CerebroOverview, UnitSnapshot } from '@/lib/types'
-import { formatCurrency, formatDateTime, formatNumber, formatPct } from '@/lib/format'
+import { formatCurrency, formatDateTime, formatNumber, formatPct, formatSignedPct } from '@/lib/format'
 import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
@@ -182,15 +182,14 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
   }
 
   function collapseSecondary() {
-    setOpenMap({
-      ops: false,
+    setOpenMap((prev) => ({
+      ...prev,
       trend: false,
       leaders: false,
       brasil: false,
       iguatemi: false,
-      alerts: false,
       decisions: false,
-    })
+    }))
   }
 
   const brasil = data.units.find((u) => u.unit.slug === 'rom-brasil')
@@ -232,10 +231,12 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
               className={`rounded-full border px-3 py-1 text-[0.65rem] uppercase tracking-wider ${
                 data.mode === 'live'
                   ? 'animate-pulse-soft border-success/35 bg-success/10 text-success'
-                  : 'border-brass/25 bg-brass/10 text-brass'
+                  : data.mode === 'fallback'
+                    ? 'border-danger/35 bg-danger/10 text-danger'
+                    : 'border-brass/25 bg-brass/10 text-brass'
               }`}
             >
-              {data.mode === 'live' ? 'Live Neon' : 'Mock'}
+              {data.mode === 'live' ? 'Live Neon' : data.mode === 'fallback' ? 'Fallback' : 'Mock'}
             </div>
             <LogoutButton />
           </div>
@@ -243,6 +244,12 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
       </header>
 
       <main className="relative mx-auto w-full max-w-[1400px] px-5 py-6 sm:px-8 sm:py-8">
+        {data.mode === 'fallback' ? (
+          <div className="mb-6 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+            <strong>Live indisponível.</strong> Os KPIs abaixo são dados mock — não use para
+            decisão operacional até o Neon responder.
+          </div>
+        ) : null}
         <section className="animate-fade-up flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[0.65rem] uppercase tracking-[0.25em] text-brass">
@@ -504,8 +511,7 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
             <p className="mt-4 text-xs text-muted">
               Delta Brasil vs Iguatemi (MTD):{' '}
               <span className="text-foreground">
-                {data.comparison.deltaRevenuePct >= 0 ? '+' : ''}
-                {formatPct(Math.abs(data.comparison.deltaRevenuePct))}
+                {formatSignedPct(data.comparison.deltaRevenuePct)}
               </span>
             </p>
           </CollapsibleSection>
@@ -606,7 +612,9 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
             Atualizado {formatDateTime(data.generatedAt)} ·{' '}
             {data.mode === 'live'
               ? 'Lendo Neons Brasil + Iguatemi (read-only)'
-              : 'Modo mock — configure NEON_*_DATABASE_URL'}
+              : data.mode === 'fallback'
+                ? 'Fallback mock — live falhou'
+                : 'Modo mock — configure NEON_*_DATABASE_URL'}
           </p>
           <p className="flex items-center gap-1.5">
             <RefreshCw size={12} />

@@ -9,6 +9,12 @@ import {
 
 export async function POST(req: Request) {
   if (!isAuthEnabled()) {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Auth não configurado — defina CEREBRO_ADMIN_PASSWORD' },
+        { status: 503 },
+      )
+    }
     return NextResponse.json({ data: { auth: 'disabled' } })
   }
 
