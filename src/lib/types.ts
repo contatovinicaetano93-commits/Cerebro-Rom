@@ -23,34 +23,41 @@ export interface DayMetrics {
   converted: number
 }
 
-/** P0 — operação do dia (Avec 0051 / 0052 / 0002 + métricas ROM). */
-export interface OpsP0 {
-  /** Horários ainda livres hoje (capacidade − agendados) */
+/** Ação do dia — derivados de today + agenda 2h */
+export interface OpsToday {
   openSlotsToday: number
-  /** Agendamentos nas próximas ~2h (encaixe imediato) */
   appointmentsNext2h: number
-  /** Capacidade estimada nas próximas 2h */
   capacityNext2h: number
-  /** Vagas estimadas nas próximas 2h */
   openSlotsNext2h: number
-  /** Cancelamentos do dia (Avec 0052) */
-  cancelledToday: number
-  /** No-shows do dia */
-  noShowsToday: number
-  /** Novos clientes do dia */
-  newClientsToday: number
-  /** Recorrentes do dia */
-  returningClientsToday: number
-  /** Share novos (0–1) entre novos+recorrentes */
   newShare: number
-  /** Fonte Avec dos cancelamentos */
-  cancelSource: string
+}
+
+/** Gestão — Avec 0021, 0126, 0032, 0107, 0003 + 0007, 0017 */
+export interface OpsWeek {
+  professionals: { name: string; revenue: number; attended: number; ticketAvg: number; occupancy: number }[]
+  services: { name: string; quantity: number; revenue: number }[]
+  acquisition: { channel: string; clients: number }[]
+  reactivationCount: number
+  returnRate: number
+  newClientsPeriod: number
+}
+
+/** Comercial leve — Avec 0056, 0061, 0104, 0001 (sem mix pagamento) */
+export interface OpsCommerce {
+  bookingChannels: { channel: string; count: number }[]
+  packages: { name: string; quantity: number; revenue: number }[]
+  packagesSold: number
+  ratingsAvg: number
+  ratingsCount: number
+  birthdayCount: number
 }
 
 export interface UnitSnapshot {
   unit: UnitMeta
   today: DayMetrics
-  opsP0: OpsP0
+  opsToday: OpsToday
+  opsWeek: OpsWeek
+  opsCommerce: OpsCommerce
   mtd: {
     revenue: number
     attended: number
@@ -62,14 +69,6 @@ export interface UnitSnapshot {
     goal: number
   }
   last30: DayMetrics[]
-  topProfessionals: {
-    id: string
-    name: string
-    revenue: number
-    attended: number
-    ticketAvg: number
-    occupancy: number
-  }[]
   sync: {
     status: 'ok' | 'stale' | 'error'
     lastSyncAt: string
@@ -86,16 +85,20 @@ export interface AlertItem {
   action: string
 }
 
-export interface DecisionInsight {
-  id: string
-  title: string
-  detail: string
-  impact: string
+/** Quem lidera cada métrica entre as unidades — só existe com as duas ao vivo. */
+export interface UnitComparison {
+  revenueLeader: UnitSlug
+  occupancyLeader: UnitSlug
+  attendanceLeader: UnitSlug
+  ticketLeader: UnitSlug
+  /** MTD Brasil vs Iguatemi: positivo = Brasil à frente. */
+  deltaRevenuePct: number
 }
 
 export interface CerebroOverview {
   generatedAt: string
-  mode: 'mock' | 'live'
+  mode: 'mock' | 'live' | 'degraded'
+  partial?: boolean
   periodLabel: string
   consolidated: {
     todayRevenue: number
@@ -110,29 +113,18 @@ export interface CerebroOverview {
     ticketAvg: number
     revenueAtRisk: number
     newClients: number
+    returningClients: number
     conversionRate: number
-    /** P0 consolidado */
     openSlotsToday: number
     openSlotsNext2h: number
     cancelledToday: number
     noShowsToday: number
-    returningClients: number
     newShare: number
   }
   units: UnitSnapshot[]
-  comparison: {
-    revenueLeader: UnitSlug
-    occupancyLeader: UnitSlug
-    attendanceLeader: UnitSlug
-    ticketLeader: UnitSlug
-    deltaRevenuePct: number
-  }
-  trend30: {
-    day: string
-    brasil: number
-    iguatemi: number
-    total: number
-  }[]
-  alerts: AlertItem[]
-  decisions: DecisionInsight[]
+  trend30: { day: string; brasil: number; iguatemi: number }[]
+  /** Próximas ações (alerta + leitura), ordenadas por severidade */
+  nextActions: AlertItem[]
+  /** Ausente quando só uma unidade está disponível (mock sempre tem as duas). */
+  comparison?: UnitComparison
 }
