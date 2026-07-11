@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "smoke": "node scripts/smoke-pre-avec.mjs",
+    "smoke:full": "npx tsx scripts/smoke-full.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
