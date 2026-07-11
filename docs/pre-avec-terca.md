@@ -47,6 +47,12 @@ AVEC_MOCK=1 npm run dev
 
 No chat: diga **`smoke segunda`** para o agente rodar validação automática.
 
+Conferir readiness (admin logado):
+
+- ROM Brasil: `GET /api/health` → `readiness.cron_ready`, `webhook_ready`, `avec.kpi_layers`
+- ROM Iguatemi: idem — hoje `last_full` provavelmente null
+- Cérebro: `GET /api/health` → unidades Neon conectadas
+
 | Unidade | URL webhook | Header |
 |---------|-------------|--------|
 | Brasil | `https://rom-club.vercel.app/api/webhooks/avec` | `x-avec-secret: $AVEC_WEBHOOK_SECRET` |

@@ -28,6 +28,7 @@ const REQUIRED_TABLES = [
 
 const HTTP_CHECKS = [
   { name: 'Cérebro login', url: 'https://cerebro-rom.vercel.app/login', expect: 200 },
+  { name: 'Cérebro health', url: 'https://cerebro-rom.vercel.app/api/health', expect: 200 },
   { name: 'ROM Brasil health', url: 'https://rom-club.vercel.app/api/health', expect: 200 },
   { name: 'ROM Iguatemi health', url: 'https://rom-iguatemi.vercel.app/api/health', expect: 200 },
 ]
