@@ -7,7 +7,7 @@ import {
   todayIsoSaoPaulo,
   type UnitRuntimeConfig,
 } from '@/lib/unit-config'
-import type { DayMetrics, OpsP0, UnitSnapshot } from '@/lib/types'
+import type { DayMetrics, OpsToday, UnitSnapshot } from '@/lib/types'
 
 function n(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -36,7 +36,7 @@ function emptyDay(day: string, capacity: number, dailyGoal: number): DayMetrics 
   }
 }
 
-function buildOpsP0(today: DayMetrics, appointmentsNext2h: number): OpsP0 {
+function buildOpsToday(today: DayMetrics, appointmentsNext2h: number): OpsToday {
   const openSlotsToday = Math.max(0, today.capacity - today.appointments)
   const capacityNext2h = Math.max(1, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
   const openSlotsNext2h = Math.max(0, capacityNext2h - appointmentsNext2h)
@@ -48,12 +48,7 @@ function buildOpsP0(today: DayMetrics, appointmentsNext2h: number): OpsP0 {
     appointmentsNext2h,
     capacityNext2h,
     openSlotsNext2h,
-    cancelledToday: today.cancelled,
-    noShowsToday: today.noShows,
-    newClientsToday: today.newClients,
-    returningClientsToday: today.returningClients,
     newShare,
-    cancelSource: 'Avec 0052',
   }
 }
 
@@ -206,9 +201,9 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     goal: config.dailyGoal * dayOfMonth(today),
   }
 
-  const opsP0 = buildOpsP0(todayMetrics, appointmentsNext2h)
+  const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h)
 
-  let topProfessionals: UnitSnapshot['topProfessionals'] = []
+  let professionals: UnitSnapshot['opsWeek']['professionals'] = []
   if (await tableExists(sql, 'professionals')) {
     try {
       const hasPdm = await tableExists(sql, 'professional_daily_metrics')
@@ -235,12 +230,11 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
           attended: unknown
           appointments: unknown
         }[]
-        topProfessionals = rows.map((r) => {
+        professionals = rows.map((r) => {
           const attended = n(r.attended)
           const revenue = n(r.revenue)
           const appointments = n(r.appointments)
           return {
-            id: r.id,
             name: r.name,
             revenue: Math.round(revenue),
             attended,
@@ -252,8 +246,7 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
         const rows = (await sql`
           select id::text as id, name from professionals where active = true order by name limit 5
         `) as { id: string; name: string }[]
-        topProfessionals = rows.map((r) => ({
-          id: r.id,
+        professionals = rows.map((r) => ({
           name: r.name,
           revenue: 0,
           attended: 0,
@@ -262,7 +255,7 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
         }))
       }
     } catch {
-      topProfessionals = []
+      professionals = []
     }
   }
 
@@ -324,10 +317,25 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
   return {
     unit: config.meta,
     today: todayMetrics,
-    opsP0,
+    opsToday,
+    opsWeek: {
+      professionals,
+      services: [],
+      acquisition: [],
+      reactivationCount: 0,
+      returnRate: 0,
+      newClientsPeriod: 0,
+    },
+    opsCommerce: {
+      bookingChannels: [],
+      packages: [],
+      packagesSold: 0,
+      ratingsAvg: 0,
+      ratingsCount: 0,
+      birthdayCount: 0,
+    },
     mtd,
     last30,
-    topProfessionals,
     sync,
   }
 }

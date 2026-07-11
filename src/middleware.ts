@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { isAuthorized, isAuthEnabled } from '@/lib/auth'
+import { isAuthEnabled, isAuthorized, isProduction } from '@/lib/auth'
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -9,15 +9,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  if (!isAuthEnabled()) {
-    if (process.env.NODE_ENV === 'production') {
-      const msg = 'Auth não configurado — defina CEREBRO_ADMIN_PASSWORD na Vercel'
-      if (pathname.startsWith('/api/')) {
-        return NextResponse.json({ error: msg }, { status: 503 })
-      }
-      return new NextResponse(msg, { status: 503 })
+  if (!isAuthEnabled() && isProduction()) {
+    const msg = 'Auth não configurado — defina CEREBRO_ADMIN_PASSWORD na Vercel'
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: msg }, { status: 503 })
     }
-    return NextResponse.next()
+    return new NextResponse(msg, { status: 503 })
   }
 
   if (await isAuthorized(req)) return NextResponse.next()

@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server'
 import {
   AUTH_COOKIE,
   createSessionToken,
-  getAdminUser,
   isAuthEnabled,
+  isProduction,
   validateAdminCredentials,
 } from '@/lib/auth'
 
 export async function POST(req: Request) {
   if (!isAuthEnabled()) {
-    if (process.env.NODE_ENV === 'production') {
+    if (isProduction()) {
       return NextResponse.json(
         { error: 'Auth não configurado — defina CEREBRO_ADMIN_PASSWORD' },
         { status: 503 },
@@ -19,11 +19,12 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null)
-  const username = typeof body?.username === 'string' ? body.username : ''
+  const username = typeof body?.username === 'string' ? body.username.trim() : ''
   const password = typeof body?.password === 'string' ? body.password : ''
 
-  const user = username || getAdminUser()
-  if (!password || !validateAdminCredentials(user, password)) {
+  // Usuário precisa ser informado explicitamente — não completar com o admin
+  // default, senão um atacante só precisa acertar a senha.
+  if (!username || !password || !validateAdminCredentials(username, password)) {
     return NextResponse.json({ error: 'Usuário ou senha incorretos' }, { status: 401 })
   }
 
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
   res.cookies.set(AUTH_COOKIE, await createSessionToken(), {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction(),
     path: '/',
     maxAge: 60 * 60 * 24 * 30,
   })

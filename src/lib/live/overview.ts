@@ -1,80 +1,88 @@
 import { buildMockOverview } from '@/lib/mock-overview'
 import { fetchLiveUnit } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo } from '@/lib/unit-config'
-import { clamp01 } from '@/lib/format'
-import type {
-  AlertItem,
-  CerebroOverview,
-  DecisionInsight,
-  UnitSlug,
-  UnitSnapshot,
-} from '@/lib/types'
+import { leaderBy, rate } from '@/lib/comparison'
+import { isProduction } from '@/lib/auth'
+import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
-function rate(num: number, den: number): number {
-  if (den <= 0) return 0
-  return clamp01(num / den)
+/** Comparativo entre unidades — só existe com as duas presentes. */
+export function buildComparison(units: UnitSnapshot[]): CerebroOverview['comparison'] {
+  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
+  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
+  if (!brasil || !iguatemi) return undefined
+
+  const deltaRevenuePct =
+    iguatemi.mtd.revenue > 0
+      ? (brasil.mtd.revenue - iguatemi.mtd.revenue) / iguatemi.mtd.revenue
+      : brasil.mtd.revenue > 0
+        ? null // Iguatemi zerado, Brasil não — % não representa isso direito
+        : 0
+
+  return {
+    revenueLeader: leaderBy(units, (u) => u.mtd.revenue),
+    occupancyLeader: leaderBy(units, (u) => rate(u.today.appointments, u.today.capacity)),
+    attendanceLeader: leaderBy(units, (u) => rate(u.today.attended, u.today.appointments)),
+    ticketLeader: leaderBy(units, (u) => u.today.ticketAvg),
+    deltaRevenuePct,
+  }
 }
 
-function buildAlerts(units: UnitSnapshot[], todayGoal: number, todayRevenue: number): AlertItem[] {
-  const alerts: AlertItem[] = []
+const SEV = { critical: 0, warning: 1, info: 2 }
+
+function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
+  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
+  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
+  const brasilByDay = new Map(brasil?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  const iguatemiByDay = new Map(iguatemi?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  const allDays = [...new Set([...brasilByDay.keys(), ...iguatemiByDay.keys()])].sort()
+
+  if (allDays.length === 0) {
+    const days = brasil?.last30 ?? iguatemi?.last30 ?? []
+    return days.map((row, idx) => ({
+      day: row.day.slice(5),
+      brasil: brasil?.last30[idx]?.revenue ?? 0,
+      iguatemi: iguatemi?.last30[idx]?.revenue ?? 0,
+    }))
+  }
+
+  return allDays.map((day) => ({
+    day: day.slice(5),
+    brasil: brasilByDay.get(day) ?? 0,
+    iguatemi: iguatemiByDay.get(day) ?? 0,
+  }))
+}
+
+/** Uma lista só: o que o Waltter deve fazer agora. */
+function buildNextActions(
+  units: UnitSnapshot[],
+  todayGoal: number,
+  todayRevenue: number,
+): AlertItem[] {
+  const actions: AlertItem[] = []
 
   for (const u of units) {
     if (u.sync.status === 'error') {
-      alerts.push({
+      actions.push({
         id: `sync-error-${u.unit.slug}`,
         severity: 'critical',
         unit: u.unit.slug,
-        title: `Sync Avec com erro — ${u.unit.short}`,
+        title: `Sync com erro — ${u.unit.short}`,
         detail: u.sync.label,
-        action: 'Checar cron, token Avec e tabelas delta (snapshots) no Neon',
+        action: 'Checar token Avec e rodar sync full',
       })
     } else if (u.sync.status === 'stale') {
-      const awaitingToken = /Aguardando AVEC_API_TOKEN|Sem registro de sync/i.test(u.sync.label)
-      alerts.push({
+      const awaiting = /Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)
+      actions.push({
         id: `sync-stale-${u.unit.slug}`,
-        severity: awaitingToken ? 'info' : 'warning',
+        severity: awaiting ? 'info' : 'warning',
         unit: u.unit.slug,
-        title: awaitingToken
-          ? `Aguardando token Avec — ${u.unit.short}`
-          : `Sync Avec atrasado — ${u.unit.short}`,
+        title: awaiting
+          ? `Aguardando token — ${u.unit.short}`
+          : `Sync atrasado — ${u.unit.short}`,
         detail: u.sync.label,
-        action: awaitingToken
-          ? 'Quando o token chegar: colar AVEC_API_TOKEN na Vercel → redeploy → Admin → Rodar sync'
-          : 'Rodar sync manual ou validar cron-job.org',
-      })
-    }
-
-    if (u.today.noShows > 0) {
-      const risk = u.today.noShows * (u.today.ticketAvg || 0)
-      alerts.push({
-        id: `noshow-${u.unit.slug}`,
-        severity: u.today.noShows >= 3 ? 'critical' : 'warning',
-        unit: u.unit.slug,
-        title: `No-show em ${u.unit.short}`,
-        detail: `${u.today.noShows} no-show(s) hoje${risk > 0 ? ` · risco ~R$ ${Math.round(risk)}` : ''}.`,
-        action: 'Remarcar e reforçar confirmação WhatsApp',
-      })
-    }
-
-    if (u.opsP0.cancelledToday > 0) {
-      alerts.push({
-        id: `cancel-${u.unit.slug}`,
-        severity: u.opsP0.cancelledToday >= 3 ? 'warning' : 'info',
-        unit: u.unit.slug,
-        title: `Cancelamentos em ${u.unit.short}`,
-        detail: `${u.opsP0.cancelledToday} cancelamento(s) hoje (Avec 0052).`,
-        action: 'Oferecer encaixe na lista de espera / WhatsApp',
-      })
-    }
-
-    if (u.opsP0.openSlotsNext2h >= 2) {
-      alerts.push({
-        id: `slots-${u.unit.slug}`,
-        severity: 'info',
-        unit: u.unit.slug,
-        title: `Vagas nas próximas 2h — ${u.unit.short}`,
-        detail: `${u.opsP0.openSlotsNext2h} horário(s) livres estimados · ${u.opsP0.appointmentsNext2h} já agendados.`,
-        action: 'Campanha rápida de encaixe',
+        action: awaiting
+          ? 'Colar AVEC_API_TOKEN na Vercel → sync full'
+          : 'Rodar sync ou validar cron',
       })
     }
 
@@ -84,72 +92,110 @@ function buildAlerts(units: UnitSnapshot[], todayGoal: number, todayRevenue: num
       u.today.attended === 0 &&
       u.mtd.attended === 0
     if (sparse) {
-      alerts.push({
+      actions.push({
         id: `sparse-${u.unit.slug}`,
         severity: 'info',
         unit: u.unit.slug,
-        title: `Dados financeiros ainda fracos — ${u.unit.short}`,
+        title: `Dados financeiros fracos — ${u.unit.short}`,
         detail:
-          'Há conexão live, mas faturamento/atendidos no Neon estão zerados ou quase. O sync Avec precisa popular revenue/attended.',
+          'Há conexão live, mas faturamento/atendidos no Neon estão zerados. Sync Avec precisa popular revenue/attended.',
         action: 'Priorizar AVEC_API_TOKEN + sync full diário',
+      })
+    }
+
+    if (u.today.noShows > 0) {
+      actions.push({
+        id: `noshow-${u.unit.slug}`,
+        severity: u.today.noShows >= 3 ? 'critical' : 'warning',
+        unit: u.unit.slug,
+        title: `No-show — ${u.unit.short}`,
+        detail: `${u.today.noShows} hoje · risco ~R$ ${Math.round(u.today.noShows * u.today.ticketAvg)}`,
+        action: 'Remarcar + confirmação WhatsApp',
+      })
+    }
+
+    if (u.today.cancelled > 0) {
+      actions.push({
+        id: `cancel-${u.unit.slug}`,
+        severity: u.today.cancelled >= 3 ? 'warning' : 'info',
+        unit: u.unit.slug,
+        title: `Cancelamentos — ${u.unit.short}`,
+        detail: `${u.today.cancelled} hoje`,
+        action: 'Encaixe na lista de espera',
+      })
+    }
+
+    if (u.opsToday.openSlotsNext2h >= 2) {
+      actions.push({
+        id: `slots-${u.unit.slug}`,
+        severity: 'info',
+        unit: u.unit.slug,
+        title: `Vagas nas 2h — ${u.unit.short}`,
+        detail: `${u.opsToday.openSlotsNext2h} livres`,
+        action: 'Campanha rápida de encaixe',
+      })
+    }
+
+    if (u.opsWeek.reactivationCount >= 10) {
+      actions.push({
+        id: `react-${u.unit.slug}`,
+        severity: 'info',
+        unit: u.unit.slug,
+        title: `Reativar — ${u.unit.short}`,
+        detail: `${u.opsWeek.reactivationCount} sem retorno`,
+        action: 'Lista WhatsApp esta semana',
+      })
+    }
+
+    if (u.opsWeek.returnRate > 0 && u.opsWeek.returnRate < 0.45) {
+      actions.push({
+        id: `return-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Retorno baixo — ${u.unit.short}`,
+        detail: `${Math.round(u.opsWeek.returnRate * 100)}%`,
+        action: 'Reforçar pós-atendimento',
+      })
+    }
+
+    if (u.opsCommerce.ratingsCount > 0 && u.opsCommerce.ratingsAvg < 4.2) {
+      actions.push({
+        id: `rate-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Nota baixa — ${u.unit.short}`,
+        detail: `${u.opsCommerce.ratingsAvg.toFixed(1)} (${u.opsCommerce.ratingsCount})`,
+        action: 'Revisar experiência',
+      })
+    }
+
+    if (u.opsCommerce.birthdayCount >= 5) {
+      actions.push({
+        id: `bday-${u.unit.slug}`,
+        severity: 'info',
+        unit: u.unit.slug,
+        title: `Aniversariantes — ${u.unit.short}`,
+        detail: `${u.opsCommerce.birthdayCount} no período`,
+        action: 'Campanha de convite',
       })
     }
   }
 
   const gap = Math.max(0, todayGoal - todayRevenue)
-  if (gap > 0) {
-    alerts.push({
+  if (gap > 500) {
+    actions.push({
       id: 'goal-gap',
       severity: 'info',
       unit: 'both',
-      title: 'Meta consolidada do dia em aberto',
-      detail: `Faltam R$ ${Math.round(gap).toLocaleString('pt-BR')} para a meta das duas unidades.`,
-      action: 'Olhar horários vagos e upsell nos atendimentos restantes',
+      title: 'Meta do dia em aberto',
+      detail: `Faltam R$ ${Math.round(gap).toLocaleString('pt-BR')}`,
+      action: 'Vagas + upsell nos restantes',
     })
   }
 
-  return alerts.slice(0, 8)
-}
-
-function buildDecisions(units: UnitSnapshot[], deltaRevenuePct: number): DecisionInsight[] {
-  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
-  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
-  const decisions: DecisionInsight[] = []
-
-  if (brasil && iguatemi) {
-    if (brasil.mtd.revenue !== iguatemi.mtd.revenue) {
-      const leader = brasil.mtd.revenue >= iguatemi.mtd.revenue ? brasil : iguatemi
-      const trailer = leader === brasil ? iguatemi : brasil
-      decisions.push({
-        id: 'd-revenue',
-        title: `${leader.unit.short} puxa o consolidado`,
-        detail: `MTD ${leader.unit.short} à frente de ${trailer.unit.short} (${(Math.abs(deltaRevenuePct) * 100).toFixed(0)}% de diferença relativa). Replicar grade/mix da unidade líder.`,
-        impact: 'Receita MTD',
-      })
-    }
-
-    for (const u of units) {
-      const occ = rate(u.today.appointments, u.today.capacity)
-      if (occ < 0.7) {
-        decisions.push({
-          id: `d-occ-${u.unit.slug}`,
-          title: `Ocupação com folga — ${u.unit.short}`,
-          detail: `${u.today.appointments}/${u.today.capacity} horários. Campanha rápida de encaixe (lista de espera / WhatsApp).`,
-          impact: 'Ocupação',
-        })
-      }
-    }
-  }
-
-  decisions.push({
-    id: 'd-data',
-    title: 'Qualidade do dado é o próximo alavanca',
-    detail:
-      'Com Avec populando revenue/attended de verdade, estes KPIs passam de “comando” para precisão diária. Enquanto isso, use agenda + sync status como norte.',
-    impact: 'Confiabilidade',
-  })
-
-  return decisions.slice(0, 5)
+  return actions
+    .sort((a, b) => SEV[a.severity] - SEV[b.severity])
+    .slice(0, 8)
 }
 
 function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
@@ -165,11 +211,6 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const returningClients = units.reduce((a, u) => a + u.today.returningClients, 0)
   const leads = units.reduce((a, u) => a + u.today.leads, 0)
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
-  const ticketAvg = attended > 0 ? Math.round(todayRevenue / attended) : 0
-  const revenueAtRisk = units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0)
-  const openSlotsToday = units.reduce((a, u) => a + u.opsP0.openSlotsToday, 0)
-  const openSlotsNext2h = units.reduce((a, u) => a + u.opsP0.openSlotsNext2h, 0)
-  const cancelledToday = units.reduce((a, u) => a + u.opsP0.cancelledToday, 0)
   const mixBase = newClients + returningClients
 
   return {
@@ -182,25 +223,67 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
     occupancyRate: rate(appointments, capacity),
-    ticketAvg,
-    revenueAtRisk,
+    ticketAvg: attended > 0 ? Math.round(todayRevenue / attended) : 0,
+    revenueAtRisk: units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
     newClients,
-    conversionRate: rate(converted, leads),
-    openSlotsToday,
-    openSlotsNext2h,
-    cancelledToday,
-    noShowsToday: noShows,
     returningClients,
+    conversionRate: rate(converted, leads),
+    openSlotsToday: units.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
+    openSlotsNext2h: units.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
+    cancelledToday: units.reduce((a, u) => a + u.today.cancelled, 0),
+    noShowsToday: noShows,
     newShare: mixBase > 0 ? newClients / mixBase : 0,
   }
 }
 
-function leaderBy(
-  units: UnitSnapshot[],
-  score: (u: UnitSnapshot) => number,
-): UnitSlug {
-  const sorted = [...units].sort((a, b) => score(b) - score(a))
-  return sorted[0]?.unit.slug ?? 'rom-brasil'
+function emptyConsolidated(): CerebroOverview['consolidated'] {
+  return {
+    todayRevenue: 0,
+    todayGoal: 0,
+    todayGoalProgress: 0,
+    mtdRevenue: 0,
+    mtdGoal: 0,
+    mtdGoalProgress: 0,
+    attendanceRate: 0,
+    noShowRate: 0,
+    occupancyRate: 0,
+    ticketAvg: 0,
+    revenueAtRisk: 0,
+    newClients: 0,
+    returningClients: 0,
+    conversionRate: 0,
+    openSlotsToday: 0,
+    openSlotsNext2h: 0,
+    cancelledToday: 0,
+    noShowsToday: 0,
+    newShare: 0,
+  }
+}
+
+function degradedOverview(
+  detail: string,
+  action: string,
+  alertId = 'live-degraded',
+): CerebroOverview {
+  return {
+    generatedAt: new Date().toISOString(),
+    mode: 'degraded',
+    partial: true,
+    periodLabel: `Degradado · ${todayIsoSaoPaulo()}`,
+    consolidated: emptyConsolidated(),
+    units: [],
+    trend30: [],
+    nextActions: [
+      {
+        id: alertId,
+        severity: 'critical',
+        unit: 'both',
+        title: 'Live indisponível',
+        detail,
+        action,
+      },
+    ],
+  }
 }
 
 export async function buildLiveOverview(): Promise<CerebroOverview> {
@@ -223,9 +306,9 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
         id: `fetch-${cfg.meta.slug}`,
         severity: 'critical',
         unit: cfg.meta.slug,
-        title: `Falha ao ler Neon — ${cfg.meta.name}`,
+        title: `Neon offline — ${cfg.meta.name}`,
         detail: String(result.reason?.message ?? result.reason),
-        action: 'Validar connection string e firewall Neon',
+        action: 'Validar connection string',
       })
     }
   })
@@ -234,92 +317,83 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
     throw new Error('Nenhuma unidade live respondeu')
   }
 
-  // Garante ordem Brasil → Iguatemi quando ambas existem
   units.sort((a, b) => a.unit.slug.localeCompare(b.unit.slug))
 
   const consolidated = consolidate(units)
-  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
-  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
+  const trend30 = buildTrend30(units)
 
-  const deltaRevenuePct =
-    brasil && iguatemi && iguatemi.mtd.revenue > 0
-      ? (brasil.mtd.revenue - iguatemi.mtd.revenue) / iguatemi.mtd.revenue
-      : brasil && iguatemi && brasil.mtd.revenue > 0
-        ? 1
-        : 0
-
-  const brasilByDay = new Map(brasil?.last30.map((d) => [d.day, d.revenue]) ?? [])
-  const iguatemiByDay = new Map(iguatemi?.last30.map((d) => [d.day, d.revenue]) ?? [])
-  const allDays = [
-    ...new Set([...brasilByDay.keys(), ...iguatemiByDay.keys()]),
-  ].sort()
-  const trend30 = allDays.map((day) => {
-    const b = brasilByDay.get(day) ?? 0
-    const i = iguatemiByDay.get(day) ?? 0
-    return {
-      day: day.slice(5),
-      brasil: b,
-      iguatemi: i,
-      total: b + i,
-    }
-  })
-
-  const alerts = [...fetchErrors, ...buildAlerts(units, consolidated.todayGoal, consolidated.todayRevenue)]
+  const nextActions = [
+    ...fetchErrors,
+    ...buildNextActions(units, consolidated.todayGoal, consolidated.todayRevenue),
+  ]
   if (units.length < 2) {
-    alerts.unshift({
+    nextActions.unshift({
       id: 'partial-units',
       severity: 'warning',
       unit: 'both',
-      title: 'Só uma unidade live no painel',
-      detail: 'Configure as duas NEON_*_DATABASE_URL para consolidar Brasil + Iguatemi.',
-      action: 'Completar .env.local do Cérebro',
+      title: 'Consolidado parcial',
+      detail: `Só ${units[0]?.unit.short ?? 'uma unidade'} no painel`,
+      action: 'Completar NEON_*_DATABASE_URL',
     })
   }
+
+  const partial = units.length < configs.length || fetchErrors.length > 0
 
   return {
     generatedAt: new Date().toISOString(),
     mode: 'live',
-    periodLabel: `Live Neon · ${todayIsoSaoPaulo()} (America/Sao_Paulo)`,
+    partial,
+    periodLabel: partial
+      ? `Live parcial · ${todayIsoSaoPaulo()}`
+      : `Live · ${todayIsoSaoPaulo()}`,
     consolidated,
     units,
-    comparison: {
-      revenueLeader: leaderBy(units, (u) => u.mtd.revenue),
-      occupancyLeader: leaderBy(units, (u) => rate(u.today.appointments, u.today.capacity)),
-      attendanceLeader: leaderBy(units, (u) => rate(u.today.attended, u.today.appointments)),
-      ticketLeader: leaderBy(units, (u) => u.today.ticketAvg),
-      deltaRevenuePct,
-    },
     trend30,
-    alerts,
-    decisions: buildDecisions(units, deltaRevenuePct),
+    nextActions: nextActions
+      .sort((a, b) => SEV[a.severity] - SEV[b.severity])
+      .slice(0, 8),
+    comparison: buildComparison(units),
   }
 }
 
 export async function buildOverview(): Promise<CerebroOverview> {
+  const hasDb = getUnitConfigs().some((c) => c.databaseUrl)
   const forceMock = process.env.CEREBRO_FORCE_MOCK === '1'
-  const hasAnyUrl = getUnitConfigs().some((c) => c.databaseUrl)
+  const isProd = isProduction()
 
-  if (forceMock || !hasAnyUrl) {
+  if (forceMock && !isProd) {
+    return buildMockOverview()
+  }
+
+  if (!hasDb) {
+    if (isProd) {
+      return {
+        ...degradedOverview(
+          'NEON_*_DATABASE_URL ausente em produção',
+          'Configurar connection strings na Vercel',
+          'no-neon',
+        ),
+        nextActions: [
+          {
+            id: 'no-neon',
+            severity: 'critical',
+            unit: 'both',
+            title: 'Neons não configurados',
+            detail: 'NEON_*_DATABASE_URL ausente em produção',
+            action: 'Configurar connection strings na Vercel',
+          },
+        ],
+      }
+    }
     return buildMockOverview()
   }
 
   try {
     return await buildLiveOverview()
   } catch (err) {
-    const mock = buildMockOverview()
-    mock.mode = 'fallback'
-    mock.alerts = [
-      {
-        id: 'live-fallback',
-        severity: 'critical',
-        unit: 'both',
-        title: 'Live falhou — dados abaixo são mock (não use para decisão)',
-        detail: String(err instanceof Error ? err.message : err),
-        action: 'Checar NEON_*_DATABASE_URL e conectividade antes de agir',
-      },
-      ...mock.alerts,
-    ]
-    mock.periodLabel = `Fallback mock (live error) · ${todayIsoSaoPaulo()}`
-    return mock
+    return degradedOverview(
+      String(err instanceof Error ? err.message : err),
+      'Checar Neons e reiniciar',
+    )
   }
 }

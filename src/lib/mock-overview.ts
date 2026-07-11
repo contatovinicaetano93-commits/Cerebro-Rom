@@ -1,12 +1,5 @@
-import type {
-  AlertItem,
-  CerebroOverview,
-  DayMetrics,
-  DecisionInsight,
-  UnitSlug,
-  UnitSnapshot,
-} from '@/lib/types'
-import { clamp01 } from '@/lib/format'
+import type { CerebroOverview, DayMetrics, UnitSlug, UnitSnapshot } from '@/lib/types'
+import { leaderBy, rate } from '@/lib/comparison'
 import {
   UNIT_META,
   dayOfMonth,
@@ -76,7 +69,7 @@ function buildUnit(
   capacity: number,
   dailyGoal: number,
   baseRevenue: number,
-  professionals: UnitSnapshot['topProfessionals'],
+  pros: { name: string; revenue: number; attended: number; ticketAvg: number; occupancy: number }[],
   sync: UnitSnapshot['sync'],
 ): UnitSnapshot {
   const last30 = buildSeries(slug, capacity, dailyGoal, baseRevenue)
@@ -84,7 +77,6 @@ function buildUnit(
   const todayIso = today.day
   const monthStart = monthStartIso(todayIso)
   const mtdDays = last30.filter((d) => d.day >= monthStart)
-
   const capacityNext2h = Math.max(1, Math.round((capacity / SALON_HOURS_PER_DAY) * 2))
   const appointmentsNext2h = Math.min(
     capacityNext2h,
@@ -95,17 +87,58 @@ function buildUnit(
   return {
     unit: UNIT_META[slug],
     today,
-    opsP0: {
+    opsToday: {
       openSlotsToday: Math.max(0, capacity - today.appointments),
       appointmentsNext2h,
       capacityNext2h,
       openSlotsNext2h: Math.max(0, capacityNext2h - appointmentsNext2h),
-      cancelledToday: today.cancelled,
-      noShowsToday: today.noShows,
-      newClientsToday: today.newClients,
-      returningClientsToday: today.returningClients,
       newShare: mixBase > 0 ? today.newClients / mixBase : 0,
-      cancelSource: 'Avec 0052',
+    },
+    opsWeek: {
+      professionals: pros,
+      services:
+        slug === 'rom-brasil'
+          ? [
+              { name: 'Corte + barba', quantity: 42, revenue: 12600 },
+              { name: 'Coloração', quantity: 18, revenue: 9800 },
+            ]
+          : [
+              { name: 'Corte feminino', quantity: 31, revenue: 10850 },
+              { name: 'Escova', quantity: 28, revenue: 5600 },
+            ],
+      acquisition:
+        slug === 'rom-brasil'
+          ? [
+              { channel: 'Indicação', clients: 14 },
+              { channel: 'Instagram', clients: 9 },
+            ]
+          : [
+              { channel: 'Shopping', clients: 11 },
+              { channel: 'Indicação', clients: 8 },
+            ],
+      reactivationCount: slug === 'rom-brasil' ? 17 : 12,
+      returnRate: slug === 'rom-brasil' ? 0.62 : 0.55,
+      newClientsPeriod: slug === 'rom-brasil' ? 48 : 36,
+    },
+    opsCommerce: {
+      bookingChannels:
+        slug === 'rom-brasil'
+          ? [
+              { channel: 'WhatsApp', count: 48 },
+              { channel: 'Online', count: 22 },
+            ]
+          : [
+              { channel: 'Online', count: 31 },
+              { channel: 'WhatsApp', count: 27 },
+            ],
+      packages:
+        slug === 'rom-brasil'
+          ? [{ name: 'Pacote corte', quantity: 12, revenue: 4800 }]
+          : [{ name: 'Day spa', quantity: 9, revenue: 5400 }],
+      packagesSold: slug === 'rom-brasil' ? 19 : 23,
+      ratingsAvg: slug === 'rom-brasil' ? 4.7 : 4.5,
+      ratingsCount: slug === 'rom-brasil' ? 38 : 29,
+      birthdayCount: slug === 'rom-brasil' ? 11 : 8,
     },
     mtd: {
       revenue: sumField(mtdDays, 'revenue'),
@@ -118,14 +151,8 @@ function buildUnit(
       goal: dailyGoal * dayOfMonth(todayIso),
     },
     last30,
-    topProfessionals: professionals,
     sync,
   }
-}
-
-function rate(num: number, den: number): number {
-  if (den <= 0) return 0
-  return clamp01(num / den)
 }
 
 export function buildMockOverview(): CerebroOverview {
@@ -135,9 +162,8 @@ export function buildMockOverview(): CerebroOverview {
     6200,
     4800,
     [
-      { id: 'b1', name: 'Camila R.', revenue: 28400, attended: 62, ticketAvg: 458, occupancy: 0.91 },
-      { id: 'b2', name: 'Diego M.', revenue: 24100, attended: 55, ticketAvg: 438, occupancy: 0.84 },
-      { id: 'b3', name: 'Larissa P.', revenue: 19800, attended: 49, ticketAvg: 404, occupancy: 0.78 },
+      { name: 'Camila R.', revenue: 28400, attended: 62, ticketAvg: 458, occupancy: 0.91 },
+      { name: 'Diego M.', revenue: 24100, attended: 55, ticketAvg: 438, occupancy: 0.84 },
     ],
     {
       status: 'ok',
@@ -152,9 +178,8 @@ export function buildMockOverview(): CerebroOverview {
     5100,
     3900,
     [
-      { id: 'i1', name: 'Sofia A.', revenue: 22100, attended: 48, ticketAvg: 460, occupancy: 0.88 },
-      { id: 'i2', name: 'Bruno T.', revenue: 18700, attended: 44, ticketAvg: 425, occupancy: 0.81 },
-      { id: 'i3', name: 'Nina V.', revenue: 15200, attended: 39, ticketAvg: 390, occupancy: 0.74 },
+      { name: 'Sofia A.', revenue: 22100, attended: 48, ticketAvg: 460, occupancy: 0.88 },
+      { name: 'Bruno T.', revenue: 18700, attended: 44, ticketAvg: 425, occupancy: 0.81 },
     ],
     {
       status: 'stale',
@@ -176,84 +201,19 @@ export function buildMockOverview(): CerebroOverview {
   const returningClients = units.reduce((a, u) => a + u.today.returningClients, 0)
   const leads = units.reduce((a, u) => a + u.today.leads, 0)
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
-  const ticketAvg =
-    attended > 0 ? Math.round(todayRevenue / attended) : 0
-  const revenueAtRisk = units.reduce(
-    (a, u) => a + u.today.noShows * u.today.ticketAvg,
-    0,
-  )
-  const openSlotsToday = units.reduce((a, u) => a + u.opsP0.openSlotsToday, 0)
-  const openSlotsNext2h = units.reduce((a, u) => a + u.opsP0.openSlotsNext2h, 0)
-  const cancelledToday = units.reduce((a, u) => a + u.opsP0.cancelledToday, 0)
+  const ticketAvg = attended > 0 ? Math.round(todayRevenue / attended) : 0
   const mixBase = newClients + returningClients
-
-  const trend30 = brasil.last30.map((row, idx) => {
-    const other = iguatemi.last30[idx]!
-    return {
-      day: row.day.slice(5),
-      brasil: row.revenue,
-      iguatemi: other.revenue,
-      total: row.revenue + other.revenue,
-    }
-  })
-
   const deltaRevenuePct =
     iguatemi.mtd.revenue > 0
       ? (brasil.mtd.revenue - iguatemi.mtd.revenue) / iguatemi.mtd.revenue
-      : 0
-
-  const alerts: AlertItem[] = [
-    {
-      id: 'a1',
-      severity: 'warning',
-      unit: 'rom-iguatemi',
-      title: 'Sync Avec atrasado no Iguatemi',
-      detail: 'Última sincronização há mais de 3 horas. KPIs do dia podem estar incompletos.',
-      action: 'Rodar sync manual ou checar cron / token Avec',
-    },
-    {
-      id: 'a2',
-      severity: 'critical',
-      unit: 'rom-brasil',
-      title: 'No-show acima do limite',
-      detail: `${brasil.today.noShows} no-shows hoje · risco estimado de ${Math.round(brasil.today.noShows * brasil.today.ticketAvg)} em receita.`,
-      action: 'Priorizar remarcação e confirmação WhatsApp nas próximas 2h',
-    },
-    {
-      id: 'a3',
-      severity: 'info',
-      unit: 'both',
-      title: 'Meta consolidada do dia em aberto',
-      detail: `Faltam ${Math.max(0, todayGoal - todayRevenue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} para bater a meta das duas unidades.`,
-      action: 'Olhar horários vagos e upsell nos atendimentos restantes',
-    },
-  ]
-
-  const decisions: DecisionInsight[] = [
-    {
-      id: 'd1',
-      title: 'Brasil puxa o consolidado',
-      detail: `ROM Brasil está ${Math.abs(deltaRevenuePct * 100).toFixed(0)}% à frente do Iguatemi no MTD. Vale replicar o mix de serviços e a grade de horários do Brasil no Iguatemi.`,
-      impact: 'Receita MTD',
-    },
-    {
-      id: 'd2',
-      title: 'Ocupação com folga no Iguatemi',
-      detail: `Capacidade ${iguatemi.today.capacity} · agendados ${iguatemi.today.appointments}. Há espaço para campanha rápida de encaixe (lista de espera / WhatsApp).`,
-      impact: 'Ocupação',
-    },
-    {
-      id: 'd3',
-      title: 'Ticket médio saudável nas duas',
-      detail: `Ticket consolidado ~${ticketAvg.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}. Manter foco em retenção e pacotes, não só volume.`,
-      impact: 'Margem',
-    },
-  ]
+      : brasil.mtd.revenue > 0
+        ? null
+        : 0
 
   return {
     generatedAt: new Date().toISOString(),
     mode: 'mock',
-    periodLabel: 'Hoje + MTD (mock realista)',
+    periodLabel: 'Hoje + MTD (mock)',
     consolidated: {
       todayRevenue,
       todayGoal,
@@ -265,35 +225,46 @@ export function buildMockOverview(): CerebroOverview {
       noShowRate: rate(noShows, appointments),
       occupancyRate: rate(appointments, capacity),
       ticketAvg,
-      revenueAtRisk,
+      revenueAtRisk: units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
       newClients,
-      conversionRate: rate(converted, leads),
-      openSlotsToday,
-      openSlotsNext2h,
-      cancelledToday,
-      noShowsToday: noShows,
       returningClients,
+      conversionRate: rate(converted, leads),
+      openSlotsToday: units.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
+      openSlotsNext2h: units.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
+      cancelledToday: units.reduce((a, u) => a + u.today.cancelled, 0),
+      noShowsToday: noShows,
       newShare: mixBase > 0 ? newClients / mixBase : 0,
     },
     units,
+    trend30: brasil.last30.map((row, idx) => ({
+      day: row.day.slice(5),
+      brasil: row.revenue,
+      iguatemi: iguatemi.last30[idx]!.revenue,
+    })),
+    nextActions: [
+      {
+        id: 'a1',
+        severity: 'warning',
+        unit: 'rom-iguatemi',
+        title: 'Sync atrasado — Iguatemi',
+        detail: 'Última sincronização há mais de 3h',
+        action: 'Rodar sync full',
+      },
+      {
+        id: 'a2',
+        severity: 'critical',
+        unit: 'rom-brasil',
+        title: 'No-show — Brasil',
+        detail: `${brasil.today.noShows} no-shows hoje`,
+        action: 'Remarcar nas próximas 2h',
+      },
+    ],
     comparison: {
-      revenueLeader: brasil.mtd.revenue >= iguatemi.mtd.revenue ? 'rom-brasil' : 'rom-iguatemi',
-      occupancyLeader:
-        rate(brasil.today.appointments, brasil.today.capacity) >=
-        rate(iguatemi.today.appointments, iguatemi.today.capacity)
-          ? 'rom-brasil'
-          : 'rom-iguatemi',
-      attendanceLeader:
-        rate(brasil.today.attended, brasil.today.appointments) >=
-        rate(iguatemi.today.attended, iguatemi.today.appointments)
-          ? 'rom-brasil'
-          : 'rom-iguatemi',
-      ticketLeader:
-        brasil.today.ticketAvg >= iguatemi.today.ticketAvg ? 'rom-brasil' : 'rom-iguatemi',
+      revenueLeader: leaderBy(units, (u) => u.mtd.revenue),
+      occupancyLeader: leaderBy(units, (u) => rate(u.today.appointments, u.today.capacity)),
+      attendanceLeader: leaderBy(units, (u) => rate(u.today.attended, u.today.appointments)),
+      ticketLeader: leaderBy(units, (u) => u.today.ticketAvg),
       deltaRevenuePct,
     },
-    trend30,
-    alerts,
-    decisions,
   }
 }
