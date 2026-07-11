@@ -39,3 +39,4 @@ Avec (por unidade)
 ## Token
 
 Sem `AVEC_API_TOKEN` nas Vercels ROM, A fica fraco e B/C vazios. Ver `quando-token-avec.md`.
+Checklist pré-terça: `pre-avec-terca.md`.

@@ -1,5 +1,5 @@
 import type { CerebroOverview, DayMetrics, UnitSlug, UnitSnapshot } from '@/lib/types'
-import { leaderBy, rate } from '@/lib/comparison'
+import { buildComparison, rate } from '@/lib/comparison'
 import {
   UNIT_META,
   dayOfMonth,
@@ -203,12 +203,6 @@ export function buildMockOverview(): CerebroOverview {
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
   const ticketAvg = attended > 0 ? Math.round(todayRevenue / attended) : 0
   const mixBase = newClients + returningClients
-  const deltaRevenuePct =
-    iguatemi.mtd.revenue > 0
-      ? (brasil.mtd.revenue - iguatemi.mtd.revenue) / iguatemi.mtd.revenue
-      : brasil.mtd.revenue > 0
-        ? null
-        : 0
 
   return {
     generatedAt: new Date().toISOString(),
@@ -259,12 +253,6 @@ export function buildMockOverview(): CerebroOverview {
         action: 'Remarcar nas próximas 2h',
       },
     ],
-    comparison: {
-      revenueLeader: leaderBy(units, (u) => u.mtd.revenue),
-      occupancyLeader: leaderBy(units, (u) => rate(u.today.appointments, u.today.capacity)),
-      attendanceLeader: leaderBy(units, (u) => rate(u.today.attended, u.today.appointments)),
-      ticketLeader: leaderBy(units, (u) => u.today.ticketAvg),
-      deltaRevenuePct,
-    },
+    comparison: buildComparison(units),
   }
 }

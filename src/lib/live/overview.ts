@@ -1,31 +1,9 @@
 import { buildMockOverview } from '@/lib/mock-overview'
 import { fetchLiveUnit } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo } from '@/lib/unit-config'
-import { leaderBy, rate } from '@/lib/comparison'
+import { rate, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
-
-/** Comparativo entre unidades — só existe com as duas presentes. */
-export function buildComparison(units: UnitSnapshot[]): CerebroOverview['comparison'] {
-  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
-  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
-  if (!brasil || !iguatemi) return undefined
-
-  const deltaRevenuePct =
-    iguatemi.mtd.revenue > 0
-      ? (brasil.mtd.revenue - iguatemi.mtd.revenue) / iguatemi.mtd.revenue
-      : brasil.mtd.revenue > 0
-        ? null // Iguatemi zerado, Brasil não — % não representa isso direito
-        : 0
-
-  return {
-    revenueLeader: leaderBy(units, (u) => u.mtd.revenue),
-    occupancyLeader: leaderBy(units, (u) => rate(u.today.appointments, u.today.capacity)),
-    attendanceLeader: leaderBy(units, (u) => rate(u.today.attended, u.today.appointments)),
-    ticketLeader: leaderBy(units, (u) => u.today.ticketAvg),
-    deltaRevenuePct,
-  }
-}
 
 const SEV = { critical: 0, warning: 1, info: 2 }
 

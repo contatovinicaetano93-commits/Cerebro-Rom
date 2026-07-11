@@ -7,6 +7,7 @@ import {
   todayIsoSaoPaulo,
   type UnitRuntimeConfig,
 } from '@/lib/unit-config'
+import { fetchOpsCommerce, fetchOpsWeek } from '@/lib/live/parse-kpi-layers'
 import type { DayMetrics, OpsToday, UnitSnapshot } from '@/lib/types'
 
 function n(v: unknown): number {
@@ -62,13 +63,6 @@ type MetricRow = {
   new_clients: unknown
   returning_clients: unknown
   ticket_avg: unknown
-}
-
-async function tableExists(sql: ReturnType<typeof getSql>, name: string): Promise<boolean> {
-  const rows = (await sql`
-    select to_regclass(${`public.${name}`}) is not null as ok
-  `) as { ok: boolean }[]
-  return Boolean(rows[0]?.ok)
 }
 
 function rowToDay(
@@ -203,61 +197,10 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
 
   const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h)
 
-  let professionals: UnitSnapshot['opsWeek']['professionals'] = []
-  if (await tableExists(sql, 'professionals')) {
-    try {
-      const hasPdm = await tableExists(sql, 'professional_daily_metrics')
-      if (hasPdm) {
-        const rows = (await sql`
-          select
-            p.id::text as id,
-            p.name,
-            coalesce(sum(m.revenue), 0)::float8 as revenue,
-            coalesce(sum(m.attended), 0)::int as attended,
-            coalesce(sum(m.appointments), 0)::int as appointments
-          from professionals p
-          left join professional_daily_metrics m
-            on m.professional_id = p.id
-           and m.day >= ${monthStart}::date
-          where p.active = true
-          group by p.id, p.name
-          order by revenue desc, attended desc, p.name asc
-          limit 5
-        `) as {
-          id: string
-          name: string
-          revenue: unknown
-          attended: unknown
-          appointments: unknown
-        }[]
-        professionals = rows.map((r) => {
-          const attended = n(r.attended)
-          const revenue = n(r.revenue)
-          const appointments = n(r.appointments)
-          return {
-            name: r.name,
-            revenue: Math.round(revenue),
-            attended,
-            ticketAvg: attended > 0 ? Math.round(revenue / attended) : 0,
-            occupancy: appointments > 0 ? Math.min(1, attended / appointments) : 0,
-          }
-        })
-      } else {
-        const rows = (await sql`
-          select id::text as id, name from professionals where active = true order by name limit 5
-        `) as { id: string; name: string }[]
-        professionals = rows.map((r) => ({
-          name: r.name,
-          revenue: 0,
-          attended: 0,
-          ticketAvg: 0,
-          occupancy: 0,
-        }))
-      }
-    } catch {
-      professionals = []
-    }
-  }
+  const [opsWeek, opsCommerce] = await Promise.all([
+    fetchOpsWeek(sql, today),
+    fetchOpsCommerce(sql, today),
+  ])
 
   let sync: UnitSnapshot['sync'] = {
     status: 'stale',
@@ -318,22 +261,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     unit: config.meta,
     today: todayMetrics,
     opsToday,
-    opsWeek: {
-      professionals,
-      services: [],
-      acquisition: [],
-      reactivationCount: 0,
-      returnRate: 0,
-      newClientsPeriod: 0,
-    },
-    opsCommerce: {
-      bookingChannels: [],
-      packages: [],
-      packagesSold: 0,
-      ratingsAvg: 0,
-      ratingsCount: 0,
-      birthdayCount: 0,
-    },
+    opsWeek,
+    opsCommerce,
     mtd,
     last30,
     sync,

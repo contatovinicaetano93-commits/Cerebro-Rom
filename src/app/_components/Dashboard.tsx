@@ -292,6 +292,7 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                 const empty =
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
+                  w.acquisition.length === 0 &&
                   w.reactivationCount === 0 &&
                   w.returnRate <= 0
                 return (
@@ -340,6 +341,16 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                             </li>
                           ))}
                         </ul>
+                        {w.acquisition.length > 0 ? (
+                          <ul className="space-y-1.5 border-t border-border/50 pt-3">
+                            {w.acquisition.slice(0, 3).map((a) => (
+                              <li key={a.channel} className="flex justify-between gap-2 text-sm">
+                                <span className="truncate text-muted">{a.channel}</span>
+                                <span>{a.clients} clientes</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
                       </div>
                     )}
                   </div>
