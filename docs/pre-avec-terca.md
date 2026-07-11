@@ -43,7 +43,9 @@ AVEC_MOCK=1 npm run dev
 
 ## Segunda — webhooks (antes do token)
 
-Configurar **cada loja** no Avec (ou bridge Zapier/Make):
+**Checklist detalhado:** [`segunda-feira.md`](segunda-feira.md)
+
+No chat: diga **`smoke segunda`** para o agente rodar validação automática.
 
 | Unidade | URL webhook | Header |
 |---------|-------------|--------|
