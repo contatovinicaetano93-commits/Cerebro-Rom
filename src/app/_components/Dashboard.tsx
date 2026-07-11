@@ -453,8 +453,14 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
               <p className="mt-4 text-xs text-muted">
                 Delta Brasil vs Iguatemi (MTD):{' '}
                 <span className="text-foreground">
-                  {data.comparison.deltaRevenuePct >= 0 ? '+' : ''}
-                  {formatPct(Math.abs(data.comparison.deltaRevenuePct))}
+                  {data.comparison.deltaRevenuePct == null ? (
+                    'Iguatemi sem faturamento no período'
+                  ) : (
+                    <>
+                      {data.comparison.deltaRevenuePct >= 0 ? '+' : ''}
+                      {formatPct(Math.abs(data.comparison.deltaRevenuePct))}
+                    </>
+                  )}
                 </span>
               </p>
             </CollapsibleSection>

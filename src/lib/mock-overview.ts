@@ -5,7 +5,7 @@ import type {
   UnitSlug,
   UnitSnapshot,
 } from '@/lib/types'
-import { clamp01 } from '@/lib/format'
+import { leaderBy, rate } from '@/lib/comparison'
 
 const UNITS: Record<UnitSlug, UnitMeta> = {
   'rom-brasil': {
@@ -171,16 +171,6 @@ function buildUnit(
   }
 }
 
-function rate(num: number, den: number): number {
-  if (den <= 0) return 0
-  return clamp01(num / den)
-}
-
-function leaderBy(units: UnitSnapshot[], score: (u: UnitSnapshot) => number): UnitSlug {
-  const sorted = [...units].sort((a, b) => score(b) - score(a))
-  return sorted[0]?.unit.slug ?? 'rom-brasil'
-}
-
 export function buildMockOverview(): CerebroOverview {
   const brasil = buildUnit(
     'rom-brasil',
@@ -235,7 +225,7 @@ export function buildMockOverview(): CerebroOverview {
     iguatemi.mtd.revenue > 0
       ? (brasil.mtd.revenue - iguatemi.mtd.revenue) / iguatemi.mtd.revenue
       : brasil.mtd.revenue > 0
-        ? 1
+        ? null // Iguatemi zerado, Brasil não — % não representa isso direito
         : 0
 
   return {

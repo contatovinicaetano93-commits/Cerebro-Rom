@@ -1,18 +1,8 @@
 import { buildMockOverview } from '@/lib/mock-overview'
 import { fetchLiveUnit } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo } from '@/lib/unit-config'
-import { clamp01 } from '@/lib/format'
-import type { AlertItem, CerebroOverview, UnitSlug, UnitSnapshot } from '@/lib/types'
-
-function rate(num: number, den: number): number {
-  if (den <= 0) return 0
-  return clamp01(num / den)
-}
-
-function leaderBy(units: UnitSnapshot[], score: (u: UnitSnapshot) => number): UnitSlug {
-  const sorted = [...units].sort((a, b) => score(b) - score(a))
-  return sorted[0]?.unit.slug ?? 'rom-brasil'
-}
+import { leaderBy, rate } from '@/lib/comparison'
+import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
 /** Comparativo entre unidades — só existe com as duas presentes. */
 export function buildComparison(units: UnitSnapshot[]): CerebroOverview['comparison'] {
@@ -24,7 +14,7 @@ export function buildComparison(units: UnitSnapshot[]): CerebroOverview['compari
     iguatemi.mtd.revenue > 0
       ? (brasil.mtd.revenue - iguatemi.mtd.revenue) / iguatemi.mtd.revenue
       : brasil.mtd.revenue > 0
-        ? 1
+        ? null // Iguatemi zerado, Brasil não — % não representa isso direito
         : 0
 
   return {

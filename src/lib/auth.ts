@@ -22,6 +22,12 @@ export function isAuthEnabled() {
   return Boolean(getAdminPassword())
 }
 
+/** Produção "de verdade" — não confundir com build de Preview do Vercel. */
+function isProduction() {
+  if (process.env.VERCEL_ENV) return process.env.VERCEL_ENV === 'production'
+  return process.env.NODE_ENV === 'production'
+}
+
 /** HMAC-SHA256 compatível com Edge Runtime (Web Crypto). */
 export async function createSessionToken() {
   const password = getAdminPassword()
@@ -50,7 +56,9 @@ export function validateAdminCredentials(username: string, password: string) {
 }
 
 export async function isAuthorized(req: NextRequest) {
-  if (!isAuthEnabled()) return true
+  // Produção sem CEREBRO_ADMIN_PASSWORD configurada = fechado (nunca abrir o
+  // painel sem querer). Fora de produção sem senha = aberto (conveniência local).
+  if (!isAuthEnabled()) return !isProduction()
 
   const session = req.cookies.get(AUTH_COOKIE)?.value
   if (!session) return false

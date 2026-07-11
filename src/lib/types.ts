@@ -91,8 +91,12 @@ export interface UnitComparison {
   occupancyLeader: UnitSlug
   attendanceLeader: UnitSlug
   ticketLeader: UnitSlug
-  /** MTD Brasil vs Iguatemi: positivo = Brasil à frente. */
-  deltaRevenuePct: number
+  /**
+   * MTD Brasil vs Iguatemi: positivo = Brasil à frente.
+   * null = não dá pra expressar como %: uma unidade faturou e a outra
+   * está zerada no período (divisão por zero seria infinita/enganosa).
+   */
+  deltaRevenuePct: number | null
 }
 
 export interface CerebroOverview {
