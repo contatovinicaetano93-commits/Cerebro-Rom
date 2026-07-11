@@ -29,6 +29,29 @@ export function buildComparison(units: UnitSnapshot[]): CerebroOverview['compari
 
 const SEV = { critical: 0, warning: 1, info: 2 }
 
+function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
+  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
+  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
+  const brasilByDay = new Map(brasil?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  const iguatemiByDay = new Map(iguatemi?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  const allDays = [...new Set([...brasilByDay.keys(), ...iguatemiByDay.keys()])].sort()
+
+  if (allDays.length === 0) {
+    const days = brasil?.last30 ?? iguatemi?.last30 ?? []
+    return days.map((row, idx) => ({
+      day: row.day.slice(5),
+      brasil: brasil?.last30[idx]?.revenue ?? 0,
+      iguatemi: iguatemi?.last30[idx]?.revenue ?? 0,
+    }))
+  }
+
+  return allDays.map((day) => ({
+    day: day.slice(5),
+    brasil: brasilByDay.get(day) ?? 0,
+    iguatemi: iguatemiByDay.get(day) ?? 0,
+  }))
+}
+
 /** Uma lista só: o que o Waltter deve fazer agora. */
 function buildNextActions(
   units: UnitSnapshot[],
@@ -60,6 +83,23 @@ function buildNextActions(
         action: awaiting
           ? 'Colar AVEC_API_TOKEN na Vercel → sync full'
           : 'Rodar sync ou validar cron',
+      })
+    }
+
+    const sparse =
+      u.today.revenue === 0 &&
+      u.mtd.revenue === 0 &&
+      u.today.attended === 0 &&
+      u.mtd.attended === 0
+    if (sparse) {
+      actions.push({
+        id: `sparse-${u.unit.slug}`,
+        severity: 'info',
+        unit: u.unit.slug,
+        title: `Dados financeiros fracos — ${u.unit.short}`,
+        detail:
+          'Há conexão live, mas faturamento/atendidos no Neon estão zerados. Sync Avec precisa popular revenue/attended.',
+        action: 'Priorizar AVEC_API_TOKEN + sync full diário',
       })
     }
 
@@ -196,6 +236,56 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   }
 }
 
+function emptyConsolidated(): CerebroOverview['consolidated'] {
+  return {
+    todayRevenue: 0,
+    todayGoal: 0,
+    todayGoalProgress: 0,
+    mtdRevenue: 0,
+    mtdGoal: 0,
+    mtdGoalProgress: 0,
+    attendanceRate: 0,
+    noShowRate: 0,
+    occupancyRate: 0,
+    ticketAvg: 0,
+    revenueAtRisk: 0,
+    newClients: 0,
+    returningClients: 0,
+    conversionRate: 0,
+    openSlotsToday: 0,
+    openSlotsNext2h: 0,
+    cancelledToday: 0,
+    noShowsToday: 0,
+    newShare: 0,
+  }
+}
+
+function degradedOverview(
+  detail: string,
+  action: string,
+  alertId = 'live-degraded',
+): CerebroOverview {
+  return {
+    generatedAt: new Date().toISOString(),
+    mode: 'degraded',
+    partial: true,
+    periodLabel: `Degradado · ${todayIsoSaoPaulo()}`,
+    consolidated: emptyConsolidated(),
+    units: [],
+    trend30: [],
+    nextActions: [
+      {
+        id: alertId,
+        severity: 'critical',
+        unit: 'both',
+        title: 'Live indisponível',
+        detail,
+        action,
+      },
+    ],
+  }
+}
+
 export async function buildLiveOverview(): Promise<CerebroOverview> {
   const configs = getUnitConfigs()
   const configured = configs.filter((c) => c.databaseUrl)
@@ -230,14 +320,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
   units.sort((a, b) => a.unit.slug.localeCompare(b.unit.slug))
 
   const consolidated = consolidate(units)
-  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
-  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
-  const days = brasil?.last30 ?? iguatemi?.last30 ?? []
-  const trend30 = days.map((row, idx) => ({
-    day: row.day.slice(5),
-    brasil: brasil?.last30[idx]?.revenue ?? 0,
-    iguatemi: iguatemi?.last30[idx]?.revenue ?? 0,
-  }))
+  const trend30 = buildTrend30(units)
 
   const nextActions = [
     ...fetchErrors,
@@ -285,33 +368,11 @@ export async function buildOverview(): Promise<CerebroOverview> {
   if (!hasDb) {
     if (isProd) {
       return {
-        generatedAt: new Date().toISOString(),
-        mode: 'degraded',
-        partial: true,
-        periodLabel: `Degradado · ${todayIsoSaoPaulo()}`,
-        consolidated: {
-          todayRevenue: 0,
-          todayGoal: 0,
-          todayGoalProgress: 0,
-          mtdRevenue: 0,
-          mtdGoal: 0,
-          mtdGoalProgress: 0,
-          attendanceRate: 0,
-          noShowRate: 0,
-          occupancyRate: 0,
-          ticketAvg: 0,
-          revenueAtRisk: 0,
-          newClients: 0,
-          returningClients: 0,
-          conversionRate: 0,
-          openSlotsToday: 0,
-          openSlotsNext2h: 0,
-          cancelledToday: 0,
-          noShowsToday: 0,
-          newShare: 0,
-        },
-        units: [],
-        trend30: [],
+        ...degradedOverview(
+          'NEON_*_DATABASE_URL ausente em produção',
+          'Configurar connection strings na Vercel',
+          'no-neon',
+        ),
         nextActions: [
           {
             id: 'no-neon',
@@ -330,44 +391,9 @@ export async function buildOverview(): Promise<CerebroOverview> {
   try {
     return await buildLiveOverview()
   } catch (err) {
-    return {
-      generatedAt: new Date().toISOString(),
-      mode: 'degraded',
-      partial: true,
-      periodLabel: `Degradado · ${todayIsoSaoPaulo()}`,
-      consolidated: {
-        todayRevenue: 0,
-        todayGoal: 0,
-        todayGoalProgress: 0,
-        mtdRevenue: 0,
-        mtdGoal: 0,
-        mtdGoalProgress: 0,
-        attendanceRate: 0,
-        noShowRate: 0,
-        occupancyRate: 0,
-        ticketAvg: 0,
-        revenueAtRisk: 0,
-        newClients: 0,
-        returningClients: 0,
-        conversionRate: 0,
-        openSlotsToday: 0,
-        openSlotsNext2h: 0,
-        cancelledToday: 0,
-        noShowsToday: 0,
-        newShare: 0,
-      },
-      units: [],
-      trend30: [],
-      nextActions: [
-        {
-          id: 'live-degraded',
-          severity: 'critical',
-          unit: 'both',
-          title: 'Live indisponível',
-          detail: String(err instanceof Error ? err.message : err),
-          action: 'Checar Neons e reiniciar',
-        },
-      ],
-    }
+    return degradedOverview(
+      String(err instanceof Error ? err.message : err),
+      'Checar Neons e reiniciar',
+    )
   }
 }

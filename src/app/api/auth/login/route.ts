@@ -3,11 +3,18 @@ import {
   AUTH_COOKIE,
   createSessionToken,
   isAuthEnabled,
+  isProduction,
   validateAdminCredentials,
 } from '@/lib/auth'
 
 export async function POST(req: Request) {
   if (!isAuthEnabled()) {
+    if (isProduction()) {
+      return NextResponse.json(
+        { error: 'Auth não configurado — defina CEREBRO_ADMIN_PASSWORD' },
+        { status: 503 },
+      )
+    }
     return NextResponse.json({ data: { auth: 'disabled' } })
   }
 
@@ -25,7 +32,7 @@ export async function POST(req: Request) {
   res.cookies.set(AUTH_COOKIE, await createSessionToken(), {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction(),
     path: '/',
     maxAge: 60 * 60 * 24 * 30,
   })

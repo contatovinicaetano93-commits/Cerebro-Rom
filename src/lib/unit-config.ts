@@ -14,7 +14,7 @@ function numEnv(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback
 }
 
-const UNIT_META: Record<UnitSlug, UnitMeta> = {
+export const UNIT_META: Record<UnitSlug, UnitMeta> = {
   'rom-brasil': {
     slug: 'rom-brasil',
     name: 'ROM Brasil',
@@ -61,4 +61,18 @@ export function monthStartIso(dayIso: string): string {
 
 export function dayOfMonth(dayIso: string): number {
   return Number(dayIso.slice(8, 10)) || 1
+}
+
+/** Horas úteis do salão por dia — usado para estimar capacidade nas próximas 2h. */
+export const SALON_HOURS_PER_DAY = 8
+
+/** Subtrai dias de uma data ISO (YYYY-MM-DD) sem depender do fuso do servidor. */
+export function isoDaysBackFrom(dayIso: string, back: number): string {
+  const [y, m, d] = dayIso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() - back)
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
 }

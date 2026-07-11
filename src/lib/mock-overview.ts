@@ -1,32 +1,16 @@
-import type {
-  CerebroOverview,
-  DayMetrics,
-  UnitMeta,
-  UnitSlug,
-  UnitSnapshot,
-} from '@/lib/types'
+import type { CerebroOverview, DayMetrics, UnitSlug, UnitSnapshot } from '@/lib/types'
 import { leaderBy, rate } from '@/lib/comparison'
-
-const UNITS: Record<UnitSlug, UnitMeta> = {
-  'rom-brasil': {
-    slug: 'rom-brasil',
-    name: 'ROM Brasil',
-    short: 'Brasil',
-    accent: '#c4a35a',
-  },
-  'rom-iguatemi': {
-    slug: 'rom-iguatemi',
-    name: 'ROM Iguatemi',
-    short: 'Iguatemi',
-    accent: '#7eb8a8',
-  },
-}
+import {
+  UNIT_META,
+  dayOfMonth,
+  isoDaysBackFrom,
+  monthStartIso,
+  SALON_HOURS_PER_DAY,
+  todayIsoSaoPaulo,
+} from '@/lib/unit-config'
 
 function isoDaysBack(n: number): string {
-  const d = new Date()
-  d.setHours(12, 0, 0, 0)
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
+  return isoDaysBackFrom(todayIsoSaoPaulo(), n)
 }
 
 function seeded(seed: number): number {
@@ -84,16 +68,16 @@ function buildUnit(
   slug: UnitSlug,
   capacity: number,
   dailyGoal: number,
-  monthlyGoal: number,
   baseRevenue: number,
   pros: { name: string; revenue: number; attended: number; ticketAvg: number; occupancy: number }[],
   sync: UnitSnapshot['sync'],
 ): UnitSnapshot {
   const last30 = buildSeries(slug, capacity, dailyGoal, baseRevenue)
   const today = last30[last30.length - 1]!
-  const monthStart = `${today.day.slice(0, 8)}01`
+  const todayIso = today.day
+  const monthStart = monthStartIso(todayIso)
   const mtdDays = last30.filter((d) => d.day >= monthStart)
-  const capacityNext2h = Math.max(1, Math.round((capacity / 8) * 2))
+  const capacityNext2h = Math.max(1, Math.round((capacity / SALON_HOURS_PER_DAY) * 2))
   const appointmentsNext2h = Math.min(
     capacityNext2h,
     Math.round(capacityNext2h * (0.55 + seeded(slug === 'rom-brasil' ? 3 : 9) * 0.4)),
@@ -101,7 +85,7 @@ function buildUnit(
   const mixBase = today.newClients + today.returningClients
 
   return {
-    unit: UNITS[slug],
+    unit: UNIT_META[slug],
     today,
     opsToday: {
       openSlotsToday: Math.max(0, capacity - today.appointments),
@@ -164,7 +148,7 @@ function buildUnit(
       newClients: sumField(mtdDays, 'newClients'),
       returningClients: sumField(mtdDays, 'returningClients'),
       cancelled: sumField(mtdDays, 'cancelled'),
-      goal: monthlyGoal,
+      goal: dailyGoal * dayOfMonth(todayIso),
     },
     last30,
     sync,
@@ -176,7 +160,6 @@ export function buildMockOverview(): CerebroOverview {
     'rom-brasil',
     18,
     6200,
-    155000,
     4800,
     [
       { name: 'Camila R.', revenue: 28400, attended: 62, ticketAvg: 458, occupancy: 0.91 },
@@ -193,7 +176,6 @@ export function buildMockOverview(): CerebroOverview {
     'rom-iguatemi',
     14,
     5100,
-    128000,
     3900,
     [
       { name: 'Sofia A.', revenue: 22100, attended: 48, ticketAvg: 460, occupancy: 0.88 },
@@ -225,7 +207,7 @@ export function buildMockOverview(): CerebroOverview {
     iguatemi.mtd.revenue > 0
       ? (brasil.mtd.revenue - iguatemi.mtd.revenue) / iguatemi.mtd.revenue
       : brasil.mtd.revenue > 0
-        ? null // Iguatemi zerado, Brasil não — % não representa isso direito
+        ? null
         : 0
 
   return {
