@@ -23,7 +23,7 @@ export function isAuthEnabled() {
 }
 
 /** Produção "de verdade" — não confundir com build de Preview do Vercel. */
-function isProduction() {
+export function isProduction() {
   if (process.env.VERCEL_ENV) return process.env.VERCEL_ENV === 'production'
   return process.env.NODE_ENV === 'production'
 }

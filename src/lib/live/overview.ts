@@ -2,6 +2,7 @@ import { buildMockOverview } from '@/lib/mock-overview'
 import { fetchLiveUnit } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo } from '@/lib/unit-config'
 import { leaderBy, rate } from '@/lib/comparison'
+import { isProduction } from '@/lib/auth'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
 /** Comparativo entre unidades — só existe com as duas presentes. */
@@ -275,7 +276,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
 export async function buildOverview(): Promise<CerebroOverview> {
   const hasDb = getUnitConfigs().some((c) => c.databaseUrl)
   const forceMock = process.env.CEREBRO_FORCE_MOCK === '1'
-  const isProd = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production'
+  const isProd = isProduction()
 
   if (forceMock && !isProd) {
     return buildMockOverview()

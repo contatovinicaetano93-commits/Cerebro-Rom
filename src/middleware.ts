@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { isAuthorized, isAuthEnabled } from '@/lib/auth'
+import { isAuthorized } from '@/lib/auth'
 
 export async function middleware(req: NextRequest) {
-  if (!isAuthEnabled()) return NextResponse.next()
-
   const { pathname } = req.nextUrl
 
   if (pathname === '/login' || pathname.startsWith('/api/auth/')) {
