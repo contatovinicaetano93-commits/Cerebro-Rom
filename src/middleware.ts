@@ -5,7 +5,13 @@ import { isAuthEnabled, isAuthorized, isProduction } from '@/lib/auth'
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  if (pathname === '/login' || pathname.startsWith('/api/auth/') || pathname === '/api/health') {
+  if (
+    pathname === '/login' ||
+    pathname.startsWith('/api/auth/') ||
+    pathname === '/api/health' ||
+    pathname === '/monitoring' ||
+    pathname.startsWith('/monitoring/')
+  ) {
     return NextResponse.next()
   }
 
