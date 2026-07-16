@@ -6,6 +6,7 @@ import {
   isProduction,
   validateAdminCredentials,
 } from '@/lib/auth'
+import { LoginRequestSchema } from '@/lib/schemas'
 
 export async function POST(req: Request) {
   if (!isAuthEnabled()) {
@@ -19,12 +20,18 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null)
-  const username = typeof body?.username === 'string' ? body.username.trim() : ''
-  const password = typeof body?.password === 'string' ? body.password : ''
 
-  // Usuário precisa ser informado explicitamente — não completar com o admin
-  // default, senão um atacante só precisa acertar a senha.
-  if (!username || !password || !validateAdminCredentials(username, password)) {
+  const validation = LoginRequestSchema.safeParse(body)
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: validation.error.errors[0]?.message || 'Dados inválidos' },
+      { status: 400 },
+    )
+  }
+
+  const { username, password } = validation.data
+
+  if (!validateAdminCredentials(username, password)) {
     return NextResponse.json({ error: 'Usuário ou senha incorretos' }, { status: 401 })
   }
 
