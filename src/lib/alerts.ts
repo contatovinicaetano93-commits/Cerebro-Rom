@@ -1,5 +1,3 @@
-import { getSql } from '@/lib/db'
-
 export interface Alert {
   id: string
   type: 'sync_failed' | 'sync_timeout' | 'health_degraded'
@@ -9,6 +7,14 @@ export interface Alert {
   context: Record<string, any>
   created_at: string
   resolved_at: string | null
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 export class AlertManager {
@@ -50,7 +56,7 @@ export class AlertManager {
     }
 
     if (channels?.email) {
-      await this.sendEmail(message, alert)
+      await this.sendEmail(alert)
     }
 
     if (channels?.webhook) {
@@ -78,7 +84,7 @@ export class AlertManager {
     }
 
     try {
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,33 +93,58 @@ export class AlertManager {
           parse_mode: 'Markdown',
         }),
       })
+      if (!res.ok) {
+        console.error(`[ALERT] Telegram HTTP ${res.status}: ${await res.text().catch(() => '')}`)
+      }
     } catch (e) {
       console.error('[ALERT] Failed to send Telegram:', e)
     }
   }
 
-  private static async sendEmail(message: string, alert: Alert): Promise<void> {
-    const emailTo = process.env.ALERT_EMAIL_TO
+  private static async sendEmail(alert: Alert): Promise<void> {
+    const apiKey = process.env.RESEND_API_KEY?.trim()
+    const emailTo = process.env.ALERT_EMAIL_TO?.trim()
+    const from =
+      process.env.RESEND_FROM?.trim() || 'Cérebro ROM <onboarding@resend.dev>'
+
+    if (!apiKey) {
+      console.warn('[ALERT] RESEND_API_KEY not configured')
+      return
+    }
 
     if (!emailTo) {
-      console.warn('[ALERT] Email not configured')
+      console.warn('[ALERT] ALERT_EMAIL_TO not configured')
+      return
+    }
+
+    const to = emailTo.split(/[,;\s]+/).map((e) => e.trim()).filter(Boolean)
+    if (to.length === 0) {
+      console.warn('[ALERT] ALERT_EMAIL_TO empty after parse')
       return
     }
 
     try {
-      await fetch('https://api.resend.com/emails', {
+      const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          from: 'alerts@rom.dev',
-          to: emailTo,
+          from,
+          to,
           subject: `[${alert.severity.toUpperCase()}] ${alert.title}`,
-          html: `<p>${alert.message}</p><p><small>${alert.context ? JSON.stringify(alert.context) : ''}</small></p>`,
+          html: `<p>${escapeHtml(alert.message)}</p><p><small>${escapeHtml(
+            alert.context ? JSON.stringify(alert.context) : '',
+          )}</small></p>`,
         }),
       })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { message?: string }
+        console.error(
+          `[ALERT] Resend HTTP ${res.status}: ${body.message ?? 'unknown error'}`,
+        )
+      }
     } catch (e) {
       console.error('[ALERT] Failed to send email:', e)
     }

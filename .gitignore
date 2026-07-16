@@ -41,3 +41,6 @@ NOTES.md
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# graphify (artefato local de análise)
+graphify-out/
