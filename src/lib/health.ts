@@ -22,19 +22,14 @@ async function probeNeon(url: string | null | undefined) {
   }
 }
 
-/** Monitoramento externo — sem segredos. */
+/** Monitoramento externo — sem segredos e sem probe de Neon (evita recon/DB load anônimo). */
 export async function getPublicHealthStatus() {
   const configs = getUnitConfigs()
-  const probes = await Promise.all(
-    configs.map(async (c) => ({
-      slug: c.meta.slug,
-      ...(await probeNeon(c.databaseUrl)),
-    })),
-  )
-  const anyConnected = probes.some((p) => p.connected)
   return {
-    ok: anyConnected || !isProduction(),
-    units: probes,
+    ok: true,
+    service: 'cerebro',
+    units_configured: configs.filter((c) => Boolean(c.databaseUrl?.trim())).length,
+    // Detalhe por unidade (connected/error) só no health autenticado.
   }
 }
 
@@ -63,8 +58,9 @@ export async function getHealthStatus() {
       auth: isAuthEnabled(),
       neon_brasil: envOk('NEON_BRASIL_DATABASE_URL'),
       neon_iguatemi: envOk('NEON_IGUATEMI_DATABASE_URL'),
-      awaiting_avec_token: true,
-      note: 'KPIs Avec dependem de AVEC_API_TOKEN nas unidades ROM (terça)',
+      // Cérebro não guarda AVEC_API_TOKEN — sync vive nas unidades.
+      awaiting_avec_token: false,
+      note: 'KPIs Avec dependem de AVEC_API_TOKEN + sync nas unidades ROM (não no Cérebro)',
     },
     units: probes,
     overview: overview
