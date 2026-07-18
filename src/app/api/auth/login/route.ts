@@ -6,7 +6,13 @@ import {
   isProduction,
   validateAdminCredentials,
 } from '@/lib/auth'
+import { RateLimiter } from '@/lib/rate-limiter'
 import { LoginRequestSchema } from '@/lib/schemas'
+
+function clientKey(req: Request) {
+  const forwarded = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  return `login:${forwarded || req.headers.get('x-real-ip') || 'unknown'}`
+}
 
 export async function POST(req: Request) {
   if (!isAuthEnabled()) {
@@ -17,6 +23,12 @@ export async function POST(req: Request) {
       )
     }
     return NextResponse.json({ data: { auth: 'disabled' } })
+  }
+
+  const limitKey = clientKey(req)
+  // 10 tentativas / 15 min por IP (in-memory; bom o bastante em serverless curto).
+  if (!RateLimiter.checkLimit(limitKey, 10, 15 * 60)) {
+    return NextResponse.json({ error: 'Muitas tentativas — aguarde e tente de novo' }, { status: 429 })
   }
 
   const body = await req.json().catch(() => null)
