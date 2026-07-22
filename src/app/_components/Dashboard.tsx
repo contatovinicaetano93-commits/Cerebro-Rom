@@ -51,7 +51,15 @@ function unitAccent(slug: string) {
   return slug === 'rom-brasil' ? 'text-brass' : 'text-teal'
 }
 
-function formatRowValue(row: ComparisonRow, value: number | null): string {
+function formatRowValue(
+  row: ComparisonRow,
+  side: 'brasil' | 'iguatemi',
+): string {
+  if (row.format === 'text') {
+    const text = side === 'brasil' ? row.brasilText : row.iguatemiText
+    return text?.trim() ? text : '—'
+  }
+  const value = side === 'brasil' ? row.brasil : row.iguatemi
   if (value == null || !Number.isFinite(value)) return '—'
   switch (row.format) {
     case 'currency':
@@ -518,16 +526,20 @@ export function Dashboard({
                             <span className="mr-1 text-[0.65rem] uppercase text-muted sm:hidden">
                               BR
                             </span>
-                            {formatRowValue(row, row.brasil)}
+                            {formatRowValue(row, 'brasil')}
                           </span>
                           <span className="text-sm text-teal">
                             <span className="mr-1 text-[0.65rem] uppercase text-muted sm:hidden">
                               IG
                             </span>
-                            {formatRowValue(row, row.iguatemi)}
+                            {formatRowValue(row, 'iguatemi')}
                           </span>
-                          <span className={`text-right text-sm tabular-nums ${deltaTone(row)}`}>
-                            {formatSignedPct(row.deltaPct)}
+                          <span
+                            className={`text-right text-sm tabular-nums ${
+                              row.format === 'text' ? 'text-muted' : deltaTone(row)
+                            }`}
+                          >
+                            {row.format === 'text' ? '—' : formatSignedPct(row.deltaPct)}
                           </span>
                         </li>
                       ))}
