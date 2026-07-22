@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { CerebroOverview } from '@/lib/types'
 import { Dashboard } from './_components/Dashboard'
 
@@ -9,40 +9,36 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/overview', { cache: 'no-store' })
-      .then(async (res) => {
-        if (res.status === 401) {
-          window.location.href = '/login?next=/'
-          return null
-        }
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(
-            typeof body?.error === 'string' ? body.error : `Erro ao carregar (${res.status})`,
-          )
-        }
-        return res.json() as Promise<{ data?: CerebroOverview; error?: string }>
-      })
-      .then((json) => {
-        if (cancelled || json == null) return
-        if (json.error) setError(json.error)
-        else if (json.data) setData(json.data)
-        else setError('Resposta vazia')
-      })
-      .catch((e) => {
-        if (!cancelled) setError(String(e))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
+  const load = useCallback(async () => {
+    setError(null)
+    try {
+      const res = await fetch('/api/overview', { cache: 'no-store' })
+      if (res.status === 401) {
+        window.location.href = '/login?next=/'
+        return
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(
+          typeof body?.error === 'string' ? body.error : `Erro ao carregar (${res.status})`,
+        )
+      }
+      const json = (await res.json()) as { data?: CerebroOverview; error?: string }
+      if (json.error) setError(json.error)
+      else if (json.data) setData(json.data)
+      else setError('Resposta vazia')
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  if (loading) {
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  if (loading && !data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
@@ -64,5 +60,13 @@ export default function HomePage() {
     )
   }
 
-  return <Dashboard data={data} />
+  return (
+    <Dashboard
+      data={data}
+      onRefresh={() => {
+        setLoading(true)
+        void load()
+      }}
+    />
+  )
 }

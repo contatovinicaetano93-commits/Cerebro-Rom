@@ -9,25 +9,28 @@ Painel executivo para o **Waltter** conduzir **ROM Brasil** + **ROM Iguatemi** c
 | **Live** | `NEON_BRASIL_DATABASE_URL` e/ou `NEON_IGUATEMI_DATABASE_URL` no `.env.local` |
 | **Mock** | Sem URLs, `CEREBRO_FORCE_MOCK=1`, ou falha total do live (fallback) |
 
-Live é **somente leitura** nos Neons dos apps operacionais. Não mistura bancos nem escreve neles.
+Live lê os Neons das unidades. **Única escrita:** tabela `cerebro_goals` (metas no painel).
 
 ```
 ROM Brasil (Neon rom-club)     ──SELECT──┐
                                          ├──► GET /api/overview ──► Cérebro
 ROM Iguatemi (Neon ROM-IGUATEMI) ─SELECT─┘
+                                         └──► PUT /api/goals → cerebro_goals
 ```
 
 ## KPIs
 
 | Bloco | Métricas |
 |-------|----------|
-| **Consolidado hoje** | Faturamento, meta do dia, progresso |
-| **MTD** | Receita acumulada do mês vs meta (meta = daily × dia do mês) |
+| **Metas** | Meta diária + capacidade por unidade (editável no painel) |
+| **Consolidado hoje** | Faturamento, meta do dia (quando definida), progresso |
+| **MTD** | Receita acumulada do mês vs meta |
 | **Operação** | Ocupação, comparecimento, taxa de no-show |
-| **Qualidade** | Ticket médio, receita em risco, novos clientes, conversão |
-| **Por unidade** | Mesmos KPIs + top profissionais + status sync Avec |
+| **Financeiro Avec** | CMV (saídas 0044), CMV/receita, conciliação 0081 |
+| **Estoque Avec** | Valor, alertas, SKUs zerados, drift vs 0045 |
+| **Comparativo** | Scorecard Brasil × Iguatemi com Δ% |
 | **Tendência** | Receita 30 dias Brasil vs Iguatemi |
-| **Alertas** | Sync erro/atrasado, no-show, dados financeiros fracos |
+| **Alertas** | Sync, no-show, metas, estoque, conciliação |
 
 ## Setup
 

@@ -117,9 +117,11 @@ export const EMPTY_OPS_COMMERCE: OpsCommerce = {
   bookingChannels: [],
   packages: [],
   packagesSold: 0,
+  packagesRevenue: 0,
   ratingsAvg: 0,
   ratingsCount: 0,
   birthdayCount: 0,
+  topBookingChannel: null,
 }
 
 type P1Row = {
@@ -215,12 +217,18 @@ export async function fetchOpsCommerce(sql: Sql, today: string): Promise<OpsComm
   const p2 = await fetchLatestP2(sql, today)
   if (!p2) return EMPTY_OPS_COMMERCE
 
+  const bookingChannels = parseBookingChannels(p2.booking_channels)
+  const packages = parsePackages(p2.packages)
+  const packagesRevenue = packages.reduce((a, p) => a + p.revenue, 0)
+
   return {
-    bookingChannels: parseBookingChannels(p2.booking_channels),
-    packages: parsePackages(p2.packages),
+    bookingChannels,
+    packages,
     packagesSold: n(p2.packages_sold),
+    packagesRevenue,
     ratingsAvg: n(p2.ratings_avg),
     ratingsCount: n(p2.ratings_count),
     birthdayCount: n(p2.birthday_count),
+    topBookingChannel: bookingChannels[0]?.channel ?? null,
   }
 }

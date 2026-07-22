@@ -19,6 +19,10 @@ export interface DayMetrics {
   ticketAvg: number
   capacity: number
   dailyGoal: number
+  /** Meta diária definida no Cérebro (ou env bootstrap). */
+  goalSet: boolean
+  /** Capacidade definida no Cérebro (ou env bootstrap). */
+  capacitySet: boolean
   leads: number
   converted: number
 }
@@ -42,14 +46,50 @@ export interface OpsWeek {
   newClientsPeriod: number
 }
 
-/** Comercial leve — Avec 0056, 0061, 0104, 0001 (sem mix pagamento) */
+/** Comercial leve — Avec 0056, 0061, 0104, 0001 (sem despesas manuais) */
 export interface OpsCommerce {
   bookingChannels: { channel: string; count: number }[]
   packages: { name: string; quantity: number; revenue: number }[]
   packagesSold: number
+  packagesRevenue: number
   ratingsAvg: number
   ratingsCount: number
   birthdayCount: number
+  topBookingChannel: string | null
+}
+
+export type PaymentReconcileStatus =
+  | 'aligned'
+  | 'divergent'
+  | 'missing_payments'
+  | 'missing_revenue'
+  | 'unknown'
+
+/**
+ * Financeiro Avec-only (sem despesas manuais).
+ * Receita/ticket = salon_daily_metrics · CMV = saídas 0044 · mix = 0081 via P2.
+ */
+export interface OpsFinance {
+  mtdRevenue: number
+  mtdAttended: number
+  mtdTicketAvg: number
+  cmv: number
+  /** CMV ÷ receita MTD — null se sem receita. */
+  cmvShare: number | null
+  paymentsTotal: number
+  paymentReconcile: PaymentReconcileStatus
+  topPaymentMethod: string | null
+  available: boolean
+}
+
+/** Estoque Avec-only — posição 0149 + alertas + drift vs 0045 quando existir. */
+export interface OpsStock {
+  available: boolean
+  totalValue: number
+  productCount: number
+  activeAlerts: number
+  zeroProducts: number
+  drift: number | null
 }
 
 export interface UnitSnapshot {
@@ -58,6 +98,8 @@ export interface UnitSnapshot {
   opsToday: OpsToday
   opsWeek: OpsWeek
   opsCommerce: OpsCommerce
+  opsFinance: OpsFinance
+  opsStock: OpsStock
   mtd: {
     revenue: number
     attended: number
@@ -67,6 +109,7 @@ export interface UnitSnapshot {
     returningClients: number
     cancelled: number
     goal: number
+    goalSet: boolean
   }
   last30: DayMetrics[]
   sync: {
@@ -85,16 +128,28 @@ export interface AlertItem {
   action: string
 }
 
-/** Quem lidera cada métrica entre as unidades — só existe com as duas ao vivo. */
+export type ComparisonGroup = 'ops' | 'comercial' | 'financeiro' | 'estoque'
+export type ComparisonFormat = 'currency' | 'pct' | 'number'
+
+/** Linha do scorecard Brasil × Iguatemi × Δ%. */
+export interface ComparisonRow {
+  key: string
+  label: string
+  group: ComparisonGroup
+  brasil: number | null
+  iguatemi: number | null
+  /** (brasil − iguatemi) / |iguatemi|; null se não comparável. */
+  deltaPct: number | null
+  format: ComparisonFormat
+  /** Se true, valor maior é melhor (pinta Δ). */
+  higherIsBetter: boolean
+}
+
 export interface UnitComparison {
-  revenueLeader: UnitSlug
-  occupancyLeader: UnitSlug
-  attendanceLeader: UnitSlug
-  ticketLeader: UnitSlug
+  rows: ComparisonRow[]
   /**
    * MTD Brasil vs Iguatemi: positivo = Brasil à frente.
-   * null = não dá pra expressar como %: uma unidade faturou e a outra
-   * está zerada no período (divisão por zero seria infinita/enganosa).
+   * null = não dá pra expressar como % (denominador zero).
    */
   deltaRevenuePct: number | null
 }
@@ -108,12 +163,16 @@ export interface CerebroOverview {
     todayRevenue: number
     todayGoal: number
     todayGoalProgress: number
+    /** false até Waltter preencher metas no painel (ou env). */
+    goalsConfigured: boolean
     mtdRevenue: number
     mtdGoal: number
     mtdGoalProgress: number
     attendanceRate: number
     noShowRate: number
     occupancyRate: number
+    /** false se nenhuma unidade tem capacidade definida. */
+    occupancyConfigured: boolean
     ticketAvg: number
     revenueAtRisk: number
     newClients: number
@@ -124,6 +183,11 @@ export interface CerebroOverview {
     cancelledToday: number
     noShowsToday: number
     newShare: number
+    /** CMV rede (Avec) no MTD. */
+    cmv: number
+    cmvShare: number | null
+    stockValue: number
+    stockAlerts: number
   }
   units: UnitSnapshot[]
   trend30: { day: string; brasil: number; iguatemi: number }[]

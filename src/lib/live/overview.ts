@@ -35,8 +35,20 @@ function buildNextActions(
   units: UnitSnapshot[],
   todayGoal: number,
   todayRevenue: number,
+  goalsConfigured: boolean,
 ): AlertItem[] {
   const actions: AlertItem[] = []
+
+  if (!goalsConfigured) {
+    actions.push({
+      id: 'goals-unset',
+      severity: 'info',
+      unit: 'both',
+      title: 'Metas ainda não definidas',
+      detail: 'Preencha meta diária e capacidade de cada unidade no painel.',
+      action: 'Abrir Metas → salvar Brasil e Iguatemi',
+    })
+  }
 
   for (const u of units) {
     if (u.sync.status === 'error') {
@@ -103,7 +115,7 @@ function buildNextActions(
       })
     }
 
-    if (u.opsToday.openSlotsNext2h >= 2) {
+    if (u.today.capacitySet && u.opsToday.openSlotsNext2h >= 2) {
       actions.push({
         id: `slots-${u.unit.slug}`,
         severity: 'info',
@@ -147,28 +159,52 @@ function buildNextActions(
       })
     }
 
-    if (u.opsCommerce.birthdayCount >= 5) {
+    if (u.opsFinance.paymentReconcile === 'divergent') {
       actions.push({
-        id: `bday-${u.unit.slug}`,
+        id: `pay-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Conciliação 0081 — ${u.unit.short}`,
+        detail: `Pagamentos ${Math.round(u.opsFinance.paymentsTotal)} vs receita MTD ${Math.round(u.opsFinance.mtdRevenue)}`,
+        action: 'Conferir sync Avec 0081 no ROM',
+      })
+    }
+
+    if (u.opsStock.available && u.opsStock.activeAlerts >= 3) {
+      actions.push({
+        id: `stock-alert-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Estoque baixo — ${u.unit.short}`,
+        detail: `${u.opsStock.activeAlerts} alertas · ${u.opsStock.zeroProducts} zerados`,
+        action: 'Fila de compra no ROM Estoque',
+      })
+    }
+
+    if (u.opsStock.available && u.opsStock.drift != null && Math.abs(u.opsStock.drift) > 50) {
+      actions.push({
+        id: `stock-drift-${u.unit.slug}`,
         severity: 'info',
         unit: u.unit.slug,
-        title: `Aniversariantes — ${u.unit.short}`,
-        detail: `${u.opsCommerce.birthdayCount} no período`,
-        action: 'Campanha de convite',
+        title: `Drift estoque — ${u.unit.short}`,
+        detail: `Diferença de R$ ${Math.round(Math.abs(u.opsStock.drift))} vs Avec 0045`,
+        action: 'Rodar sync estoque full',
       })
     }
   }
 
-  const gap = Math.max(0, todayGoal - todayRevenue)
-  if (gap > 500) {
-    actions.push({
-      id: 'goal-gap',
-      severity: 'info',
-      unit: 'both',
-      title: 'Meta do dia em aberto',
-      detail: `Faltam R$ ${Math.round(gap).toLocaleString('pt-BR')}`,
-      action: 'Vagas + upsell nos restantes',
-    })
+  if (goalsConfigured) {
+    const gap = Math.max(0, todayGoal - todayRevenue)
+    if (gap > 500) {
+      actions.push({
+        id: 'goal-gap',
+        severity: 'info',
+        unit: 'both',
+        title: 'Meta do dia em aberto',
+        detail: `Faltam R$ ${Math.round(gap).toLocaleString('pt-BR')}`,
+        action: 'Vagas + upsell nos restantes',
+      })
+    }
   }
 
   return actions
@@ -178,29 +214,39 @@ function buildNextActions(
 
 function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const todayRevenue = units.reduce((a, u) => a + u.today.revenue, 0)
-  const todayGoal = units.reduce((a, u) => a + u.today.dailyGoal, 0)
+  const todayGoal = units.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
+  const goalsConfigured = units.every((u) => u.today.goalSet)
   const mtdRevenue = units.reduce((a, u) => a + u.mtd.revenue, 0)
-  const mtdGoal = units.reduce((a, u) => a + u.mtd.goal, 0)
+  const mtdGoal = units.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
   const attended = units.reduce((a, u) => a + u.today.attended, 0)
   const appointments = units.reduce((a, u) => a + u.today.appointments, 0)
   const noShows = units.reduce((a, u) => a + u.today.noShows, 0)
-  const capacity = units.reduce((a, u) => a + u.today.capacity, 0)
+  const capacity = units.reduce((a, u) => a + (u.today.capacitySet ? u.today.capacity : 0), 0)
+  const occupancyConfigured = units.every((u) => u.today.capacitySet)
   const newClients = units.reduce((a, u) => a + u.today.newClients, 0)
   const returningClients = units.reduce((a, u) => a + u.today.returningClients, 0)
   const leads = units.reduce((a, u) => a + u.today.leads, 0)
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
   const mixBase = newClients + returningClients
+  const cmv = units.reduce((a, u) => a + u.opsFinance.cmv, 0)
+  const stockValue = units.reduce((a, u) => a + (u.opsStock.available ? u.opsStock.totalValue : 0), 0)
+  const stockAlerts = units.reduce(
+    (a, u) => a + (u.opsStock.available ? u.opsStock.activeAlerts : 0),
+    0,
+  )
 
   return {
     todayRevenue,
     todayGoal,
-    todayGoalProgress: rate(todayRevenue, todayGoal),
+    todayGoalProgress: goalsConfigured ? rate(todayRevenue, todayGoal) : 0,
+    goalsConfigured,
     mtdRevenue,
     mtdGoal,
-    mtdGoalProgress: rate(mtdRevenue, mtdGoal),
+    mtdGoalProgress: goalsConfigured && mtdGoal > 0 ? rate(mtdRevenue, mtdGoal) : 0,
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
-    occupancyRate: rate(appointments, capacity),
+    occupancyRate: occupancyConfigured ? rate(appointments, capacity) : 0,
+    occupancyConfigured,
     ticketAvg: attended > 0 ? Math.round(todayRevenue / attended) : 0,
     revenueAtRisk: units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
     newClients,
@@ -211,6 +257,10 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     cancelledToday: units.reduce((a, u) => a + u.today.cancelled, 0),
     noShowsToday: noShows,
     newShare: mixBase > 0 ? newClients / mixBase : 0,
+    cmv,
+    cmvShare: mtdRevenue > 0 ? cmv / mtdRevenue : null,
+    stockValue,
+    stockAlerts,
   }
 }
 
@@ -219,12 +269,14 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     todayRevenue: 0,
     todayGoal: 0,
     todayGoalProgress: 0,
+    goalsConfigured: false,
     mtdRevenue: 0,
     mtdGoal: 0,
     mtdGoalProgress: 0,
     attendanceRate: 0,
     noShowRate: 0,
     occupancyRate: 0,
+    occupancyConfigured: false,
     ticketAvg: 0,
     revenueAtRisk: 0,
     newClients: 0,
@@ -235,6 +287,10 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     cancelledToday: 0,
     noShowsToday: 0,
     newShare: 0,
+    cmv: 0,
+    cmvShare: null,
+    stockValue: 0,
+    stockAlerts: 0,
   }
 }
 
@@ -302,7 +358,12 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
 
   const nextActions = [
     ...fetchErrors,
-    ...buildNextActions(units, consolidated.todayGoal, consolidated.todayRevenue),
+    ...buildNextActions(
+      units,
+      consolidated.todayGoal,
+      consolidated.todayRevenue,
+      consolidated.goalsConfigured,
+    ),
   ]
   if (units.length < 2) {
     nextActions.unshift({

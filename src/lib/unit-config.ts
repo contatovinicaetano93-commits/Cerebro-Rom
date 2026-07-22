@@ -1,17 +1,18 @@
 import type { UnitMeta, UnitSlug } from '@/lib/types'
+import { goalsFromEnv, type UnitGoals } from '@/lib/goals'
 
 export interface UnitRuntimeConfig {
   meta: UnitMeta
   databaseUrl: string | null
-  dailyGoal: number
-  capacity: number
+  /** Bootstrap via env — prefer DB goals when present. */
+  envGoals: UnitGoals
 }
 
-function numEnv(name: string, fallback: number): number {
+function numEnv(name: string): number {
   const raw = process.env[name]
-  if (!raw?.trim()) return fallback
+  if (!raw?.trim()) return 0
   const n = Number(raw.replace(/\./g, '').replace(',', '.'))
-  return Number.isFinite(n) && n > 0 ? n : fallback
+  return Number.isFinite(n) && n > 0 ? n : 0
 }
 
 export const UNIT_META: Record<UnitSlug, UnitMeta> = {
@@ -34,16 +35,18 @@ export function getUnitConfigs(): UnitRuntimeConfig[] {
     {
       meta: UNIT_META['rom-brasil'],
       databaseUrl: process.env.NEON_BRASIL_DATABASE_URL?.trim() || null,
-      dailyGoal: numEnv('BRASIL_DAILY_GOAL', 5000),
-      capacity: numEnv('BRASIL_DAILY_CAPACITY', 15),
+      envGoals: goalsFromEnv(numEnv('BRASIL_DAILY_GOAL'), numEnv('BRASIL_DAILY_CAPACITY')),
     },
     {
       meta: UNIT_META['rom-iguatemi'],
       databaseUrl: process.env.NEON_IGUATEMI_DATABASE_URL?.trim() || null,
-      dailyGoal: numEnv('IGUATEMI_DAILY_GOAL', 5000),
-      capacity: numEnv('IGUATEMI_DAILY_CAPACITY', 14),
+      envGoals: goalsFromEnv(numEnv('IGUATEMI_DAILY_GOAL'), numEnv('IGUATEMI_DAILY_CAPACITY')),
     },
   ]
+}
+
+export function getUnitConfig(slug: UnitSlug): UnitRuntimeConfig | undefined {
+  return getUnitConfigs().find((c) => c.meta.slug === slug)
 }
 
 export function todayIsoSaoPaulo(): string {

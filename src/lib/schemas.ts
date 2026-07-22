@@ -56,6 +56,13 @@ export const CronWebhookSchema = z.object({
 })
 export type CronWebhook = z.infer<typeof CronWebhookSchema>
 
+export const GoalsUpdateSchema = z.object({
+  unit: z.enum(['rom-brasil', 'rom-iguatemi']),
+  dailyGoal: z.number().min(0).max(1_000_000),
+  capacity: z.number().int().min(0).max(500),
+})
+export type GoalsUpdate = z.infer<typeof GoalsUpdateSchema>
+
 // Validation Helpers
 export function parseRequestBody<T extends z.ZodTypeAny>(schema: T, body: unknown): z.infer<T> {
   return schema.parse(body)
