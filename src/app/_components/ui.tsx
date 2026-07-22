@@ -6,11 +6,14 @@ export function KpiStat({
   label,
   value,
   hint,
+  legend,
   tone = 'default',
 }: {
   label: string
   value: string
   hint?: string
+  /** Definição curta — aparece no hover do rótulo e em linha discreta abaixo. */
+  legend?: string
   tone?: 'default' | 'good' | 'bad' | 'warn'
 }) {
   const toneClass =
@@ -24,11 +27,21 @@ export function KpiStat({
 
   return (
     <div className="min-w-0">
-      <p className="text-[0.65rem] uppercase tracking-[0.18em] text-muted">{label}</p>
+      <p
+        className={`text-[0.65rem] uppercase tracking-[0.18em] text-muted ${
+          legend ? 'cursor-help underline decoration-dotted decoration-muted/40 underline-offset-2' : ''
+        }`}
+        title={legend}
+      >
+        {label}
+      </p>
       <p className={`mt-1 truncate font-display text-2xl tracking-tight sm:text-3xl ${toneClass}`}>
         {value}
       </p>
       {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
+      {legend ? (
+        <p className="mt-1 text-[0.65rem] leading-snug text-muted/70">{legend}</p>
+      ) : null}
     </div>
   )
 }

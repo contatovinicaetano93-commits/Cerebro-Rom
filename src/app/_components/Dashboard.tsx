@@ -41,6 +41,47 @@ const GROUP_LABEL: Record<ComparisonGroup, string> = {
   estoque: 'Estoque Avec',
 }
 
+/** Legendas curtas — hover no rótulo + linha discreta no KPI. */
+const LEGEND = {
+  faturamento:
+    'Soma da receita Avec do dia nas unidades ao vivo.',
+  ocupacao:
+    'Ocupação = agenda ÷ capacidade (Metas). Comparecimento = atendidos ÷ agendados. Risco = no-shows × ticket.',
+  mtd: 'Receita acumulada no mês (MTD). Ticket = receita ÷ atendidos.',
+  cmv: 'Custo das saídas de estoque no mês (Avec 0044) — proxy de CMV.',
+  estoqueValor: 'Valor da posição de estoque sincronizada da Avec.',
+  estoqueAlertas: 'Produtos abaixo do mínimo (alertas ativos no ROM Estoque).',
+  vagasHoje: 'Capacidade do dia (Metas) − agendamentos do dia.',
+  vagas2h: 'Estimativa de encaixes nas próximas 2h: (capacidade ÷ 8) × 2 − agenda nesse intervalo.',
+  cancelNoshow: 'Cancelamentos e faltas do dia (Avec).',
+  novosRec: 'Clientes novos vs recorrentes no dia.',
+  unitHoje: 'Faturamento Avec da unidade hoje.',
+  unit2h: 'Vagas livres estimadas nas próximas 2 horas nesta unidade.',
+  unitCancel: 'Cancelamentos do dia nesta unidade.',
+} as const
+
+const COMPARISON_LEGEND: Partial<Record<string, string>> = {
+  revenue_today: 'Receita Avec do dia.',
+  goal_pct: 'Receita do dia ÷ meta diária (Metas).',
+  occupancy: 'Agendamentos ÷ capacidade (Metas).',
+  noshow: 'No-shows ÷ agendamentos do dia.',
+  lost_revenue: '(Cancelamentos + no-shows) × ticket médio do dia.',
+  ticket: 'Receita ÷ atendidos (hoje).',
+  return: 'Taxa de retorno (Avec / P3).',
+  packages: 'Receita de pacotes (Avec 0061).',
+  mtd_revenue: 'Receita acumulada no mês.',
+  mtd_ticket: 'Receita MTD ÷ atendidos MTD.',
+  cmv: 'Custo das saídas de estoque no mês (0044).',
+  cmv_share: 'CMV ÷ receita MTD.',
+  payments_total: 'Soma das formas de pagamento (Avec 0081).',
+  payment_gap: 'Pagamentos 0081 − receita MTD (ideal ≈ 0).',
+  payment_reconcile: 'Status da conciliação 0081 vs receita.',
+  top_payment: 'Forma de pagamento com maior volume no período.',
+  stock_value: 'Valor em estoque (posição Avec).',
+  stock_alerts: 'Alertas ativos de estoque baixo.',
+  stock_zero: 'SKUs com saldo zero.',
+}
+
 function severityStyles(severity: 'critical' | 'warning' | 'info') {
   if (severity === 'critical') return 'border-danger/40 bg-danger/10 text-danger'
   if (severity === 'warning') return 'border-warning/40 bg-warning/10 text-warning'
@@ -229,6 +270,7 @@ export function Dashboard({
                   ? `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
                   : 'Defina as metas para acompanhar progresso'
               }
+              legend={LEGEND.faturamento}
               tone={goalTone}
             />
             {c.goalsConfigured ? (
@@ -249,6 +291,7 @@ export function Dashboard({
                   : `— · ${formatPct(c.attendanceRate)}`
               }
               hint={`No-show ${formatPct(c.noShowRate)} · risco ${formatCurrency(c.revenueAtRisk)}`}
+              legend={LEGEND.ocupacao}
               tone={c.noShowRate > 0.08 ? 'warn' : 'default'}
             />
           </Panel>
@@ -261,6 +304,7 @@ export function Dashboard({
                   ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.ticketAvg)}`
                   : `Ticket ${formatCurrency(c.ticketAvg)} · CMV ${formatCurrency(c.cmv)}`
               }
+              legend={LEGEND.mtd}
             />
             {c.goalsConfigured ? (
               <div className="mt-3">
@@ -277,13 +321,14 @@ export function Dashboard({
                 label="CMV rede (MTD)"
                 value={formatCurrency(c.cmv)}
                 hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita` : 'Avec 0044'}
+                legend={LEGEND.cmv}
               />
             </Panel>
             <Panel>
               <KpiStat
                 label="Estoque (valor)"
                 value={formatCurrency(c.stockValue)}
-                hint="Posição Avec sync"
+                legend={LEGEND.estoqueValor}
               />
             </Panel>
             <Panel>
@@ -291,7 +336,7 @@ export function Dashboard({
                 label="Alertas estoque"
                 value={formatNumber(c.stockAlerts)}
                 tone={c.stockAlerts >= 3 ? 'warn' : 'default'}
-                hint="Itens abaixo do mínimo"
+                legend={LEGEND.estoqueAlertas}
               />
             </Panel>
           </section>
@@ -334,21 +379,25 @@ export function Dashboard({
                 label="Vagas hoje"
                 value={c.occupancyConfigured ? String(c.openSlotsToday) : '—'}
                 tone={c.openSlotsToday >= 4 ? 'warn' : 'default'}
+                legend={LEGEND.vagasHoje}
               />
               <KpiStat
                 label="Vagas 2h"
                 value={c.occupancyConfigured ? String(c.openSlotsNext2h) : '—'}
                 tone={c.openSlotsNext2h >= 2 ? 'warn' : 'good'}
+                legend={LEGEND.vagas2h}
               />
               <KpiStat
                 label="Cancel. · No-show"
                 value={`${c.cancelledToday} · ${c.noShowsToday}`}
                 tone={c.cancelledToday + c.noShowsToday > 0 ? 'warn' : 'good'}
+                legend={LEGEND.cancelNoshow}
               />
               <KpiStat
                 label="Novos · Recorrentes"
                 value={`${c.newClients} · ${c.returningClients}`}
                 hint={`Novos ${formatPct(c.newShare)}`}
+                legend={LEGEND.novosRec}
               />
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -365,19 +414,34 @@ export function Dashboard({
                   </div>
                   <div className="mt-2 grid grid-cols-3 gap-2 text-left">
                     <div>
-                      <p className="text-muted">Hoje</p>
+                      <p
+                        className="cursor-help text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
+                        title={LEGEND.unitHoje}
+                      >
+                        Hoje
+                      </p>
                       <p className="font-medium text-foreground">
                         {formatCurrency(u.today.revenue)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted">2h</p>
+                      <p
+                        className="cursor-help text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
+                        title={LEGEND.unit2h}
+                      >
+                        2h
+                      </p>
                       <p className="font-medium text-foreground">
                         {u.today.capacitySet ? u.opsToday.openSlotsNext2h : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted">Cancel.</p>
+                      <p
+                        className="cursor-help text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
+                        title={LEGEND.unitCancel}
+                      >
+                        Cancel.
+                      </p>
                       <p className="font-medium text-foreground">{u.today.cancelled}</p>
                     </div>
                   </div>
@@ -519,7 +583,14 @@ export function Dashboard({
                           key={row.key}
                           className="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-panel-2/60 px-3 py-3 sm:grid-cols-[1.2fr_1fr_1fr_0.8fr] sm:items-center"
                         >
-                          <span className="col-span-2 text-sm text-muted sm:col-span-1">
+                          <span
+                            className={`col-span-2 text-sm text-muted sm:col-span-1 ${
+                              COMPARISON_LEGEND[row.key]
+                                ? 'cursor-help underline decoration-dotted decoration-muted/40 underline-offset-2'
+                                : ''
+                            }`}
+                            title={COMPARISON_LEGEND[row.key]}
+                          >
                             {row.label}
                           </span>
                           <span className="text-sm text-brass">
