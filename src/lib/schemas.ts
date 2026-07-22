@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 // Auth Schemas
 export const LoginRequestSchema = z.object({
-  user: z.string().min(1, 'Usuário é obrigatório'),
+  username: z.string().min(1, 'Usuário é obrigatório'),
   password: z.string().min(1, 'Senha é obrigatória'),
 })
 export type LoginRequest = z.infer<typeof LoginRequestSchema>
