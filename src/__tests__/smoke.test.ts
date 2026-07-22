@@ -2,23 +2,11 @@ import { describe, it, expect } from 'vitest'
 
 describe('Smoke Tests', () => {
   describe('Health Check', () => {
-    it('should verify unit databases connectivity', async () => {
+    it('should reject unauthenticated health', async () => {
       const res = await fetch('http://localhost:3000/api/health', {
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: 'application/json' },
       })
-      expect(res.status).toBe(200)
-      const data = await res.json()
-      expect(data).toHaveProperty('ok')
-      expect(data).toHaveProperty('units')
-      expect(Array.isArray(data.units)).toBe(true)
-    })
-
-    it('should return public health without auth', async () => {
-      const res = await fetch('http://localhost:3000/api/health/public')
-      expect(res.status).toBe(200)
-      const data = await res.json()
-      expect(data).toHaveProperty('ok')
-      expect(data).toHaveProperty('units')
+      expect(res.status).toBe(401)
     })
   })
 

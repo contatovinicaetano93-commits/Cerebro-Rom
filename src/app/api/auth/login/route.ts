@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import {
   AUTH_COOKIE,
+  SESSION_TTL_SECONDS,
   createSessionToken,
   isAuthEnabled,
   isProduction,
   validateAdminCredentials,
 } from '@/lib/auth'
-import { RateLimiter } from '@/lib/rate-limiter'
+import { checkLoginRateLimit } from '@/lib/auth-rate-limit'
 import { LoginRequestSchema } from '@/lib/schemas'
 
 function clientKey(req: Request) {
@@ -26,9 +27,13 @@ export async function POST(req: Request) {
   }
 
   const limitKey = clientKey(req)
-  // 10 tentativas / 15 min por IP (in-memory; bom o bastante em serverless curto).
-  if (!RateLimiter.checkLimit(limitKey, 10, 15 * 60)) {
-    return NextResponse.json({ error: 'Muitas tentativas — aguarde e tente de novo' }, { status: 429 })
+  // 10 tentativas / 15 min por IP (persistente no Neon Cérebro quando disponível).
+  const limit = await checkLoginRateLimit(limitKey, 10, 15 * 60)
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Muitas tentativas — aguarde e tente de novo' },
+      { status: 429 },
+    )
   }
 
   const body = await req.json().catch(() => null)
@@ -53,7 +58,7 @@ export async function POST(req: Request) {
     sameSite: 'lax',
     secure: isProduction(),
     path: '/',
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: SESSION_TTL_SECONDS,
   })
   return res
 }

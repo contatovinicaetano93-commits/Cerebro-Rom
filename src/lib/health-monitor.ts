@@ -1,4 +1,4 @@
-import { getHealthStatus, getPublicHealthStatus } from '@/lib/health'
+import { getHealthStatus } from '@/lib/health'
 import { AlertManager } from '@/lib/alerts'
 
 export interface HealthMetrics {

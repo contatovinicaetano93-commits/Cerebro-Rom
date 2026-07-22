@@ -8,7 +8,6 @@ export async function middleware(req: NextRequest) {
   if (
     pathname === '/login' ||
     pathname.startsWith('/api/auth/') ||
-    pathname === '/api/health' ||
     pathname === '/monitoring' ||
     pathname.startsWith('/monitoring/')
   ) {

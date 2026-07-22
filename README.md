@@ -53,6 +53,9 @@ Abra [http://localhost:3000](http://localhost:3000) → redireciona para `/login
 |----------|--------|
 | `CEREBRO_ADMIN_USER` | `waltter` |
 | `CEREBRO_ADMIN_PASSWORD` | *(obrigatório em produção)* |
+| `CEREBRO_SESSION_SECRET` | opcional — secret da sessão (senão usa a senha) |
+
+Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias). Login: rate limit 10/15min por IP (Neon Cérebro). `/api/health` exige login.
 
 Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergência).
 
