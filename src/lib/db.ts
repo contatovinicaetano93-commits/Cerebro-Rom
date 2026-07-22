@@ -18,3 +18,16 @@ export function getSql(databaseUrl?: string): Sql {
   }
   return neon(url)
 }
+
+/** Neon exclusivo do Cérebro — snapshots/relatórios. */
+export function getCerebroSql(): Sql {
+  const url = process.env.CEREBRO_DATABASE_URL?.trim()
+  if (!url) {
+    throw new Error('CEREBRO_DATABASE_URL não configurada')
+  }
+  return neon(url)
+}
+
+export function isCerebroDbConfigured(): boolean {
+  return Boolean(process.env.CEREBRO_DATABASE_URL?.trim())
+}
