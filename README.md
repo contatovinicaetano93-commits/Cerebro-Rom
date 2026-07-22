@@ -9,13 +9,16 @@ Painel executivo para o **Waltter** conduzir **ROM Brasil** + **ROM Iguatemi** c
 | **Live** | `NEON_BRASIL_DATABASE_URL` e/ou `NEON_IGUATEMI_DATABASE_URL` no `.env.local` |
 | **Mock** | Sem URLs, `CEREBRO_FORCE_MOCK=1`, ou falha total do live (fallback) |
 
-Live lê os Neons das unidades. **Única escrita:** tabela `cerebro_goals` (metas no painel).
+Live lê os Neons das unidades. Escritas do Cérebro:
+- `cerebro_goals` em cada Neon de unidade (metas no painel)
+- `report_runs` / `report_unit_metrics` no Neon próprio (`CEREBRO_DATABASE_URL`) — snapshots sob demanda
 
 ```
 ROM Brasil (Neon rom-club)     ──SELECT──┐
                                          ├──► GET /api/overview ──► Cérebro
 ROM Iguatemi (Neon ROM-IGUATEMI) ─SELECT─┘
-                                         └──► PUT /api/goals → cerebro_goals
+                                         ├──► PUT /api/goals → cerebro_goals (por unidade)
+                                         └──► POST /api/reports → Neon Cérebro (snapshots)
 ```
 
 ## KPIs
@@ -31,6 +34,7 @@ ROM Iguatemi (Neon ROM-IGUATEMI) ─SELECT─┘
 | **Comparativo** | Scorecard Brasil × Iguatemi com Δ% |
 | **Tendência** | Receita 30 dias Brasil vs Iguatemi |
 | **Alertas** | Sync, no-show, metas, estoque, conciliação |
+| **Relatórios** | Snapshot sob demanda + export CSV / XLSX |
 
 ## Setup
 

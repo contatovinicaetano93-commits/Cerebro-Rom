@@ -7,7 +7,8 @@ Avec (por unidade)
   → ROM sync (fast = A · full = A+B+C + estoque)
   → Neon da unidade
   → Cérebro Promise.allSettled (read-only KPIs)
-    · escrita única: cerebro_goals (metas)
+    · escrita: cerebro_goals (metas nas unidades)
+    · escrita: report_runs no Neon Cérebro (snapshots sob demanda)
 ```
 
 ## Camadas
@@ -52,6 +53,17 @@ Scorecard **Brasil | Iguatemi | Δ%** por grupo: ops · comercial · financeiro 
 | `stock_movements` / `stock_products` / `stock_alerts` | D/E |
 | `avec_report_snapshots` (0045) | drift estoque |
 | `cerebro_goals` | metas (write) |
+
+## Neon Cérebro (`CEREBRO_DATABASE_URL`)
+
+Snapshots sob demanda do overview (KPIs do painel). Export CSV/XLSX.
+
+| Tabela | Uso |
+|--------|-----|
+| `report_runs` | captura + payload JSONB completo |
+| `report_unit_metrics` | métricas flat por unidade (consulta/histórico) |
+
+APIs: `GET/POST /api/reports`, `GET /api/reports/[id]?format=csv|xlsx`.
 
 ## Token
 

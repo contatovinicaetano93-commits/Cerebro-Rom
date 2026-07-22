@@ -23,6 +23,7 @@ import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
 import { GoalsEditor } from './GoalsEditor'
+import { ReportsPanel } from './ReportsPanel'
 
 type SectionKey = 'hoje' | 'semana' | 'comercial' | 'comparativo' | 'trend'
 
@@ -256,8 +257,9 @@ export function Dashboard({
           />
         </section>
 
-        <section className="mt-6">
+        <section className="mt-6 space-y-3">
           <GoalsEditor data={data} onSaved={() => onRefresh?.()} />
+          <ReportsPanel />
         </section>
 
         <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
