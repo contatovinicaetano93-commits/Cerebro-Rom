@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   validateAdminCredentials,
   createSessionToken,
+  verifySessionToken,
   isAuthorized,
   getAdminUser,
   getAdminPassword,
@@ -13,6 +14,8 @@ describe('Cerebro Auth', () => {
     vi.resetModules()
     process.env.CEREBRO_ADMIN_USER = 'waltter'
     process.env.CEREBRO_ADMIN_PASSWORD = 'test-password-123'
+    delete process.env.CEREBRO_SESSION_SECRET
+    delete process.env.VERCEL_ENV
     process.env.NODE_ENV = 'test'
   })
 
@@ -45,23 +48,33 @@ describe('Cerebro Auth', () => {
   })
 
   describe('createSessionToken', () => {
-    it('should create deterministic token', async () => {
-      const token1 = await createSessionToken()
-      const token2 = await createSessionToken()
-      expect(token1).toBe(token2)
+    it('should create v1 token with exp claim', async () => {
+      const token = await createSessionToken()
+      expect(token.startsWith('v1.')).toBe(true)
+      const parts = token.split('.')
+      expect(parts).toHaveLength(3)
+      expect(Number(parts[1])).toBeGreaterThan(Math.floor(Date.now() / 1000))
     })
 
-    it('should return different token if password changes', async () => {
+    it('should return different token if password/secret changes', async () => {
       const token1 = await createSessionToken()
       process.env.CEREBRO_ADMIN_PASSWORD = 'different-password'
       const token2 = await createSessionToken()
       expect(token1).not.toBe(token2)
     })
 
-    it('should return string token', async () => {
+    it('should verify valid token', async () => {
       const token = await createSessionToken()
-      expect(typeof token).toBe('string')
-      expect(token.length).toBeGreaterThan(0)
+      expect(await verifySessionToken(token)).toBe(true)
+    })
+
+    it('should reject expired token', async () => {
+      const token = await createSessionToken(-5)
+      expect(await verifySessionToken(token)).toBe(false)
+    })
+
+    it('should reject legacy hex token', async () => {
+      expect(await verifySessionToken('abcdef0123456789')).toBe(false)
     })
   })
 
@@ -104,6 +117,17 @@ describe('Cerebro Auth', () => {
 
       const result = await isAuthorized(req)
       expect(result).toBe(false)
+    })
+
+    it('should accept valid session cookie', async () => {
+      const token = await createSessionToken()
+      const req = {
+        cookies: {
+          get: () => ({ value: token }),
+        },
+      } as unknown as NextRequest
+
+      expect(await isAuthorized(req)).toBe(true)
     })
   })
 

@@ -51,7 +51,7 @@ Conferir readiness (admin logado):
 
 - ROM Brasil: `GET /api/health` → `readiness.cron_ready`, `webhook_ready`, `avec.kpi_layers`
 - ROM Iguatemi: idem — hoje `last_full` provavelmente null
-- Cérebro: `GET /api/health` → unidades Neon conectadas
+- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. Com sessão: unidades Neon conectadas
 
 | Unidade | URL webhook | Header |
 |---------|-------------|--------|
