@@ -10,21 +10,19 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { Activity, AlertTriangle, ArrowRight, Brain, RefreshCw } from 'lucide-react'
+import type { CerebroOverview, ComparisonGroup, ComparisonRow } from '@/lib/types'
 import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Brain,
-  CheckCircle2,
-  RefreshCw,
-  TrendingUp,
-  Users,
-} from 'lucide-react'
-import type { CerebroOverview, UnitSlug } from '@/lib/types'
-import { formatCurrency, formatDateTime, formatPct } from '@/lib/format'
+  formatCurrency,
+  formatDateTime,
+  formatNumber,
+  formatPct,
+  formatSignedPct,
+} from '@/lib/format'
 import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
+import { GoalsEditor } from './GoalsEditor'
 
 type SectionKey = 'hoje' | 'semana' | 'comercial' | 'comparativo' | 'trend'
 
@@ -32,8 +30,15 @@ const DEFAULT_OPEN: Record<SectionKey, boolean> = {
   hoje: true,
   semana: false,
   comercial: false,
-  comparativo: false,
+  comparativo: true,
   trend: false,
+}
+
+const GROUP_LABEL: Record<ComparisonGroup, string> = {
+  ops: 'Operação',
+  comercial: 'Comercial',
+  financeiro: 'Financeiro Avec',
+  estoque: 'Estoque Avec',
 }
 
 function severityStyles(severity: 'critical' | 'warning' | 'info') {
@@ -46,14 +51,48 @@ function unitAccent(slug: string) {
   return slug === 'rom-brasil' ? 'text-brass' : 'text-teal'
 }
 
-function unitName(slug: UnitSlug) {
-  return slug === 'rom-brasil' ? 'ROM Brasil' : 'ROM Iguatemi'
+function formatRowValue(row: ComparisonRow, value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  switch (row.format) {
+    case 'currency':
+      return formatCurrency(value)
+    case 'pct':
+      return formatPct(value)
+    case 'number':
+      return formatNumber(value)
+    default: {
+      const _exhaustive: never = row.format
+      return String(_exhaustive)
+    }
+  }
 }
 
-export function Dashboard({ data }: { data: CerebroOverview }) {
+function deltaTone(row: ComparisonRow): string {
+  if (row.deltaPct == null) return 'text-muted'
+  const good =
+    (row.higherIsBetter && row.deltaPct > 0) || (!row.higherIsBetter && row.deltaPct < 0)
+  const bad =
+    (row.higherIsBetter && row.deltaPct < 0) || (!row.higherIsBetter && row.deltaPct > 0)
+  if (good) return 'text-success'
+  if (bad) return 'text-danger'
+  return 'text-muted'
+}
+
+export function Dashboard({
+  data,
+  onRefresh,
+}: {
+  data: CerebroOverview
+  onRefresh?: () => void
+}) {
   const c = data.consolidated
-  const goalTone =
-    c.todayGoalProgress >= 1 ? 'good' : c.todayGoalProgress >= 0.7 ? 'default' : 'warn'
+  const goalTone = !c.goalsConfigured
+    ? 'warn'
+    : c.todayGoalProgress >= 1
+      ? 'good'
+      : c.todayGoalProgress >= 0.7
+        ? 'default'
+        : 'warn'
 
   const [openMap, setOpenMap] = useState(DEFAULT_OPEN)
   const allOpen = useMemo(
@@ -77,6 +116,14 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
       : data.mode === 'degraded'
         ? 'Degradado'
         : 'Mock'
+
+  const comparisonGroups = useMemo(() => {
+    const rows = data.comparison?.rows ?? []
+    const order: ComparisonGroup[] = ['ops', 'comercial', 'financeiro', 'estoque']
+    return order
+      .map((group) => ({ group, rows: rows.filter((r) => r.group === group) }))
+      .filter((g) => g.rows.length > 0)
+  }, [data.comparison])
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -140,34 +187,59 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
             allOpen={allOpen}
             anyOpen={anyOpen}
             onExpandAll={() =>
-              setOpenMap({ hoje: true, semana: true, comercial: true, comparativo: true, trend: true })
+              setOpenMap({
+                hoje: true,
+                semana: true,
+                comercial: true,
+                comparativo: true,
+                trend: true,
+              })
             }
             onCollapseAll={() =>
-              setOpenMap({ hoje: false, semana: false, comercial: false, comparativo: false, trend: false })
+              setOpenMap({
+                hoje: false,
+                semana: false,
+                comercial: false,
+                comparativo: false,
+                trend: false,
+              })
             }
           />
         </section>
 
-        {/* Comando — meta do dia + o que fazer */}
-        <section className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="mt-6">
+          <GoalsEditor data={data} onSaved={() => onRefresh?.()} />
+        </section>
+
+        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Panel>
             <KpiStat
               label="Faturamento hoje"
               value={formatCurrency(c.todayRevenue)}
-              hint={`Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`}
+              hint={
+                c.goalsConfigured
+                  ? `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
+                  : 'Defina as metas para acompanhar progresso'
+              }
               tone={goalTone}
             />
-            <div className="mt-3">
-              <ProgressBar
-                value={c.todayGoalProgress}
-                color={c.todayGoalProgress >= 1 ? 'success' : 'brass'}
-              />
-            </div>
+            {c.goalsConfigured ? (
+              <div className="mt-3">
+                <ProgressBar
+                  value={c.todayGoalProgress}
+                  color={c.todayGoalProgress >= 1 ? 'success' : 'brass'}
+                />
+              </div>
+            ) : null}
           </Panel>
           <Panel>
             <KpiStat
               label="Ocupação · Comparec."
-              value={`${formatPct(c.occupancyRate)} · ${formatPct(c.attendanceRate)}`}
+              value={
+                c.occupancyConfigured
+                  ? `${formatPct(c.occupancyRate)} · ${formatPct(c.attendanceRate)}`
+                  : `— · ${formatPct(c.attendanceRate)}`
+              }
               hint={`No-show ${formatPct(c.noShowRate)} · risco ${formatCurrency(c.revenueAtRisk)}`}
               tone={c.noShowRate > 0.08 ? 'warn' : 'default'}
             />
@@ -176,13 +248,46 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
             <KpiStat
               label="MTD · Ticket"
               value={formatCurrency(c.mtdRevenue)}
-              hint={`${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.ticketAvg)}`}
+              hint={
+                c.goalsConfigured
+                  ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.ticketAvg)}`
+                  : `Ticket ${formatCurrency(c.ticketAvg)} · CMV ${formatCurrency(c.cmv)}`
+              }
             />
-            <div className="mt-3">
-              <ProgressBar value={c.mtdGoalProgress} color="teal" />
-            </div>
+            {c.goalsConfigured ? (
+              <div className="mt-3">
+                <ProgressBar value={c.mtdGoalProgress} color="teal" />
+              </div>
+            ) : null}
           </Panel>
         </section>
+
+        {(c.cmv > 0 || c.stockValue > 0 || c.stockAlerts > 0) && (
+          <section className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Panel>
+              <KpiStat
+                label="CMV rede (MTD)"
+                value={formatCurrency(c.cmv)}
+                hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita` : 'Avec 0044'}
+              />
+            </Panel>
+            <Panel>
+              <KpiStat
+                label="Estoque (valor)"
+                value={formatCurrency(c.stockValue)}
+                hint="Posição Avec sync"
+              />
+            </Panel>
+            <Panel>
+              <KpiStat
+                label="Alertas estoque"
+                value={formatNumber(c.stockAlerts)}
+                tone={c.stockAlerts >= 3 ? 'warn' : 'default'}
+                hint="Itens abaixo do mínimo"
+              />
+            </Panel>
+          </section>
+        )}
 
         {data.nextActions.length > 0 ? (
           <section className="mt-6">
@@ -219,12 +324,12 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <KpiStat
                 label="Vagas hoje"
-                value={String(c.openSlotsToday)}
+                value={c.occupancyConfigured ? String(c.openSlotsToday) : '—'}
                 tone={c.openSlotsToday >= 4 ? 'warn' : 'default'}
               />
               <KpiStat
                 label="Vagas 2h"
-                value={String(c.openSlotsNext2h)}
+                value={c.occupancyConfigured ? String(c.openSlotsNext2h) : '—'}
                 tone={c.openSlotsNext2h >= 2 ? 'warn' : 'good'}
               />
               <KpiStat
@@ -248,24 +353,24 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                     <p className={`uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
                       {u.unit.short}
                     </p>
-                    <p className="truncate text-[0.65rem] text-muted">{u.sync.label}</p>
+                    <p className="text-muted">{u.sync.label}</p>
                   </div>
-                  <div className="mt-2 grid grid-cols-4 gap-2">
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-left">
                     <div>
                       <p className="text-muted">Hoje</p>
-                      <p className="font-medium">{formatCurrency(u.today.revenue)}</p>
+                      <p className="font-medium text-foreground">
+                        {formatCurrency(u.today.revenue)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted">2h</p>
-                      <p className="font-medium">{u.opsToday.openSlotsNext2h}</p>
+                      <p className="font-medium text-foreground">
+                        {u.today.capacitySet ? u.opsToday.openSlotsNext2h : '—'}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted">Cancel.</p>
-                      <p className="font-medium">{u.today.cancelled}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted">Novos %</p>
-                      <p className="font-medium">{formatPct(u.opsToday.newShare)}</p>
+                      <p className="font-medium text-foreground">{u.today.cancelled}</p>
                     </div>
                   </div>
                 </div>
@@ -278,79 +383,42 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
           <CollapsibleSection
             eyebrow="2 · Semana"
             title="Equipe e retenção"
-            summary={(() => {
-              const r = data.units.reduce((a, u) => a + u.opsWeek.reactivationCount, 0)
-              const n = data.units.reduce((a, u) => a + u.opsWeek.newClientsPeriod, 0)
-              return `${r} reativar · ${n} novos 30d`
-            })()}
+            summary="Top pros · retorno · reativação"
             open={openMap.semana}
             onOpenChange={(v) => setSection('semana', v)}
           >
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               {data.units.map((u) => {
                 const w = u.opsWeek
                 const empty =
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
-                  w.acquisition.length === 0 &&
-                  w.reactivationCount === 0 &&
-                  w.returnRate <= 0
+                  w.returnRate === 0 &&
+                  w.reactivationCount === 0
                 return (
                   <div
                     key={u.unit.slug}
-                    className="rounded-xl border border-border/60 bg-panel-2/40 px-4 py-4"
+                    className="rounded-xl border border-border/50 bg-panel-2/40 p-3"
                   >
-                    <div className="flex justify-between gap-2 text-xs">
-                      <p className={`uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
-                        {u.unit.short}
-                      </p>
-                      <span className="text-muted">
-                        Retorno{' '}
-                        <span className="text-foreground">
-                          {w.returnRate > 0 ? formatPct(w.returnRate) : '—'}
-                        </span>
-                        {' · '}
-                        Reativar <span className="text-foreground">{w.reactivationCount}</span>
-                      </span>
-                    </div>
+                    <p className={`text-xs uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
+                      {u.unit.short}
+                    </p>
                     {empty ? (
-                      <p className="mt-3 text-xs text-muted">
-                        Sem dados — sync full + token Avec.
-                      </p>
+                      <p className="mt-3 text-sm text-muted">Sem dados — sync full + token Avec.</p>
                     ) : (
-                      <div className="mt-3 space-y-3">
-                        <ul className="space-y-1.5">
+                      <div className="mt-3 space-y-3 text-sm">
+                        <ul className="space-y-1">
                           {w.professionals.slice(0, 3).map((p) => (
-                            <li key={p.name} className="flex justify-between gap-2 text-sm">
-                              <span className="truncate">{p.name}</span>
-                              <span className="shrink-0 text-brass-soft">
-                                {formatCurrency(p.revenue)}
-                              </span>
+                            <li key={p.name} className="flex justify-between gap-2">
+                              <span className="truncate text-muted">{p.name}</span>
+                              <span>{formatCurrency(p.revenue)}</span>
                             </li>
                           ))}
                         </ul>
-                        <ul className="space-y-1.5 border-t border-border/50 pt-3">
-                          {w.services.slice(0, 3).map((s) => (
-                            <li key={s.name} className="flex justify-between gap-2 text-sm">
-                              <span className="truncate">
-                                {s.name} <span className="text-xs text-muted">×{s.quantity}</span>
-                              </span>
-                              <span className="shrink-0 text-brass-soft">
-                                {formatCurrency(s.revenue)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                        {w.acquisition.length > 0 ? (
-                          <ul className="space-y-1.5 border-t border-border/50 pt-3">
-                            {w.acquisition.slice(0, 3).map((a) => (
-                              <li key={a.channel} className="flex justify-between gap-2 text-sm">
-                                <span className="truncate text-muted">{a.channel}</span>
-                                <span>{a.clients} clientes</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
+                        <p className="text-xs text-muted">
+                          Retorno {formatPct(w.returnRate)} · reativação {w.reactivationCount} ·
+                          novos {w.newClientsPeriod}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -364,15 +432,11 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
           <CollapsibleSection
             eyebrow="3 · Comercial"
             title="Canais e qualidade"
-            summary={(() => {
-              const p = data.units.reduce((a, u) => a + u.opsCommerce.packagesSold, 0)
-              const b = data.units.reduce((a, u) => a + u.opsCommerce.birthdayCount, 0)
-              return `${p} pacotes · ${b} anivers.`
-            })()}
+            summary="Booking · pacotes · notas"
             open={openMap.comercial}
             onOpenChange={(v) => setSection('comercial', v)}
           >
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               {data.units.map((u) => {
                 const co = u.opsCommerce
                 const empty =
@@ -382,21 +446,13 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
                 return (
                   <div
                     key={u.unit.slug}
-                    className="rounded-xl border border-border/60 bg-panel-2/40 px-4 py-4"
+                    className="rounded-xl border border-border/50 bg-panel-2/40 p-3"
                   >
-                    <div className="flex justify-between gap-2 text-xs">
-                      <p className={`uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
-                        {u.unit.short}
-                      </p>
-                      <span className="text-muted">
-                        Nota{' '}
-                        <span className="text-foreground">
-                          {co.ratingsCount ? co.ratingsAvg.toFixed(1) : '—'}
-                        </span>
-                      </span>
-                    </div>
+                    <p className={`text-xs uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
+                      {u.unit.short}
+                    </p>
                     {empty ? (
-                      <p className="mt-3 text-xs text-muted">Sem dados comerciais ainda.</p>
+                      <p className="mt-3 text-sm text-muted">Sem dados comerciais ainda.</p>
                     ) : (
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                         <ul className="space-y-1">
@@ -428,51 +484,60 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
           <section className="mt-4">
             <CollapsibleSection
               eyebrow="Comparativo"
-              title="Quem lidera"
-              summary={`Receita: ${unitName(data.comparison.revenueLeader)}`}
+              title="Brasil × Iguatemi"
+              summary={
+                data.comparison.deltaRevenuePct == null
+                  ? 'Scorecard Avec'
+                  : `Δ receita MTD ${formatSignedPct(data.comparison.deltaRevenuePct)}`
+              }
               open={openMap.comparativo}
               onOpenChange={(v) => setSection('comparativo', v)}
             >
-              <ul className="space-y-3">
-                {[
-                  { label: 'Receita MTD', leader: data.comparison.revenueLeader, icon: TrendingUp },
-                  { label: 'Ocupação hoje', leader: data.comparison.occupancyLeader, icon: Activity },
-                  {
-                    label: 'Comparecimento',
-                    leader: data.comparison.attendanceLeader,
-                    icon: CheckCircle2,
-                  },
-                  { label: 'Ticket médio', leader: data.comparison.ticketLeader, icon: Users },
-                ].map((row) => {
-                  const Icon = row.icon
-                  return (
-                    <li
-                      key={row.label}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-panel-2/60 px-3 py-3"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Icon size={16} className="text-muted" />
-                        <span className="text-sm text-muted">{row.label}</span>
-                      </div>
-                      <span className={`text-sm font-medium ${unitAccent(row.leader)}`}>
-                        {unitName(row.leader)}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-              <p className="mt-4 text-xs text-muted">
-                Delta Brasil vs Iguatemi (MTD):{' '}
-                <span className="text-foreground">
-                  {data.comparison.deltaRevenuePct == null ? (
-                    'Iguatemi sem faturamento no período'
-                  ) : (
-                    <>
-                      {data.comparison.deltaRevenuePct >= 0 ? '+' : ''}
-                      {formatPct(Math.abs(data.comparison.deltaRevenuePct))}
-                    </>
-                  )}
-                </span>
+              <div className="mb-3 hidden grid-cols-[1.2fr_1fr_1fr_0.8fr] gap-2 px-1 text-[0.65rem] uppercase tracking-[0.14em] text-muted sm:grid">
+                <span>KPI</span>
+                <span className="text-brass">Brasil</span>
+                <span className="text-teal">Iguatemi</span>
+                <span className="text-right">Δ%</span>
+              </div>
+              <div className="space-y-5">
+                {comparisonGroups.map(({ group, rows }) => (
+                  <div key={group}>
+                    <p className="mb-2 text-[0.65rem] uppercase tracking-[0.18em] text-brass">
+                      {GROUP_LABEL[group]}
+                    </p>
+                    <ul className="space-y-2">
+                      {rows.map((row) => (
+                        <li
+                          key={row.key}
+                          className="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-panel-2/60 px-3 py-3 sm:grid-cols-[1.2fr_1fr_1fr_0.8fr] sm:items-center"
+                        >
+                          <span className="col-span-2 text-sm text-muted sm:col-span-1">
+                            {row.label}
+                          </span>
+                          <span className="text-sm text-brass">
+                            <span className="mr-1 text-[0.65rem] uppercase text-muted sm:hidden">
+                              BR
+                            </span>
+                            {formatRowValue(row, row.brasil)}
+                          </span>
+                          <span className="text-sm text-teal">
+                            <span className="mr-1 text-[0.65rem] uppercase text-muted sm:hidden">
+                              IG
+                            </span>
+                            {formatRowValue(row, row.iguatemi)}
+                          </span>
+                          <span className={`text-right text-sm tabular-nums ${deltaTone(row)}`}>
+                            {formatSignedPct(row.deltaPct)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-4 flex items-center gap-1.5 text-xs text-muted">
+                <Activity size={12} />
+                Só KPIs Avec · despesas manuais ficam no ROM Financeiro
               </p>
             </CollapsibleSection>
           </section>
@@ -551,14 +616,14 @@ export function Dashboard({ data }: { data: CerebroOverview }) {
           <p>
             Atualizado {formatDateTime(data.generatedAt)} ·{' '}
             {data.mode === 'live'
-              ? 'Neons Brasil + Iguatemi (read-only)'
+              ? 'Neons Brasil + Iguatemi (KPIs Avec)'
               : data.mode === 'degraded'
                 ? 'Sem fallback fictício'
                 : 'Mock'}
           </p>
           <p className="flex items-center gap-1.5">
             <RefreshCw size={12} />
-            Cérebro v1 · {data.mode}
+            Cérebro v1.1 · {data.mode}
           </p>
         </footer>
       </main>

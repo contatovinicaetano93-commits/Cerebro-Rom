@@ -8,6 +8,8 @@ import {
   type UnitRuntimeConfig,
 } from '@/lib/unit-config'
 import { fetchOpsCommerce, fetchOpsWeek } from '@/lib/live/parse-kpi-layers'
+import { fetchOpsFinance, fetchOpsStock } from '@/lib/live/fetch-money-stock'
+import { readGoalsFromDb, resolveGoals } from '@/lib/goals'
 import type { DayMetrics, OpsToday, UnitSnapshot } from '@/lib/types'
 
 function n(v: unknown): number {
@@ -19,7 +21,13 @@ function n(v: unknown): number {
   return 0
 }
 
-function emptyDay(day: string, capacity: number, dailyGoal: number): DayMetrics {
+function emptyDay(
+  day: string,
+  capacity: number,
+  dailyGoal: number,
+  goalSet: boolean,
+  capacitySet: boolean,
+): DayMetrics {
   return {
     day,
     revenue: 0,
@@ -32,15 +40,23 @@ function emptyDay(day: string, capacity: number, dailyGoal: number): DayMetrics 
     ticketAvg: 0,
     capacity,
     dailyGoal,
+    goalSet,
+    capacitySet,
     leads: 0,
     converted: 0,
   }
 }
 
 function buildOpsToday(today: DayMetrics, appointmentsNext2h: number): OpsToday {
-  const openSlotsToday = Math.max(0, today.capacity - today.appointments)
-  const capacityNext2h = Math.max(1, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
-  const openSlotsNext2h = Math.max(0, capacityNext2h - appointmentsNext2h)
+  const openSlotsToday = today.capacitySet
+    ? Math.max(0, today.capacity - today.appointments)
+    : 0
+  const capacityNext2h = today.capacitySet
+    ? Math.max(1, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
+    : 0
+  const openSlotsNext2h = today.capacitySet
+    ? Math.max(0, capacityNext2h - appointmentsNext2h)
+    : 0
   const mixBase = today.newClients + today.returningClients
   const newShare = mixBase > 0 ? today.newClients / mixBase : 0
 
@@ -70,10 +86,12 @@ function rowToDay(
   day: string,
   capacity: number,
   dailyGoal: number,
+  goalSet: boolean,
+  capacitySet: boolean,
   leads = 0,
   converted = 0,
 ): DayMetrics {
-  if (!row) return emptyDay(day, capacity, dailyGoal)
+  if (!row) return emptyDay(day, capacity, dailyGoal, goalSet, capacitySet)
   const attended = n(row.attended)
   const revenue = n(row.revenue)
   const ticketAvg =
@@ -90,6 +108,8 @@ function rowToDay(
     ticketAvg: Math.round(ticketAvg),
     capacity,
     dailyGoal,
+    goalSet,
+    capacitySet,
     leads,
     converted,
   }
@@ -104,6 +124,10 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
   const today = todayIsoSaoPaulo()
   const monthStart = monthStartIso(today)
   const from30 = isoDaysBackFrom(today, 29)
+
+  const dbGoals = await readGoalsFromDb(sql)
+  const goals = resolveGoals(dbGoals, config.envGoals)
+  const { dailyGoal, capacity, goalSet, capacitySet } = goals
 
   const metricRows = (await sql`
     select
@@ -147,8 +171,10 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
       rowToDay(
         byDay.get(day),
         day,
-        config.capacity,
-        config.dailyGoal,
+        capacity,
+        dailyGoal,
+        goalSet,
+        capacitySet,
         isToday ? leadsToday : 0,
         isToday ? convertedToday : 0,
       ),
@@ -184,22 +210,27 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
   }
 
   const mtdRows = last30.filter((d) => d.day >= monthStart)
+  const mtdRevenue = mtdRows.reduce((a, d) => a + d.revenue, 0)
+  const mtdAttended = mtdRows.reduce((a, d) => a + d.attended, 0)
   const mtd = {
-    revenue: mtdRows.reduce((a, d) => a + d.revenue, 0),
-    attended: mtdRows.reduce((a, d) => a + d.attended, 0),
+    revenue: mtdRevenue,
+    attended: mtdAttended,
     noShows: mtdRows.reduce((a, d) => a + d.noShows, 0),
     appointments: mtdRows.reduce((a, d) => a + d.appointments, 0),
     newClients: mtdRows.reduce((a, d) => a + d.newClients, 0),
     returningClients: mtdRows.reduce((a, d) => a + d.returningClients, 0),
     cancelled: mtdRows.reduce((a, d) => a + d.cancelled, 0),
-    goal: config.dailyGoal * dayOfMonth(today),
+    goal: goalSet ? dailyGoal * dayOfMonth(today) : 0,
+    goalSet,
   }
 
   const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h)
 
-  const [opsWeek, opsCommerce] = await Promise.all([
+  const [opsWeek, opsCommerce, opsFinance, opsStock] = await Promise.all([
     fetchOpsWeek(sql, today),
     fetchOpsCommerce(sql, today),
+    fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended),
+    fetchOpsStock(sql),
   ])
 
   let sync: UnitSnapshot['sync'] = {
@@ -263,6 +294,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     opsToday,
     opsWeek,
     opsCommerce,
+    opsFinance,
+    opsStock,
     mtd,
     last30,
     sync,

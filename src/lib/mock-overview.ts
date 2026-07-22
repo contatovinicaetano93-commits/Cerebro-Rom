@@ -8,6 +8,7 @@ import {
   SALON_HOURS_PER_DAY,
   todayIsoSaoPaulo,
 } from '@/lib/unit-config'
+import { EMPTY_OPS_FINANCE, EMPTY_OPS_STOCK } from '@/lib/live/fetch-money-stock'
 
 function isoDaysBack(n: number): string {
   return isoDaysBackFrom(todayIsoSaoPaulo(), n)
@@ -53,6 +54,8 @@ function buildSeries(
       ticketAvg,
       capacity,
       dailyGoal,
+      goalSet: dailyGoal > 0,
+      capacitySet: capacity > 0,
       leads,
       converted,
     })
@@ -83,6 +86,23 @@ function buildUnit(
     Math.round(capacityNext2h * (0.55 + seeded(slug === 'rom-brasil' ? 3 : 9) * 0.4)),
   )
   const mixBase = today.newClients + today.returningClients
+  const mtdRevenue = sumField(mtdDays, 'revenue')
+  const mtdAttended = sumField(mtdDays, 'attended')
+  const packages =
+    slug === 'rom-brasil'
+      ? [{ name: 'Pacote corte', quantity: 12, revenue: 4800 }]
+      : [{ name: 'Day spa', quantity: 9, revenue: 5400 }]
+  const bookingChannels =
+    slug === 'rom-brasil'
+      ? [
+          { channel: 'WhatsApp', count: 48 },
+          { channel: 'Online', count: 22 },
+        ]
+      : [
+          { channel: 'Online', count: 31 },
+          { channel: 'WhatsApp', count: 27 },
+        ]
+  const cmv = slug === 'rom-brasil' ? 4200 : 3100
 
   return {
     unit: UNIT_META[slug],
@@ -121,34 +141,46 @@ function buildUnit(
       newClientsPeriod: slug === 'rom-brasil' ? 48 : 36,
     },
     opsCommerce: {
-      bookingChannels:
-        slug === 'rom-brasil'
-          ? [
-              { channel: 'WhatsApp', count: 48 },
-              { channel: 'Online', count: 22 },
-            ]
-          : [
-              { channel: 'Online', count: 31 },
-              { channel: 'WhatsApp', count: 27 },
-            ],
-      packages:
-        slug === 'rom-brasil'
-          ? [{ name: 'Pacote corte', quantity: 12, revenue: 4800 }]
-          : [{ name: 'Day spa', quantity: 9, revenue: 5400 }],
+      bookingChannels,
+      packages,
       packagesSold: slug === 'rom-brasil' ? 19 : 23,
+      packagesRevenue: packages.reduce((a, p) => a + p.revenue, 0),
       ratingsAvg: slug === 'rom-brasil' ? 4.7 : 4.5,
       ratingsCount: slug === 'rom-brasil' ? 38 : 29,
       birthdayCount: slug === 'rom-brasil' ? 11 : 8,
+      topBookingChannel: bookingChannels[0]?.channel ?? null,
+    },
+    opsFinance: {
+      ...EMPTY_OPS_FINANCE,
+      mtdRevenue,
+      mtdAttended,
+      mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0,
+      cmv,
+      cmvShare: mtdRevenue > 0 ? cmv / mtdRevenue : null,
+      paymentsTotal: Math.round(mtdRevenue * 0.98),
+      paymentReconcile: 'aligned',
+      topPaymentMethod: 'Cartão',
+      available: true,
+    },
+    opsStock: {
+      ...EMPTY_OPS_STOCK,
+      available: true,
+      totalValue: slug === 'rom-brasil' ? 28500 : 19200,
+      productCount: slug === 'rom-brasil' ? 86 : 64,
+      activeAlerts: slug === 'rom-brasil' ? 4 : 2,
+      zeroProducts: slug === 'rom-brasil' ? 3 : 1,
+      drift: slug === 'rom-brasil' ? -120 : 40,
     },
     mtd: {
-      revenue: sumField(mtdDays, 'revenue'),
-      attended: sumField(mtdDays, 'attended'),
+      revenue: mtdRevenue,
+      attended: mtdAttended,
       noShows: sumField(mtdDays, 'noShows'),
       appointments: sumField(mtdDays, 'appointments'),
       newClients: sumField(mtdDays, 'newClients'),
       returningClients: sumField(mtdDays, 'returningClients'),
       cancelled: sumField(mtdDays, 'cancelled'),
       goal: dailyGoal * dayOfMonth(todayIso),
+      goalSet: dailyGoal > 0,
     },
     last30,
     sync,
@@ -203,6 +235,7 @@ export function buildMockOverview(): CerebroOverview {
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
   const ticketAvg = attended > 0 ? Math.round(todayRevenue / attended) : 0
   const mixBase = newClients + returningClients
+  const cmv = units.reduce((a, u) => a + u.opsFinance.cmv, 0)
 
   return {
     generatedAt: new Date().toISOString(),
@@ -212,12 +245,14 @@ export function buildMockOverview(): CerebroOverview {
       todayRevenue,
       todayGoal,
       todayGoalProgress: rate(todayRevenue, todayGoal),
+      goalsConfigured: true,
       mtdRevenue,
       mtdGoal,
       mtdGoalProgress: rate(mtdRevenue, mtdGoal),
       attendanceRate: rate(attended, appointments),
       noShowRate: rate(noShows, appointments),
       occupancyRate: rate(appointments, capacity),
+      occupancyConfigured: true,
       ticketAvg,
       revenueAtRisk: units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
       newClients,
@@ -228,6 +263,10 @@ export function buildMockOverview(): CerebroOverview {
       cancelledToday: units.reduce((a, u) => a + u.today.cancelled, 0),
       noShowsToday: noShows,
       newShare: mixBase > 0 ? newClients / mixBase : 0,
+      cmv,
+      cmvShare: mtdRevenue > 0 ? cmv / mtdRevenue : null,
+      stockValue: units.reduce((a, u) => a + u.opsStock.totalValue, 0),
+      stockAlerts: units.reduce((a, u) => a + u.opsStock.activeAlerts, 0),
     },
     units,
     trend30: brasil.last30.map((row, idx) => ({

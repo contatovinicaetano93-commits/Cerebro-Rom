@@ -27,9 +27,10 @@ Assim o Cérebro abre como app, sem digitar a URL todo dia.
 
 | Momento | O que olhar |
 |---------|-------------|
+| Primeira vez | **Metas** — preencher meta diária + capacidade de cada unidade |
 | Manhã (2–5 min) | Meta do dia, ocupação, alertas, sync ok? |
-| Meio do dia | Gap de meta, no-shows, Brasil vs Iguatemi |
-| Fim do dia / semana | MTD, tendência 30 dias, unidade líder |
+| Meio do dia | Comparativo Brasil × Iguatemi (Δ%), gap de meta, no-shows |
+| Fim do dia / semana | MTD, CMV/estoque, tendência 30 dias |
 
 ## O que é cada sistema
 
