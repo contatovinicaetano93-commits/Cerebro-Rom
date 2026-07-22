@@ -129,7 +129,7 @@ export interface AlertItem {
 }
 
 export type ComparisonGroup = 'ops' | 'comercial' | 'financeiro' | 'estoque'
-export type ComparisonFormat = 'currency' | 'pct' | 'number'
+export type ComparisonFormat = 'currency' | 'pct' | 'number' | 'text'
 
 /** Linha do scorecard Brasil × Iguatemi × Δ%. */
 export interface ComparisonRow {
@@ -138,6 +138,9 @@ export interface ComparisonRow {
   group: ComparisonGroup
   brasil: number | null
   iguatemi: number | null
+  /** Rótulo textual (ex.: forma de pagamento / status 0081). */
+  brasilText?: string | null
+  iguatemiText?: string | null
   /** (brasil − iguatemi) / |iguatemi|; null se não comparável. */
   deltaPct: number | null
   format: ComparisonFormat

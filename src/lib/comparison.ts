@@ -43,6 +43,38 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   const noShow = (u: UnitSnapshot): number | null =>
     u.today.appointments > 0 ? rate(u.today.noShows, u.today.appointments) : null
 
+  /** Cancel + no-show × ticket do dia — dinheiro que vazou da agenda (Avec). */
+  const lostRevenue = (u: UnitSnapshot): number =>
+    Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
+
+  const paymentGap = (u: UnitSnapshot): number | null => {
+    if (!u.opsFinance.available || u.opsFinance.paymentReconcile === 'unknown') return null
+    if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
+      return null
+    }
+    return Math.round((u.opsFinance.paymentsTotal - u.opsFinance.mtdRevenue) * 100) / 100
+  }
+
+  const reconcileLabel = (u: UnitSnapshot): string | null => {
+    if (!u.opsFinance.available) return null
+    switch (u.opsFinance.paymentReconcile) {
+      case 'aligned':
+        return 'Ok'
+      case 'divergent':
+        return 'Divergente'
+      case 'missing_payments':
+        return 'Sem 0081'
+      case 'missing_revenue':
+        return 'Sem receita'
+      case 'unknown':
+        return null
+      default: {
+        const _exhaustive: never = u.opsFinance.paymentReconcile
+        return _exhaustive
+      }
+    }
+  }
+
   const rows: ComparisonRow[] = [
     row({
       key: 'revenue_today',
@@ -78,6 +110,15 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       brasil: noShow(brasil),
       iguatemi: noShow(iguatemi),
       format: 'pct',
+      higherIsBetter: false,
+    }),
+    row({
+      key: 'lost_revenue',
+      label: 'Receita perdida',
+      group: 'ops',
+      brasil: lostRevenue(brasil),
+      iguatemi: lostRevenue(iguatemi),
+      format: 'currency',
       higherIsBetter: false,
     }),
     row({
@@ -142,6 +183,48 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       iguatemi: iguatemi.opsFinance.cmvShare,
       format: 'pct',
       higherIsBetter: false,
+    }),
+    row({
+      key: 'payments_total',
+      label: 'Pagamentos 0081',
+      group: 'financeiro',
+      brasil: brasil.opsFinance.available ? brasil.opsFinance.paymentsTotal : null,
+      iguatemi: iguatemi.opsFinance.available ? iguatemi.opsFinance.paymentsTotal : null,
+      format: 'currency',
+      higherIsBetter: true,
+    }),
+    row({
+      key: 'payment_gap',
+      label: 'Gap 0081 vs receita',
+      group: 'financeiro',
+      brasil: paymentGap(brasil),
+      iguatemi: paymentGap(iguatemi),
+      format: 'currency',
+      higherIsBetter: false,
+    }),
+    row({
+      key: 'payment_reconcile',
+      label: 'Conciliação 0081',
+      group: 'financeiro',
+      brasil: null,
+      iguatemi: null,
+      brasilText: reconcileLabel(brasil),
+      iguatemiText: reconcileLabel(iguatemi),
+      format: 'text',
+      higherIsBetter: true,
+      deltaPct: null,
+    }),
+    row({
+      key: 'top_payment',
+      label: 'Forma #1',
+      group: 'financeiro',
+      brasil: null,
+      iguatemi: null,
+      brasilText: brasil.opsFinance.topPaymentMethod,
+      iguatemiText: iguatemi.opsFinance.topPaymentMethod,
+      format: 'text',
+      higherIsBetter: true,
+      deltaPct: null,
     }),
     row({
       key: 'stock_value',

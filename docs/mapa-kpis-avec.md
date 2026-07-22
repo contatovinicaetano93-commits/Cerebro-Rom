@@ -20,6 +20,8 @@ Avec (por unidade)
 | **D · Financeiro Avec** | full | 0081 (mix) + 0044 (CMV saídas) | Comparativo + comando CMV |
 | **E · Estoque Avec** | stock | 0149 / alertas / 0045 (drift) | Comparativo + alertas |
 
+Comparativo inclui também **receita perdida** (cancel + no-show × ticket) e **conciliação 0081** (totais, gap, status, forma #1).
+
 **Fora do Cérebro (de propósito):** despesas manuais, comissões, NF, fila de compra detalhada.
 
 ## Metas
