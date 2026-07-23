@@ -290,8 +290,8 @@ function comparisonTable(o: CerebroOverview): (string | number | null)[][] | nul
     r.format === 'text'
       ? 'Comparativo textual (sem Δ%)'
       : r.higherIsBetter
-        ? 'Δ% positivo = Iguatemi acima (melhor)'
-        : 'Δ% negativo = Iguatemi abaixo (melhor neste KPI)',
+        ? 'Δ% positivo = Brasil acima (melhor)'
+        : 'Δ% negativo = Brasil abaixo (melhor neste KPI)',
   ])
   return [header, ...rows]
 }
