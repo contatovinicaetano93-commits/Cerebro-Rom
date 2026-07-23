@@ -176,6 +176,15 @@ export function Dashboard({
       .filter((g) => g.rows.length > 0)
   }, [data.comparison])
 
+  const actionsSummary = useMemo(() => {
+    const n = data.nextActions.length
+    if (n === 0) return ''
+    const critical = data.nextActions.filter((a) => a.severity === 'critical').length
+    const base = `${n} item${n === 1 ? '' : 's'}`
+    if (critical === 0) return base
+    return `${base} · ${critical} crítico${critical === 1 ? '' : 's'}`
+  }, [data.nextActions])
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div
@@ -352,13 +361,7 @@ export function Dashboard({
             <CollapsibleSection
               eyebrow="Prioridade"
               title="Próximas ações"
-              summary={`${data.nextActions.length} item${data.nextActions.length === 1 ? '' : 's'}${
-                data.nextActions.some((a) => a.severity === 'critical')
-                  ? ` · ${data.nextActions.filter((a) => a.severity === 'critical').length} crítico${
-                      data.nextActions.filter((a) => a.severity === 'critical').length === 1 ? '' : 's'
-                    }`
-                  : ''
-              }`}
+              summary={actionsSummary}
               open={openMap.acoes}
               onOpenChange={(v) => setSection('acoes', v)}
             >
