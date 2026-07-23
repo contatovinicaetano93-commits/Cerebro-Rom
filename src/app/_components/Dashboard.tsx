@@ -25,9 +25,10 @@ import { LogoutButton } from './LogoutButton'
 import { GoalsEditor } from './GoalsEditor'
 import { ReportsPanel } from './ReportsPanel'
 
-type SectionKey = 'hoje' | 'semana' | 'comercial' | 'comparativo' | 'trend'
+type SectionKey = 'acoes' | 'hoje' | 'semana' | 'comercial' | 'comparativo' | 'trend'
 
 const DEFAULT_OPEN: Record<SectionKey, boolean> = {
+  acoes: true,
   hoje: true,
   semana: false,
   comercial: false,
@@ -175,6 +176,15 @@ export function Dashboard({
       .filter((g) => g.rows.length > 0)
   }, [data.comparison])
 
+  const actionsSummary = useMemo(() => {
+    const n = data.nextActions.length
+    if (n === 0) return ''
+    const critical = data.nextActions.filter((a) => a.severity === 'critical').length
+    const base = `${n} item${n === 1 ? '' : 's'}`
+    if (critical === 0) return base
+    return `${base} · ${critical} crítico${critical === 1 ? '' : 's'}`
+  }, [data.nextActions])
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div
@@ -238,6 +248,7 @@ export function Dashboard({
             anyOpen={anyOpen}
             onExpandAll={() =>
               setOpenMap({
+                acoes: true,
                 hoje: true,
                 semana: true,
                 comercial: true,
@@ -247,6 +258,7 @@ export function Dashboard({
             }
             onCollapseAll={() =>
               setOpenMap({
+                acoes: false,
                 hoje: false,
                 semana: false,
                 comercial: false,
@@ -346,25 +358,32 @@ export function Dashboard({
 
         {data.nextActions.length > 0 ? (
           <section className="mt-6">
-            <p className="text-[0.65rem] uppercase tracking-[0.22em] text-brass">Próximas ações</p>
-            <ul className="mt-3 space-y-2">
-              {data.nextActions.map((a) => (
-                <li
-                  key={a.id}
-                  className={`flex items-start gap-2 rounded-xl border px-4 py-3 ${severityStyles(a.severity)}`}
-                >
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground">{a.title}</p>
-                    <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
-                    <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/80">
-                      <ArrowRight size={11} />
-                      {a.action}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <CollapsibleSection
+              eyebrow="Prioridade"
+              title="Próximas ações"
+              summary={actionsSummary}
+              open={openMap.acoes}
+              onOpenChange={(v) => setSection('acoes', v)}
+            >
+              <ul className="space-y-2">
+                {data.nextActions.map((a) => (
+                  <li
+                    key={a.id}
+                    className={`flex items-start gap-2 rounded-xl border px-4 py-3 ${severityStyles(a.severity)}`}
+                  >
+                    <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">{a.title}</p>
+                      <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
+                      <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/80">
+                        <ArrowRight size={11} />
+                        {a.action}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </CollapsibleSection>
           </section>
         ) : null}
 
