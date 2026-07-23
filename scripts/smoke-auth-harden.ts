@@ -15,7 +15,7 @@ async function main() {
     verifySessionToken,
     SESSION_TTL_SECONDS,
   } = await import('../src/lib/auth')
-  const { checkLoginRateLimit } = await import('../src/lib/auth-rate-limit')
+  const { isLoginBlocked, recordLoginFailure } = await import('../src/lib/auth-rate-limit')
 
   const token = await createSessionToken()
   if (!(await verifySessionToken(token))) throw new Error('valid token rejected')
@@ -26,12 +26,12 @@ async function main() {
   console.log('session ok ttl=', SESSION_TTL_SECONDS, 'token_prefix=', token.slice(0, 12))
 
   const key = `smoke:${Date.now()}`
+  if (await isLoginBlocked(key, 10, 60)) throw new Error('blocked before any failure')
   for (let i = 0; i < 10; i++) {
-    const r = await checkLoginRateLimit(key, 10, 60)
-    if (!r.ok) throw new Error(`blocked early at ${i}`)
+    const r = await recordLoginFailure(key, 10, 60)
+    if (i < 9 && r.blocked) throw new Error(`blocked early at ${i}`)
   }
-  const blocked = await checkLoginRateLimit(key, 10, 60)
-  if (blocked.ok) throw new Error('11th attempt should block')
+  if (!(await isLoginBlocked(key, 10, 60))) throw new Error('should be blocked after 10 failures')
   console.log('rate-limit ok')
   console.log('OK')
 }
