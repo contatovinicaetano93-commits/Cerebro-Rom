@@ -21,12 +21,14 @@ export function getAdminPassword() {
   return (process.env.CEREBRO_ADMIN_PASSWORD ?? '').trim()
 }
 
-/** Secret dedicado da sessão; fallback = senha admin (legado). */
+/**
+ * Chave HMAC da sessão = senha admin.
+ * Usamos a senha (não CEREBRO_SESSION_SECRET) para Edge Middleware e
+ * Serverless assinarem/verificarem com a mesma chave — o secret dedicado
+ * às vezes não chega ao Edge na Vercel e quebrava o login após 200.
+ */
 export function getSessionSecret() {
-  return (
-    process.env.CEREBRO_SESSION_SECRET?.trim() ||
-    getAdminPassword()
-  )
+  return getAdminPassword()
 }
 
 export function isAuthEnabled() {
@@ -70,8 +72,7 @@ export async function createSessionToken(ttlSeconds = SESSION_TTL_SECONDS): Prom
   return `v1.${exp}.${sig}`
 }
 
-export async function verifySessionToken(token: string): Promise<boolean> {
-  const secret = getSessionSecret()
+async function verifyWithSecret(token: string, secret: string): Promise<boolean> {
   if (!secret || !token) return false
 
   const parts = token.split('.')
@@ -87,12 +88,27 @@ export async function verifySessionToken(token: string): Promise<boolean> {
   return timingSafeEqual(sig, expected)
 }
 
+/**
+ * Aceita assinatura com CEREBRO_SESSION_SECRET ou com a senha admin.
+ * Cobre Edge Middleware sem o secret dedicado (fallback) vs Node login com secret.
+ */
+export async function verifySessionToken(token: string): Promise<boolean> {
+  const primary = getSessionSecret()
+  if (await verifyWithSecret(token, primary)) return true
+  const password = getAdminPassword()
+  if (password && password !== primary) {
+    return verifyWithSecret(token, password)
+  }
+  return false
+}
+
 export function validateAdminCredentials(username: string, password: string) {
   const expectedUser = getAdminUser()
   const expectedPass = getAdminPassword()
   if (!expectedPass) return false
   return (
-    timingSafeEqual(username.trim(), expectedUser) && timingSafeEqual(password, expectedPass)
+    timingSafeEqual(username.trim(), expectedUser) &&
+    timingSafeEqual(password.trim(), expectedPass)
   )
 }
 
