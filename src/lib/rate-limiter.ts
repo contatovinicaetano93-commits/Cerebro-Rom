@@ -30,6 +30,15 @@ export class RateLimiter {
     return Math.max(0, maxRequests - requests.length)
   }
 
+  /** Consulta sem incrementar. */
+  static isBlocked(key: string, maxRequests: number = 100, windowSeconds: number = 60): boolean {
+    const now = Date.now()
+    const windowMs = windowSeconds * 1000
+    const recent = (this.requests.get(key) || []).filter((time) => now - time < windowMs)
+    this.requests.set(key, recent)
+    return recent.length >= maxRequests
+  }
+
   static reset(key?: string): void {
     if (key) {
       this.requests.delete(key)

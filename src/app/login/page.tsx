@@ -1,12 +1,11 @@
 'use client'
 
 import { Suspense, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { Brain } from 'lucide-react'
 import { sanitizeRedirectPath } from '@/lib/auth-redirect'
 
 function LoginForm() {
-  const router = useRouter()
   const params = useSearchParams()
   const next = sanitizeRedirectPath(params.get('next'))
   const [username, setUsername] = useState('waltter')
@@ -25,16 +24,15 @@ function LoginForm() {
         body: JSON.stringify({ username, password }),
         credentials: 'include',
       })
-      const json = await res.json()
+      const json = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok || json.error) {
         setError(json.error ?? 'Usuário ou senha incorretos')
         return
       }
-      router.push(next)
-      router.refresh()
+      // Hard navigation — garante que o cookie da sessão vá na próxima request.
+      window.location.assign(next)
     } catch (err) {
       setError(String(err))
-    } finally {
       setLoading(false)
     }
   }
