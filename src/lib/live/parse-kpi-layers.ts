@@ -49,7 +49,8 @@ function parseProfessionals(raw: unknown): OpsWeek['professionals'] {
       }
     })
     .filter((x): x is OpsWeek['professionals'][number] => x != null)
-    .slice(0, 5)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10)
 }
 
 function parseServices(raw: unknown): OpsWeek['services'] {

@@ -476,7 +476,7 @@ export function Dashboard({
           <CollapsibleSection
             eyebrow="2 · Semana"
             title="Equipe e retenção"
-            summary="Top pros · retorno · reativação"
+            summary="Top 10 pros · retorno · reativação"
             open={openMap.semana}
             onOpenChange={(v) => setSection('semana', v)}
           >
@@ -501,10 +501,13 @@ export function Dashboard({
                     ) : (
                       <div className="mt-3 space-y-3 text-sm">
                         <ul className="space-y-1">
-                          {w.professionals.slice(0, 3).map((p) => (
+                          {w.professionals.slice(0, 10).map((p, i) => (
                             <li key={p.name} className="flex justify-between gap-2">
-                              <span className="truncate text-muted">{p.name}</span>
-                              <span>{formatCurrency(p.revenue)}</span>
+                              <span className="truncate text-muted">
+                                <span className="mr-1.5 tabular-nums text-muted/70">{i + 1}.</span>
+                                {p.name}
+                              </span>
+                              <span className="shrink-0 tabular-nums">{formatCurrency(p.revenue)}</span>
                             </li>
                           ))}
                         </ul>
