@@ -123,7 +123,7 @@ export async function fetchOpsFinance(
           )
         ), 0)::float as cmv
         from stock_movements sm
-        join stock_products sp on sp.id = sm.product_id
+        left join stock_products sp on sp.id = sm.product_id
         where sm.type = 'saida'
           and (sm.occurred_at at time zone 'America/Sao_Paulo')::date >= ${monthStart}::date
           and (sm.occurred_at at time zone 'America/Sao_Paulo')::date <= ${today}::date
