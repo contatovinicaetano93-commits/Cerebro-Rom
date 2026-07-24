@@ -116,11 +116,17 @@ export async function fetchOpsFinance(
   if (await tableExists(sql, 'stock_movements')) {
     try {
       const rows = (await sql`
-        select coalesce(sum(coalesce(cost, 0)), 0)::float as cmv
-        from stock_movements
-        where type = 'saida'
-          and (occurred_at at time zone 'America/Sao_Paulo')::date >= ${monthStart}::date
-          and (occurred_at at time zone 'America/Sao_Paulo')::date <= ${today}::date
+        select coalesce(sum(
+          coalesce(
+            sm.cost,
+            sm.quantity * coalesce(sp.unit_cost, sp.avg_cost, 0)
+          )
+        ), 0)::float as cmv
+        from stock_movements sm
+        join stock_products sp on sp.id = sm.product_id
+        where sm.type = 'saida'
+          and (sm.occurred_at at time zone 'America/Sao_Paulo')::date >= ${monthStart}::date
+          and (sm.occurred_at at time zone 'America/Sao_Paulo')::date <= ${today}::date
       `) as { cmv: number }[]
       cmv = Math.round(n(rows[0]?.cmv) * 100) / 100
       cmvOk = true
