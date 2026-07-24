@@ -149,14 +149,25 @@ type P3Row = {
 async function fetchLatestP1(sql: Sql, today: string): Promise<P1Row | null> {
   if (!(await tableExists(sql, 'salon_p1_daily'))) return null
   try {
+    // Prefere o dia mais recente com ranking de profissionais (evita [] de sync parcial).
     const rows = (await sql`
+      select professionals, services, acquisition, reactivation_count
+      from salon_p1_daily
+      where day <= ${today}::date
+        and jsonb_typeof(coalesce(professionals, '[]'::jsonb)) = 'array'
+        and jsonb_array_length(coalesce(professionals, '[]'::jsonb)) > 0
+      order by day desc
+      limit 1
+    `) as P1Row[]
+    if (rows[0]) return rows[0]
+    const fallback = (await sql`
       select professionals, services, acquisition, reactivation_count
       from salon_p1_daily
       where day <= ${today}::date
       order by day desc
       limit 1
     `) as P1Row[]
-    return rows[0] ?? null
+    return fallback[0] ?? null
   } catch {
     return null
   }
