@@ -557,8 +557,14 @@ export async function buildReportXlsx(run: ReportRunDetail): Promise<Buffer> {
       renderRevenueTrendPng(o),
       renderMtdBarsPng(o),
     ])
-    const trendId = wb.addImage({ buffer: trendPng, extension: 'png' })
-    const barsId = wb.addImage({ buffer: barsPng, extension: 'png' })
+    const trendId = wb.addImage({
+      base64: trendPng.toString('base64'),
+      extension: 'png',
+    })
+    const barsId = wb.addImage({
+      base64: barsPng.toString('base64'),
+      extension: 'png',
+    })
     charts.addImage(trendId, {
       tl: { col: 0, row: 4 },
       ext: { width: 720, height: 330 },
