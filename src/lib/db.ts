@@ -1,10 +1,11 @@
-import { setDefaultResultOrder } from 'dns'
+import 'server-only'
 import postgres, { type Sql as PostgresSql } from 'postgres'
 
 try {
-  setDefaultResultOrder('ipv4first')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('dns').setDefaultResultOrder('ipv4first')
 } catch {
-  // older Node
+  // older Node / non-Node
 }
 
 /** Tagged-template client (compatível com o uso anterior do neon). */
