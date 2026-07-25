@@ -47,22 +47,29 @@ function emptyDay(
   }
 }
 
-function buildOpsToday(today: DayMetrics, appointmentsNext2h: number): OpsToday {
+function buildOpsToday(
+  today: DayMetrics,
+  appointmentsNext2h: number,
+  isRealtimeDay: boolean,
+): OpsToday {
   const openSlotsToday = today.capacitySet
     ? Math.max(0, today.capacity - today.appointments)
     : 0
-  const capacityNext2h = today.capacitySet
-    ? Math.max(1, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
-    : 0
-  const openSlotsNext2h = today.capacitySet
-    ? Math.max(0, capacityNext2h - appointmentsNext2h)
-    : 0
+  // Próximas 2h só existe no dia corrente; em dias históricos zera (não “capacidade cheia livre”).
+  const capacityNext2h =
+    today.capacitySet && isRealtimeDay
+      ? Math.max(1, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
+      : 0
+  const openSlotsNext2h =
+    today.capacitySet && isRealtimeDay
+      ? Math.max(0, capacityNext2h - appointmentsNext2h)
+      : 0
   const mixBase = today.newClients + today.returningClients
   const newShare = mixBase > 0 ? today.newClients / mixBase : 0
 
   return {
     openSlotsToday,
-    appointmentsNext2h,
+    appointmentsNext2h: isRealtimeDay ? appointmentsNext2h : 0,
     capacityNext2h,
     openSlotsNext2h,
     newShare,
@@ -237,7 +244,7 @@ export async function fetchLiveUnit(
     goalSet,
   }
 
-  const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h)
+  const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, isRealtimeDay)
 
   const [opsWeek, opsCommerce, opsFinance, opsStock] = await Promise.all([
     fetchOpsWeek(sql, today),
