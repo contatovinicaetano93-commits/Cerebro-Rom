@@ -275,6 +275,13 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
           lastSyncAt,
           label: `Sync atrasado (~${ageH.toFixed(1)}h)`,
         }
+      } else if (last.status === 'partial') {
+        const mins = Math.max(1, Math.round(ageMs / 60_000))
+        sync = {
+          status: 'partial',
+          lastSyncAt,
+          label: `Sync parcial há ${mins} min — conferir dados`,
+        }
       } else {
         const mins = Math.max(1, Math.round(ageMs / 60_000))
         sync = {

@@ -77,7 +77,7 @@ function sourceHint(
 }
 
 function syncSourceLabel(status: string | undefined): 'incompleto' | 'desatualizado' | null {
-  if (status === 'error') return 'incompleto'
+  if (status === 'error' || status === 'partial') return 'incompleto'
   if (status === 'stale') return 'desatualizado'
   return null
 }
