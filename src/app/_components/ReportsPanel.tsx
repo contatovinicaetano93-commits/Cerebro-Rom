@@ -144,8 +144,9 @@ export function ReportsPanel() {
               </div>
 
               <p className="mt-3 text-xs text-muted">
-                KPIs do dia escolhido + acumulado do mês até esse dia (MTD). Estoque e sync
-                ficam como estão agora.
+                O export é MTD (acumulado do dia 1 até o dia escolhido) em todos os KPIs
+                operacionais e financeiros. Estoque/sync = momento da captura. Há uma aba
+                extra só com o dia de referência.
               </p>
 
               <ul className="mt-4 space-y-2">

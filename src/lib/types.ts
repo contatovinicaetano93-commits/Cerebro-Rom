@@ -110,6 +110,12 @@ export interface UnitSnapshot {
     cancelled: number
     goal: number
     goalSet: boolean
+    /** Receita MTD ÷ atendidos MTD. */
+    ticketAvg: number
+    leads: number
+    converted: number
+    /** Soma (capacidade − agenda) nos dias do mês até o dia do relatório. */
+    openSlots: number
   }
   last30: DayMetrics[]
   sync: {

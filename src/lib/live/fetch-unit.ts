@@ -166,16 +166,38 @@ export async function fetchLiveUnit(
 
   let leadsToday = 0
   let convertedToday = 0
+  let leadsMtd = 0
+  let convertedMtd = 0
   try {
     const leadRows = (await sql`
       select
-        count(*)::int as leads,
-        count(*) filter (where status = 'convertido')::int as converted
+        count(*) filter (
+          where (created_at at time zone 'America/Sao_Paulo')::date = ${today}::date
+        )::int as leads,
+        count(*) filter (
+          where (created_at at time zone 'America/Sao_Paulo')::date = ${today}::date
+            and status = 'convertido'
+        )::int as converted,
+        count(*) filter (
+          where (created_at at time zone 'America/Sao_Paulo')::date >= ${monthStart}::date
+            and (created_at at time zone 'America/Sao_Paulo')::date <= ${today}::date
+        )::int as leads_mtd,
+        count(*) filter (
+          where (created_at at time zone 'America/Sao_Paulo')::date >= ${monthStart}::date
+            and (created_at at time zone 'America/Sao_Paulo')::date <= ${today}::date
+            and status = 'convertido'
+        )::int as converted_mtd
       from contacts
-      where (created_at at time zone 'America/Sao_Paulo')::date = ${today}::date
-    `) as { leads: number; converted: number }[]
+    `) as {
+      leads: number
+      converted: number
+      leads_mtd: number
+      converted_mtd: number
+    }[]
     leadsToday = n(leadRows[0]?.leads)
     convertedToday = n(leadRows[0]?.converted)
+    leadsMtd = n(leadRows[0]?.leads_mtd)
+    convertedMtd = n(leadRows[0]?.converted_mtd)
   } catch {
     // ok
   }
@@ -232,23 +254,31 @@ export async function fetchLiveUnit(
   const mtdRows = last30.filter((d) => d.day >= monthStart)
   const mtdRevenue = mtdRows.reduce((a, d) => a + d.revenue, 0)
   const mtdAttended = mtdRows.reduce((a, d) => a + d.attended, 0)
+  const mtdAppointments = mtdRows.reduce((a, d) => a + d.appointments, 0)
+  const mtdOpenSlots = capacitySet
+    ? mtdRows.reduce((a, d) => a + Math.max(0, capacity - d.appointments), 0)
+    : 0
   const mtd = {
     revenue: mtdRevenue,
     attended: mtdAttended,
     noShows: mtdRows.reduce((a, d) => a + d.noShows, 0),
-    appointments: mtdRows.reduce((a, d) => a + d.appointments, 0),
+    appointments: mtdAppointments,
     newClients: mtdRows.reduce((a, d) => a + d.newClients, 0),
     returningClients: mtdRows.reduce((a, d) => a + d.returningClients, 0),
     cancelled: mtdRows.reduce((a, d) => a + d.cancelled, 0),
     goal: goalSet ? dailyGoal * dayOfMonth(today) : 0,
     goalSet,
+    ticketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0,
+    leads: leadsMtd,
+    converted: convertedMtd,
+    openSlots: mtdOpenSlots,
   }
 
   const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, isRealtimeDay)
 
   const [opsWeek, opsCommerce, opsFinance, opsStock] = await Promise.all([
     fetchOpsWeek(sql, today),
-    fetchOpsCommerce(sql, today),
+    fetchOpsCommerce(sql, today, monthStart),
     fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended),
     fetchOpsStock(sql),
   ])

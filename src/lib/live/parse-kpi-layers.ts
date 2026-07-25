@@ -225,22 +225,72 @@ export async function fetchOpsWeek(sql: Sql, today: string): Promise<OpsWeek> {
   }
 }
 
-export async function fetchOpsCommerce(sql: Sql, today: string): Promise<OpsCommerce> {
+/**
+ * Comercial MTD: soma pacotes/aniversários do mês até `today`.
+ * Canais/ratings usam o snapshot mais recente ≤ today (não são somáveis limpos).
+ */
+export async function fetchOpsCommerce(
+  sql: Sql,
+  today: string,
+  monthStart?: string,
+): Promise<OpsCommerce> {
   const p2 = await fetchLatestP2(sql, today)
   if (!p2) return EMPTY_OPS_COMMERCE
 
   const bookingChannels = parseBookingChannels(p2.booking_channels)
-  const packages = parsePackages(p2.packages)
-  const packagesRevenue = packages.reduce((a, p) => a + p.revenue, 0)
+  let packages = parsePackages(p2.packages)
+  let packagesSold = n(p2.packages_sold)
+  let packagesRevenue = packages.reduce((a, p) => a + p.revenue, 0)
+  let birthdayCount = n(p2.birthday_count)
+
+  const from = monthStart ?? `${today.slice(0, 7)}-01`
+  if (await tableExists(sql, 'salon_p2_daily')) {
+    try {
+      const rows = (await sql`
+        select packages, packages_sold, birthday_count
+        from salon_p2_daily
+        where day >= ${from}::date and day <= ${today}::date
+        order by day asc
+      `) as P2Row[]
+      if (rows.length > 0) {
+        const byName = new Map<string, { name: string; quantity: number; revenue: number }>()
+        packagesSold = 0
+        birthdayCount = 0
+        for (const row of rows) {
+          packagesSold += n(row.packages_sold)
+          birthdayCount += n(row.birthday_count)
+          for (const p of parsePackages(row.packages)) {
+            const prev = byName.get(p.name)
+            if (prev) {
+              prev.quantity += p.quantity
+              prev.revenue += p.revenue
+            } else {
+              byName.set(p.name, { ...p })
+            }
+          }
+        }
+        packages = [...byName.values()]
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 5)
+        packagesRevenue = packages.reduce((a, p) => a + p.revenue, 0)
+        // packages_sold no P2 às vezes já é total; se 0, usa soma das linhas de pacote.
+        if (packagesSold <= 0) {
+          packagesSold = [...byName.values()].reduce((a, p) => a + p.quantity, 0)
+        }
+      }
+    } catch {
+      // mantém snapshot do dia
+    }
+  }
 
   return {
     bookingChannels,
     packages,
-    packagesSold: n(p2.packages_sold),
+    packagesSold,
     packagesRevenue,
     ratingsAvg: n(p2.ratings_avg),
     ratingsCount: n(p2.ratings_count),
-    birthdayCount: n(p2.birthday_count),
+    birthdayCount,
     topBookingChannel: bookingChannels[0]?.channel ?? null,
   }
 }

@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
-import type { CerebroOverview, ComparisonRow, UnitSnapshot } from '@/lib/types'
+import type { CerebroOverview, ComparisonRow } from '@/lib/types'
 import type { ReportRunDetail } from '@/lib/reports/store'
+import { redeMtdKpis, unitMtdKpis } from '@/lib/reports/mtd-kpis'
 
 /** Separador decimal BR + milhar. */
 function money(value: number | null | undefined, digits = 2): string {
@@ -110,46 +111,46 @@ function formatCmpSide(row: ComparisonRow, side: 'brasil' | 'iguatemi'): string 
   }
 }
 
-function lostRevenue(u: UnitSnapshot): number {
-  return Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
+function deltaPct(brasil: number | null, iguatemi: number | null): number | null {
+  if (brasil == null || iguatemi == null) return null
+  if (iguatemi === 0) return brasil === 0 ? 0 : null
+  return (brasil - iguatemi) / Math.abs(iguatemi)
 }
 
 const LEGEND_ROWS: [string, string][] = [
-  ['Faturamento hoje', 'Soma da receita Avec do dia nas unidades ao vivo.'],
-  ['Meta hoje', 'Meta diária definida no painel (Metas). Sem meta → progresso vazio.'],
-  ['% meta hoje', 'Faturamento hoje ÷ meta hoje.'],
-  ['MTD', 'Month-to-date: receita acumulada do dia 1 até o dia do relatório (Avec).'],
-  ['Ticket', 'Receita ÷ atendidos (hoje). — se não houver atendidos.'],
-  ['Ocupação', 'Agendamentos ÷ capacidade (Metas).'],
-  ['Comparecimento', 'Atendidos ÷ agendamentos do dia.'],
-  ['No-show %', 'Faltas ÷ agendamentos do dia.'],
-  ['Receita em risco', 'No-shows × ticket médio (potencial perdido por falta).'],
-  ['Receita perdida', '(Cancelamentos + no-shows) × ticket do dia.'],
-  ['Vagas hoje', 'Capacidade do dia − agendamentos do dia.'],
-  ['Vagas 2h', 'Estimativa: (capacidade÷8)×2 − agenda nas próximas 2h.'],
-  ['CMV', 'Custo das saídas de estoque no mês (Avec 0044) — proxy de CMV.'],
+  ['Período', 'Todos os KPIs operacionais/financeiros do relatório são MTD: dia 1 → dia escolhido.'],
+  ['Receita MTD', 'Soma da receita Avec do mês até o dia do relatório.'],
+  ['Meta MTD', 'Meta diária × dias decorridos no mês (painel Metas).'],
+  ['% meta MTD', 'Receita MTD ÷ meta MTD.'],
+  ['Ticket MTD', 'Receita MTD ÷ atendidos MTD.'],
+  ['Agendamentos / Atendidos / No-shows / Cancel.', 'Somas do mês até o dia.'],
+  ['Ocupação MTD', 'Agendamentos MTD ÷ (capacidade diária × dias do período).'],
+  ['Comparecimento MTD', 'Atendidos MTD ÷ agendamentos MTD.'],
+  ['No-show % MTD', 'Faltas MTD ÷ agendamentos MTD.'],
+  ['Receita em risco MTD', 'No-shows MTD × ticket MTD.'],
+  ['Receita perdida MTD', '(Cancel. + no-shows) MTD × ticket MTD.'],
+  ['Vagas MTD', 'Soma (capacidade − agenda) nos dias do mês.'],
+  ['Novos / Recorrentes', 'Somas MTD de salon_daily_metrics.'],
+  ['Leads / Conversão', 'Contatos criados no mês até o dia; convertidos ÷ leads.'],
+  ['CMV', 'Custo das saídas de estoque no mês (Avec 0044).'],
   ['CMV/receita', 'CMV ÷ receita MTD.'],
-  ['Pagamentos 0081', 'Soma das formas de pagamento (relatório Avec 0081).'],
-  ['Conciliação', 'Status 0081 vs receita MTD (ideal ≈ alinhado).'],
-  ['Forma #1', 'Forma de pagamento com maior volume no período.'],
-  ['Pacotes', 'Receita de pacotes (Avec 0061).'],
-  ['Retorno', 'Taxa de retorno de clientes (Avec / P3).'],
-  ['Estoque valor', 'Valor da posição de estoque sincronizada da Avec.'],
-  ['Alertas estoque', 'Produtos abaixo do mínimo (alertas ativos).'],
-  ['Zerados', 'SKUs com saldo zero.'],
-  ['Sync', 'Saúde do sync Avec → Neon da unidade (atraso/erro).'],
+  ['Pagamentos 0081', 'Soma das formas de pagamento no MTD.'],
+  ['Pacotes', 'Soma de pacotes (P2) no MTD.'],
+  ['Retorno / Reativação', 'Último snapshot P3/P1 ≤ dia (taxa de período Avec, não soma diária).'],
+  ['Estoque', 'Posição atual no momento da captura (não há série diária).'],
+  ['Sync', 'Saúde do sync Avec → Neon no momento da captura.'],
   ['Δ%', 'Variação Iguatemi vs Brasil: (IG − BR) ÷ |BR|.'],
-  ['Modo live', 'Números lidos dos Neons. Zeros podem ser dia sem movimento OU sync fraco.'],
-  ['Modo degradado', 'Live indisponível — o Cérebro não inventa KPIs.'],
+  ['Dia (referência)', 'Bloco opcional com KPIs só do dia escolhido — o corpo do relatório é MTD.'],
 ]
 
 function capaRows(run: ReportRunDetail): (string | number | null)[][] {
   const o = run.payload
+  const mtd = redeMtdKpis(o)
   const notes: string[] = []
   if (o.mode === 'degraded') notes.push('Live indisponível — trate zeros com cautela.')
   if (o.partial) notes.push('Totais parciais: alguma unidade offline.')
-  if (o.mode === 'live' && o.consolidated.todayRevenue === 0 && o.consolidated.mtdRevenue > 0) {
-    notes.push('Faturamento hoje = R$ 0 com MTD > 0: dia sem venda ainda OU sync do dia atrasado.')
+  if (o.mode === 'live' && mtd.revenue === 0) {
+    notes.push('Receita MTD = R$ 0: mês sem movimento OU sync Avec fraco.')
   }
   for (const u of o.units) {
     if (u.sync.status !== 'ok') {
@@ -158,11 +159,13 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
   }
 
   return [
-    ['Cérebro ROM — Relatório executivo'],
+    ['Cérebro ROM — Relatório executivo (MTD)'],
     ['ROM Brasil + ROM Iguatemi'],
     [],
     ['Capturado em', new Date(run.createdAt).toLocaleString('pt-BR')],
     ['Período', run.periodLabel],
+    ['MTD até', mtd.asOfDay],
+    ['Dias no período', mtd.daysInPeriod],
     ['Modo', modeLabel(o.mode, o.partial)],
     ['Unidades no snapshot', o.units.length],
     ['Separador CSV', 'ponto-e-vírgula (;) — Excel/Numbers BR'],
@@ -174,79 +177,135 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
       : [['—', 'Nenhum aviso no momento do snapshot.']]),
     [],
     ['Como usar'],
-    ['1.', 'Aba/seção Rede = consolidado da rede.'],
-    ['2.', 'Unidades = detalhe por salão.'],
-    ['3.', 'Comparativo = Brasil × Iguatemi × Δ%.'],
-    ['4.', 'Legenda = significado de cada indicador.'],
+    ['1.', 'Rede = consolidado MTD da rede.'],
+    ['2.', 'Unidades = MTD por salão.'],
+    ['3.', 'Comparativo = Brasil × Iguatemi em MTD.'],
+    ['4.', 'Dia (referência) = só o dia escolhido, para contraste.'],
+    ['5.', 'Legenda = significado de cada indicador.'],
   ]
 }
 
 function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
-  const c = o.consolidated
+  const c = redeMtdKpis(o)
   return [
-    ['Indicador', 'Valor', 'Unidade / formato', 'Como ler'],
+    ['Indicador (MTD)', 'Valor', 'Unidade / formato', 'Como ler'],
+    ['Receita MTD', money(c.revenue), 'R$', 'Acumulado do mês até o dia.'],
     [
-      'Faturamento hoje',
-      money(c.todayRevenue),
+      'Meta MTD',
+      c.goalsConfigured ? money(c.goal) : '— (meta não definida)',
       'R$',
-      'Receita Avec do dia (unidades ao vivo).',
+      'Meta diária × dias do período.',
     ],
-    [
-      'Meta hoje',
-      c.goalsConfigured ? money(c.todayGoal) : '— (meta não definida)',
-      'R$',
-      'Definida no painel Metas.',
-    ],
-    [
-      '% meta hoje',
-      c.goalsConfigured ? pct(c.todayGoalProgress) : '—',
-      '%',
-      'Faturamento ÷ meta.',
-    ],
-    ['MTD (mês)', money(c.mtdRevenue), 'R$', 'Receita acumulada do dia 1 até o dia do relatório.'],
-    ['Ticket médio (hoje)', money(c.ticketAvg), 'R$', 'Receita ÷ atendidos.'],
-    ['Ocupação', pct(c.occupancyRate), '%', 'Agenda ÷ capacidade.'],
-    ['Comparecimento', pct(c.attendanceRate), '%', 'Atendidos ÷ agendados.'],
-    ['No-show', pct(c.noShowRate), '%', 'Faltas ÷ agendados.'],
-    ['Receita em risco', money(c.revenueAtRisk), 'R$', 'No-shows × ticket.'],
-    ['Vagas hoje', num(c.openSlotsToday), 'qtd', 'Capacidade − agenda do dia.'],
-    ['Vagas 2h', num(c.openSlotsNext2h), 'qtd', 'Encaixes estimados nas próximas 2h.'],
-    ['Cancelamentos (hoje)', num(c.cancelledToday), 'qtd', 'Cancelamentos Avec do dia.'],
-    ['No-shows (qtd)', num(c.noShowsToday), 'qtd', 'Faltas do dia.'],
+    ['% meta MTD', c.goalsConfigured ? pct(c.goalProgress) : '—', '%', 'Receita ÷ meta MTD.'],
+    ['Ticket médio MTD', money(c.ticketAvg), 'R$', 'Receita ÷ atendidos MTD.'],
+    ['Agendamentos MTD', num(c.appointments), 'qtd', 'Soma do mês.'],
+    ['Atendidos MTD', num(c.attended), 'qtd', 'Soma do mês.'],
+    ['No-shows MTD', num(c.noShows), 'qtd', 'Soma do mês.'],
+    ['Cancelamentos MTD', num(c.cancelled), 'qtd', 'Soma do mês.'],
+    ['Ocupação MTD', pct(c.occupancyRate), '%', 'Agenda ÷ (capacidade × dias).'],
+    ['Comparecimento MTD', pct(c.attendanceRate), '%', 'Atendidos ÷ agendados.'],
+    ['No-show % MTD', pct(c.noShowRate), '%', 'Faltas ÷ agendados.'],
+    ['Receita em risco MTD', money(c.revenueAtRisk), 'R$', 'No-shows × ticket MTD.'],
+    ['Receita perdida MTD', money(c.lostRevenue), 'R$', '(Cancel. + no-shows) × ticket.'],
+    ['Vagas MTD', num(c.openSlots), 'qtd', 'Soma capacidade − agenda.'],
+    ['Novos clientes MTD', num(c.newClients), 'qtd', 'Soma do mês.'],
+    ['Recorrentes MTD', num(c.returningClients), 'qtd', 'Soma do mês.'],
+    ['Mix novos MTD', pct(c.newShare), '%', 'Novos ÷ (novos + recorrentes).'],
+    ['Leads MTD', num(c.leads), 'qtd', 'Contatos criados no mês.'],
+    ['Conversão MTD', pct(c.conversionRate), '%', 'Convertidos ÷ leads.'],
     ['CMV (mês)', money(c.cmv), 'R$', 'Saídas estoque 0044.'],
-    ['CMV / receita', pct(c.cmvShare), '%', 'CMV ÷ MTD.'],
-    ['Estoque (valor)', money(c.stockValue), 'R$', 'Posição Avec.'],
+    ['CMV / receita', pct(c.cmvShare), '%', 'CMV ÷ receita MTD.'],
+    ['Pagamentos 0081 MTD', money(c.paymentsTotal), 'R$', 'Soma formas de pagamento.'],
+    ['Pacotes MTD', money(c.packagesRevenue), 'R$', 'Receita pacotes no mês.'],
+    ['Pacotes vendidos MTD', num(c.packagesSold), 'qtd', 'Quantidade no mês.'],
+    ['Reativações (P1)', num(c.reactivationCount), 'qtd', 'Snapshot P1 ≤ dia.'],
+    ['Estoque (valor agora)', money(c.stockValue), 'R$', 'Posição na captura.'],
     ['Alertas estoque', num(c.stockAlerts), 'qtd', 'Abaixo do mínimo.'],
+    ['SKUs zerados', num(c.zeroProducts), 'qtd', 'Saldo zero.'],
   ]
 }
 
 function unitTable(o: CerebroOverview): (string | number | null)[][] {
   const header = [
     'Unidade',
-    'Dia',
-    'Receita hoje (R$)',
-    'Agendamentos',
-    'Atendidos',
-    'No-shows',
-    'Cancelamentos',
-    'Ticket (R$)',
-    'Capacidade',
-    'Meta diária (R$)',
-    'Receita perdida (R$)',
-    'Vagas hoje',
-    'Vagas 2h',
-    'MTD (R$)',
+    'MTD até',
+    'Dias',
+    'Receita MTD (R$)',
+    'Agendamentos MTD',
+    'Atendidos MTD',
+    'No-shows MTD',
+    'Cancel. MTD',
     'Ticket MTD (R$)',
+    'Meta MTD (R$)',
+    '% meta MTD',
+    'Ocupação MTD',
+    'Comparecimento MTD',
+    'No-show % MTD',
+    'Receita perdida MTD (R$)',
+    'Vagas MTD',
+    'Novos MTD',
+    'Recorrentes MTD',
+    'Leads MTD',
+    'Conversão MTD',
     'CMV (R$)',
     'Pagamentos 0081 (R$)',
     'Conciliação',
     'Forma #1',
-    'Pacotes (R$)',
+    'Pacotes MTD (R$)',
     'Retorno',
-    'Estoque (R$)',
-    'Alertas estoque',
+    'Estoque agora (R$)',
+    'Alertas',
     'Zerados',
     'Sync',
+  ]
+  const rows = o.units.map((u) => {
+    const m = unitMtdKpis(u)
+    return [
+      u.unit.short,
+      m.day,
+      num(m.daysInPeriod),
+      money(m.revenue),
+      num(m.appointments),
+      num(m.attended),
+      num(m.noShows),
+      num(m.cancelled),
+      money(m.ticketAvg),
+      m.goalSet ? money(m.goal) : '—',
+      pct(m.goalProgress),
+      pct(m.occupancyRate),
+      pct(m.attendanceRate),
+      pct(m.noShowRate),
+      money(m.lostRevenue),
+      num(m.openSlots),
+      num(m.newClients),
+      num(m.returningClients),
+      num(m.leads),
+      pct(m.conversionRate),
+      money(m.cmv),
+      money(m.paymentsTotal),
+      reconcileLabel(m.paymentReconcile),
+      m.topPaymentMethod || '—',
+      money(m.packagesRevenue),
+      pct(m.returnRate),
+      money(m.stockValue),
+      num(m.stockAlerts),
+      num(m.zeroProducts),
+      m.syncLabel,
+    ]
+  })
+  return [header, ...rows]
+}
+
+function dayReferenceTable(o: CerebroOverview): (string | number | null)[][] {
+  const header = [
+    'Unidade',
+    'Dia',
+    'Receita dia (R$)',
+    'Agendamentos',
+    'Atendidos',
+    'No-shows',
+    'Cancelamentos',
+    'Ticket dia (R$)',
   ]
   const rows = o.units.map((u) => [
     u.unit.short,
@@ -257,31 +316,152 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     num(u.today.noShows),
     num(u.today.cancelled),
     money(u.today.ticketAvg),
-    u.today.capacitySet ? num(u.today.capacity) : '—',
-    u.today.goalSet ? money(u.today.dailyGoal) : '—',
-    money(lostRevenue(u)),
-    num(u.opsToday.openSlotsToday),
-    num(u.opsToday.openSlotsNext2h),
-    money(u.opsFinance.mtdRevenue),
-    money(u.opsFinance.mtdTicketAvg),
-    money(u.opsFinance.cmv),
-    money(u.opsFinance.paymentsTotal),
-    reconcileLabel(u.opsFinance.paymentReconcile),
-    u.opsFinance.topPaymentMethod || '—',
-    money(u.opsCommerce.packagesRevenue),
-    pct(u.opsWeek.returnRate),
-    money(u.opsStock.totalValue),
-    num(u.opsStock.activeAlerts),
-    num(u.opsStock.zeroProducts),
-    u.sync.label || u.sync.status,
   ])
   return [header, ...rows]
 }
 
-function comparisonTable(o: CerebroOverview): (string | number | null)[][] | null {
-  if (!o.comparison?.rows?.length) return null
-  const header = ['KPI', 'Grupo', 'Brasil', 'Iguatemi', 'Δ%', 'Como ler Δ%']
-  const rows = o.comparison.rows.map((r) => [
+function mtdComparisonTable(o: CerebroOverview): (string | number | null)[][] | null {
+  const brasilU = o.units.find((u) => u.unit.slug === 'rom-brasil')
+  const iguatemiU = o.units.find((u) => u.unit.slug === 'rom-iguatemi')
+  if (!brasilU || !iguatemiU) return null
+  const b = unitMtdKpis(brasilU)
+  const i = unitMtdKpis(iguatemiU)
+
+  const rows: ComparisonRow[] = [
+    {
+      key: 'revenue_mtd',
+      label: 'Receita MTD',
+      group: 'ops',
+      brasil: b.revenue,
+      iguatemi: i.revenue,
+      format: 'currency',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.revenue, i.revenue),
+    },
+    {
+      key: 'goal_pct_mtd',
+      label: '% meta MTD',
+      group: 'ops',
+      brasil: b.goalProgress,
+      iguatemi: i.goalProgress,
+      format: 'pct',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.goalProgress, i.goalProgress),
+    },
+    {
+      key: 'occupancy_mtd',
+      label: 'Ocupação MTD',
+      group: 'ops',
+      brasil: b.occupancyRate,
+      iguatemi: i.occupancyRate,
+      format: 'pct',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.occupancyRate, i.occupancyRate),
+    },
+    {
+      key: 'noshow_mtd',
+      label: 'No-show % MTD',
+      group: 'ops',
+      brasil: b.noShowRate,
+      iguatemi: i.noShowRate,
+      format: 'pct',
+      higherIsBetter: false,
+      deltaPct: deltaPct(b.noShowRate, i.noShowRate),
+    },
+    {
+      key: 'attendance_mtd',
+      label: 'Comparecimento MTD',
+      group: 'ops',
+      brasil: b.attendanceRate,
+      iguatemi: i.attendanceRate,
+      format: 'pct',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.attendanceRate, i.attendanceRate),
+    },
+    {
+      key: 'lost_mtd',
+      label: 'Receita perdida MTD',
+      group: 'ops',
+      brasil: b.lostRevenue,
+      iguatemi: i.lostRevenue,
+      format: 'currency',
+      higherIsBetter: false,
+      deltaPct: deltaPct(b.lostRevenue, i.lostRevenue),
+    },
+    {
+      key: 'ticket_mtd',
+      label: 'Ticket MTD',
+      group: 'ops',
+      brasil: b.ticketAvg || null,
+      iguatemi: i.ticketAvg || null,
+      format: 'currency',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.ticketAvg || null, i.ticketAvg || null),
+    },
+    {
+      key: 'return',
+      label: 'Taxa de retorno',
+      group: 'comercial',
+      brasil: b.returnRate || null,
+      iguatemi: i.returnRate || null,
+      format: 'pct',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.returnRate || null, i.returnRate || null),
+    },
+    {
+      key: 'packages_mtd',
+      label: 'Pacotes MTD',
+      group: 'comercial',
+      brasil: b.packagesRevenue,
+      iguatemi: i.packagesRevenue,
+      format: 'currency',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.packagesRevenue, i.packagesRevenue),
+    },
+    {
+      key: 'cmv',
+      label: 'CMV (mês)',
+      group: 'financeiro',
+      brasil: b.cmv,
+      iguatemi: i.cmv,
+      format: 'currency',
+      higherIsBetter: false,
+      deltaPct: deltaPct(b.cmv, i.cmv),
+    },
+    {
+      key: 'cmv_share',
+      label: 'CMV / receita',
+      group: 'financeiro',
+      brasil: b.cmvShare,
+      iguatemi: i.cmvShare,
+      format: 'pct',
+      higherIsBetter: false,
+      deltaPct: deltaPct(b.cmvShare, i.cmvShare),
+    },
+    {
+      key: 'payments_mtd',
+      label: 'Pagamentos 0081 MTD',
+      group: 'financeiro',
+      brasil: b.paymentsTotal,
+      iguatemi: i.paymentsTotal,
+      format: 'currency',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.paymentsTotal, i.paymentsTotal),
+    },
+    {
+      key: 'stock',
+      label: 'Estoque (agora)',
+      group: 'estoque',
+      brasil: b.stockValue,
+      iguatemi: i.stockValue,
+      format: 'currency',
+      higherIsBetter: true,
+      deltaPct: deltaPct(b.stockValue, i.stockValue),
+    },
+  ]
+
+  const header = ['KPI (MTD)', 'Grupo', 'Brasil', 'Iguatemi', 'Δ%', 'Como ler Δ%']
+  const body = rows.map((r) => [
     r.label,
     groupLabel(r.group),
     formatCmpSide(r, 'brasil'),
@@ -293,10 +473,10 @@ function comparisonTable(o: CerebroOverview): (string | number | null)[][] | nul
         ? 'Δ% positivo = Iguatemi acima (melhor)'
         : 'Δ% negativo = Iguatemi abaixo (melhor neste KPI)',
   ])
-  return [header, ...rows]
+  return [header, ...body]
 }
 
-/** CSV BR (;) — capa + legenda + rede + unidades + comparativo. UTF-8 com BOM. */
+/** CSV BR (;) — capa + legenda + rede MTD + unidades MTD + comparativo MTD + dia. UTF-8 com BOM. */
 export function buildReportCsv(run: ReportRunDetail): string {
   const o = run.payload
   const blocks: string[] = []
@@ -305,17 +485,24 @@ export function buildReportCsv(run: ReportRunDetail): string {
   blocks.push('')
   blocks.push(joinCsv([['—— Legenda dos indicadores ——'], ['Indicador', 'Significado'], ...LEGEND_ROWS]))
   blocks.push('')
-  blocks.push(joinCsv([['—— Consolidado da rede ——'], ...redeMetricRows(o)]))
+  blocks.push(joinCsv([['—— Consolidado da rede (MTD) ——'], ...redeMetricRows(o)]))
   blocks.push('')
-  blocks.push(joinCsv([['—— Por unidade ——'], ...unitTable(o)]))
+  blocks.push(joinCsv([['—— Por unidade (MTD) ——'], ...unitTable(o)]))
 
-  const cmp = comparisonTable(o)
+  const cmp = mtdComparisonTable(o)
   if (cmp) {
     blocks.push('')
-    blocks.push(joinCsv([['—— Comparativo Brasil × Iguatemi ——'], ...cmp]))
+    blocks.push(joinCsv([['—— Comparativo Brasil × Iguatemi (MTD) ——'], ...cmp]))
   }
 
-  // BOM ajuda Excel/Numbers a reconhecer UTF-8 e acentos.
+  blocks.push('')
+  blocks.push(
+    joinCsv([
+      ['—— Dia de referência (não é o corpo do relatório) ——'],
+      ...dayReferenceTable(o),
+    ]),
+  )
+
   return `\uFEFF${blocks.join('\n')}\n`
 }
 
@@ -344,7 +531,7 @@ export async function buildReportXlsx(run: ReportRunDetail): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Cérebro ROM'
   wb.created = new Date(run.createdAt)
-  wb.description = 'Snapshot executivo ROM Brasil + Iguatemi — formatação pt-BR'
+  wb.description = 'Snapshot executivo MTD ROM Brasil + Iguatemi — formatação pt-BR'
 
   const capa = wb.addWorksheet('Capa')
   capa.addRows(capaRows(run))
@@ -359,27 +546,32 @@ export async function buildReportXlsx(run: ReportRunDetail): Promise<Buffer> {
   for (const [k, v] of LEGEND_ROWS) legenda.addRow([k, v])
   autosize(legenda, 18, 70)
 
-  const rede = wb.addWorksheet('Rede')
+  const rede = wb.addWorksheet('Rede MTD')
   const redeRows = redeMetricRows(o)
   rede.addRows(redeRows)
   styleHeaderRow(rede.getRow(1))
   autosize(rede, 14, 56)
 
-  const units = wb.addWorksheet('Unidades')
+  const units = wb.addWorksheet('Unidades MTD')
   const uRows = unitTable(o)
   units.addRows(uRows)
   styleHeaderRow(units.getRow(1))
   autosize(units, 10, 28)
   units.views = [{ state: 'frozen', ySplit: 1 }]
 
-  const cmp = comparisonTable(o)
+  const cmp = mtdComparisonTable(o)
   if (cmp) {
-    const sheet = wb.addWorksheet('Comparativo')
+    const sheet = wb.addWorksheet('Comparativo MTD')
     sheet.addRows(cmp)
     styleHeaderRow(sheet.getRow(1))
     autosize(sheet, 12, 42)
     sheet.views = [{ state: 'frozen', ySplit: 1 }]
   }
+
+  const daySheet = wb.addWorksheet('Dia referência')
+  daySheet.addRows(dayReferenceTable(o))
+  styleHeaderRow(daySheet.getRow(1))
+  autosize(daySheet, 10, 28)
 
   const buf = await wb.xlsx.writeBuffer()
   return Buffer.from(buf)

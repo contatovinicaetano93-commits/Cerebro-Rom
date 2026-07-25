@@ -181,6 +181,13 @@ function buildUnit(
       cancelled: sumField(mtdDays, 'cancelled'),
       goal: dailyGoal * dayOfMonth(todayIso),
       goalSet: dailyGoal > 0,
+      ticketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0,
+      leads: sumField(mtdDays, 'leads'),
+      converted: sumField(mtdDays, 'converted'),
+      openSlots: mtdDays.reduce(
+        (a, d) => a + Math.max(0, capacity - d.appointments),
+        0,
+      ),
     },
     last30,
     sync,
