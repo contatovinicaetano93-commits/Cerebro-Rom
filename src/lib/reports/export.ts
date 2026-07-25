@@ -177,11 +177,11 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
       : [['—', 'Nenhum aviso no momento do snapshot.']]),
     [],
     ['Como usar'],
-    ['1.', 'Rede = consolidado MTD da rede.'],
-    ['2.', 'Unidades = MTD por salão.'],
-    ['3.', 'Comparativo = Brasil × Iguatemi em MTD.'],
-    ['4.', 'Dia (referência) = só o dia escolhido, para contraste.'],
-    ['5.', 'Legenda = significado de cada indicador.'],
+    ['1.', 'Aba Graficos = tendência de receita + barras MTD.'],
+    ['2.', 'Rede = consolidado MTD da rede.'],
+    ['3.', 'Unidades = MTD por salão.'],
+    ['4.', 'Comparativo = Brasil × Iguatemi em MTD.'],
+    ['5.', 'Dia (referência) = só o dia escolhido, para contraste.'],
   ]
 }
 
@@ -539,6 +539,51 @@ export async function buildReportXlsx(run: ReportRunDetail): Promise<Buffer> {
   capa.getRow(2).font = { italic: true, color: { argb: 'FF666666' } }
   capa.getColumn(1).width = 22
   capa.getColumn(2).width = 72
+
+  // Gráficos primeiro — visão rápida antes das tabelas.
+  const charts = wb.addWorksheet('Graficos')
+  charts.getColumn(1).width = 18
+  charts.getCell('A1').value = 'Gráficos executivos (MTD)'
+  charts.getCell('A1').font = { bold: true, size: 14 }
+  charts.getCell('A2').value = run.periodLabel
+  charts.getCell('A2').font = { italic: true, color: { argb: 'FF666666' } }
+  charts.getCell('A3').value =
+    '1) Receita diária Brasil × Iguatemi · 2) KPIs MTD (receita, atendidos, cancel., ticket, ocupação)'
+  charts.getCell('A3').font = { size: 10, color: { argb: 'FF7A6A55' } }
+
+  try {
+    const { renderRevenueTrendPng, renderMtdBarsPng } = await import('@/lib/reports/charts')
+    const [trendPng, barsPng] = await Promise.all([
+      renderRevenueTrendPng(o),
+      renderMtdBarsPng(o),
+    ])
+    const trendId = wb.addImage({ buffer: trendPng, extension: 'png' })
+    const barsId = wb.addImage({ buffer: barsPng, extension: 'png' })
+    charts.addImage(trendId, {
+      tl: { col: 0, row: 4 },
+      ext: { width: 720, height: 330 },
+      editAs: 'oneCell',
+    })
+    charts.addImage(barsId, {
+      tl: { col: 0, row: 22 },
+      ext: { width: 720, height: 330 },
+      editAs: 'oneCell',
+    })
+  } catch (e) {
+    charts.getCell('A5').value =
+      'Não foi possível gerar os gráficos neste ambiente: ' +
+      (e instanceof Error ? e.message : String(e))
+    charts.getCell('A5').font = { color: { argb: 'FFB45309' } }
+  }
+
+  // Dados das séries (para recriar gráfico nativo no Excel se quiser).
+  const chartData = wb.addWorksheet('Dados grafico')
+  chartData.addRow(['Dia', 'Brasil (R$)', 'Iguatemi (R$)'])
+  styleHeaderRow(chartData.getRow(1))
+  for (const row of o.trend30 ?? []) {
+    chartData.addRow([row.day, row.brasil, row.iguatemi])
+  }
+  autosize(chartData, 12, 22)
 
   const legenda = wb.addWorksheet('Legenda')
   legenda.addRow(['Indicador', 'Significado'])

@@ -94,7 +94,7 @@ export function ReportsPanel() {
           <div>
             <p className="text-sm font-medium text-foreground">Relatórios</p>
             <p className="text-xs text-muted">
-              Snapshot por dia · MTD até o dia · CSV / XLSX
+              Snapshot por dia · MTD · CSV / XLSX com gráficos
             </p>
           </div>
         </div>

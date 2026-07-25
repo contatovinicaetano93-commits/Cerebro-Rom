@@ -2,7 +2,12 @@ import type { NextConfig } from 'next'
 import { withSentryConfig } from '@sentry/nextjs'
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['exceljs'],
+  serverExternalPackages: ['exceljs', 'pureimage'],
+  // Fontes TTF usadas nos gráficos PNG do XLSX (pureimage).
+  outputFileTracingIncludes: {
+    '/api/reports/**': ['./src/lib/reports/fonts/**'],
+    '/api/reports/[id]/**': ['./src/lib/reports/fonts/**'],
+  },
 }
 
 export default withSentryConfig(nextConfig, {
