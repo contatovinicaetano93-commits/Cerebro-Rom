@@ -15,6 +15,15 @@ type ReportRunMeta = {
   mtdRevenue: number
 }
 
+function todayLocalIso(): string {
+  // Espelha o default do servidor (usuário no BR); input date usa calendário local.
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function ReportsPanel() {
   const [open, setOpen] = useState(false)
   const [configured, setConfigured] = useState(true)
@@ -23,6 +32,7 @@ export function ReportsPanel() {
   const [capturing, setCapturing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
+  const [day, setDay] = useState(todayLocalIso)
 
   const loadRuns = useCallback(async () => {
     setLoading(true)
@@ -52,13 +62,17 @@ export function ReportsPanel() {
     setError(null)
     setOkMsg(null)
     try {
-      const res = await fetch('/api/reports', { method: 'POST' })
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ day }),
+      })
       const json = (await res.json().catch(() => ({}))) as {
         error?: string
         data?: ReportRunMeta
       }
       if (!res.ok) throw new Error(json.error || `Erro ${res.status}`)
-      setOkMsg('Snapshot capturado')
+      setOkMsg(`Snapshot capturado · ${json.data?.periodLabel ?? day}`)
       await loadRuns()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -79,7 +93,7 @@ export function ReportsPanel() {
           <div>
             <p className="text-sm font-medium text-foreground">Relatórios</p>
             <p className="text-xs text-muted">
-              Snapshot sob demanda · export CSV / XLSX
+              Snapshot por dia · MTD até o dia · CSV / XLSX
             </p>
           </div>
         </div>
@@ -94,15 +108,27 @@ export function ReportsPanel() {
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[0.65rem] uppercase tracking-wide text-muted">
+                    Dia do relatório
+                  </span>
+                  <input
+                    type="date"
+                    value={day}
+                    max={todayLocalIso()}
+                    onChange={(e) => setDay(e.target.value || todayLocalIso())}
+                    className="rounded-xl border border-border bg-panel-2 px-3 py-2 text-sm text-foreground outline-none focus:border-brass/50"
+                  />
+                </label>
                 <button
                   type="button"
-                  disabled={capturing}
+                  disabled={capturing || !day}
                   onClick={() => void captureNow()}
                   className="inline-flex items-center gap-2 rounded-xl bg-brass/90 px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
                 >
                   <Camera size={14} />
-                  {capturing ? 'Capturando…' : 'Capturar agora'}
+                  {capturing ? 'Capturando…' : 'Capturar dia'}
                 </button>
                 <button
                   type="button"
@@ -117,8 +143,8 @@ export function ReportsPanel() {
               </div>
 
               <p className="mt-3 text-xs text-muted">
-                Grava o overview atual (KPIs do painel) no Neon do Cérebro para histórico e
-                download.
+                KPIs do dia escolhido + acumulado do mês até esse dia (MTD). Estoque e sync
+                ficam como estão agora.
               </p>
 
               <ul className="mt-4 space-y-2">
@@ -138,7 +164,7 @@ export function ReportsPanel() {
                         {formatDateTime(run.createdAt)}
                       </p>
                       <p className="text-xs text-muted">
-                        {run.periodLabel} · {run.unitCount} un. · hoje{' '}
+                        {run.periodLabel} · {run.unitCount} un. · dia{' '}
                         {formatCurrency(run.todayRevenue)} · MTD{' '}
                         {formatCurrency(run.mtdRevenue)}
                       </p>

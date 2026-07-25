@@ -63,6 +63,15 @@ export const GoalsUpdateSchema = z.object({
 })
 export type GoalsUpdate = z.infer<typeof GoalsUpdateSchema>
 
+/** Captura de relatório executivo — dia opcional (YYYY-MM-DD). */
+export const ReportCaptureSchema = z.object({
+  day: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Dia inválido — use YYYY-MM-DD')
+    .optional(),
+})
+export type ReportCapture = z.infer<typeof ReportCaptureSchema>
+
 // Validation Helpers
 export function parseRequestBody<T extends z.ZodTypeAny>(schema: T, body: unknown): z.infer<T> {
   return schema.parse(body)

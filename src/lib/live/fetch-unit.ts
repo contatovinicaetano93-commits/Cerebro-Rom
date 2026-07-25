@@ -115,13 +115,23 @@ function rowToDay(
   }
 }
 
-export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnapshot> {
+export type FetchLiveUnitOpts = {
+  /** Dia de referência (YYYY-MM-DD). Default: hoje SP. */
+  asOfDay?: string
+}
+
+export async function fetchLiveUnit(
+  config: UnitRuntimeConfig,
+  opts?: FetchLiveUnitOpts,
+): Promise<UnitSnapshot> {
   if (!config.databaseUrl) {
     throw new Error(`Sem DATABASE_URL para ${config.meta.name}`)
   }
 
   const sql = getSql(config.databaseUrl)
-  const today = todayIsoSaoPaulo()
+  const realToday = todayIsoSaoPaulo()
+  const today = opts?.asOfDay && opts.asOfDay <= realToday ? opts.asOfDay : realToday
+  const isRealtimeDay = today === realToday
   const monthStart = monthStartIso(today)
   const from30 = isoDaysBackFrom(today, 29)
 
@@ -196,15 +206,18 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
       todayMetrics.appointments = scheduled
     }
 
-    const next2h = (await sql`
-      select count(*)::int as n
-      from client_services
-      where active = true
-        and scheduled_at is not null
-        and scheduled_at >= now()
-        and scheduled_at < now() + interval '2 hours'
-    `) as { n: number }[]
-    appointmentsNext2h = n(next2h[0]?.n)
+    // Próximas 2h só faz sentido no dia corrente.
+    if (isRealtimeDay) {
+      const next2h = (await sql`
+        select count(*)::int as n
+        from client_services
+        where active = true
+          and scheduled_at is not null
+          and scheduled_at >= now()
+          and scheduled_at < now() + interval '2 hours'
+      `) as { n: number }[]
+      appointmentsNext2h = n(next2h[0]?.n)
+    }
   } catch {
     // ok
   }

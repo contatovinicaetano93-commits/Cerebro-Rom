@@ -1,6 +1,6 @@
 import { buildMockOverview } from '@/lib/mock-overview'
 import { fetchLiveUnit } from '@/lib/live/fetch-unit'
-import { getUnitConfigs, todayIsoSaoPaulo } from '@/lib/unit-config'
+import { getUnitConfigs, monthStartIso, resolveAsOfDay, todayIsoSaoPaulo } from '@/lib/unit-config'
 import { rate, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
@@ -320,14 +320,31 @@ function degradedOverview(
   }
 }
 
-export async function buildLiveOverview(): Promise<CerebroOverview> {
+export type BuildOverviewOpts = {
+  /** Dia de referência do relatório (YYYY-MM-DD). Default: hoje SP. */
+  asOfDay?: string | null
+}
+
+function periodLabelFor(asOfDay: string, partial: boolean): string {
+  const mtdStart = monthStartIso(asOfDay)
+  const prefix = partial ? 'Live parcial' : 'Live'
+  if (asOfDay === todayIsoSaoPaulo()) {
+    return `${prefix} · ${asOfDay} · MTD ${mtdStart}→${asOfDay}`
+  }
+  return `${prefix} · dia ${asOfDay} · MTD ${mtdStart}→${asOfDay}`
+}
+
+export async function buildLiveOverview(opts?: BuildOverviewOpts): Promise<CerebroOverview> {
+  const asOfDay = resolveAsOfDay(opts?.asOfDay)
   const configs = getUnitConfigs()
   const configured = configs.filter((c) => c.databaseUrl)
   if (configured.length === 0) {
     throw new Error('Nenhuma NEON_*_DATABASE_URL configurada')
   }
 
-  const settled = await Promise.allSettled(configured.map((c) => fetchLiveUnit(c)))
+  const settled = await Promise.allSettled(
+    configured.map((c) => fetchLiveUnit(c, { asOfDay })),
+  )
   const units: UnitSnapshot[] = []
   const fetchErrors: AlertItem[] = []
 
@@ -382,9 +399,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
     generatedAt: new Date().toISOString(),
     mode: 'live',
     partial,
-    periodLabel: partial
-      ? `Live parcial · ${todayIsoSaoPaulo()}`
-      : `Live · ${todayIsoSaoPaulo()}`,
+    periodLabel: periodLabelFor(asOfDay, partial),
     consolidated,
     units,
     trend30,
@@ -395,7 +410,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
   }
 }
 
-export async function buildOverview(): Promise<CerebroOverview> {
+export async function buildOverview(opts?: BuildOverviewOpts): Promise<CerebroOverview> {
   const hasDb = getUnitConfigs().some((c) => c.databaseUrl)
   const forceMock = process.env.CEREBRO_FORCE_MOCK === '1'
   const isProd = isProduction()
@@ -428,7 +443,7 @@ export async function buildOverview(): Promise<CerebroOverview> {
   }
 
   try {
-    return await buildLiveOverview()
+    return await buildLiveOverview(opts)
   } catch (err) {
     return degradedOverview(
       String(err instanceof Error ? err.message : err),

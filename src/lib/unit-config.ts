@@ -58,6 +58,43 @@ export function todayIsoSaoPaulo(): string {
   }).format(new Date())
 }
 
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/** Valida YYYY-MM-DD (calendário gregoriano). */
+export function isIsoDay(value: string): boolean {
+  if (!ISO_DAY_RE.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  )
+}
+
+/**
+ * Resolve o dia de referência do relatório/overview.
+ * - vazio → hoje (America/Sao_Paulo)
+ * - futuro → rejeita
+ * - mais de ~2 anos atrás → rejeita
+ */
+export function resolveAsOfDay(raw?: string | null): string {
+  const today = todayIsoSaoPaulo()
+  const day = (raw ?? '').trim()
+  if (!day) return today
+  if (!isIsoDay(day)) {
+    throw new Error('Dia inválido — use YYYY-MM-DD')
+  }
+  if (day > today) {
+    throw new Error('Dia não pode ser no futuro')
+  }
+  const earliest = isoDaysBackFrom(today, 730)
+  if (day < earliest) {
+    throw new Error('Dia fora do histórico disponível (máx. 2 anos)')
+  }
+  return day
+}
+
 export function monthStartIso(dayIso: string): string {
   return `${dayIso.slice(0, 7)}-01`
 }
