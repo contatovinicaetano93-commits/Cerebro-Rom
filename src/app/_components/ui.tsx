@@ -7,6 +7,7 @@ export function KpiStat({
   value,
   hint,
   legend,
+  source,
   tone = 'default',
 }: {
   label: string
@@ -14,6 +15,8 @@ export function KpiStat({
   hint?: string
   /** Definição curta — aparece no hover do rótulo e em linha discreta abaixo. */
   legend?: string
+  /** Fonte do número (Avec / proxy / incompleto / desatualizado) — discreto. */
+  source?: string
   tone?: 'default' | 'good' | 'bad' | 'warn'
 }) {
   const toneClass =
@@ -38,6 +41,9 @@ export function KpiStat({
       <p className={`mt-1 truncate font-display text-2xl tracking-tight sm:text-3xl ${toneClass}`}>
         {value}
       </p>
+      {source ? (
+        <p className="mt-0.5 text-[0.6rem] uppercase tracking-wide text-muted/70">{source}</p>
+      ) : null}
       {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
       {legend ? (
         <p className="mt-1 text-[0.65rem] leading-snug text-muted/70">{legend}</p>

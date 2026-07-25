@@ -50,7 +50,7 @@ const LEGEND = {
   ocupacao:
     'Ocupação = agenda ÷ capacidade (Metas). Comparecimento = atendidos ÷ agendados. Risco = no-shows × ticket.',
   mtd: 'Receita acumulada no mês (MTD). Ticket = receita ÷ atendidos.',
-  cmv: 'Custo das saídas de estoque no mês (Avec 0044) — proxy de CMV.',
+  cmv: 'Proxy: custo das saídas de estoque no mês (Avec 0044) — não é CMV fiscal.',
   estoqueValor: 'Valor da posição de estoque sincronizada da Avec.',
   estoqueAlertas: 'Produtos abaixo do mínimo (alertas ativos no ROM Estoque).',
   vagasHoje: 'Capacidade do dia (Metas) − agendamentos do dia.',
@@ -61,6 +61,26 @@ const LEGEND = {
   unit2h: 'Vagas livres estimadas nas próximas 2 horas nesta unidade.',
   unitCancel: 'Cancelamentos do dia nesta unidade.',
 } as const
+
+/** Rótulo curto de fonte (Avec / proxy / incompleto / desatualizado). */
+function sourceHint(
+  ...parts: Array<'Avec' | 'proxy' | 'manual' | 'ROM' | 'incompleto' | 'desatualizado' | null | undefined>
+): string {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const p of parts) {
+    if (!p || seen.has(p)) continue
+    seen.add(p)
+    out.push(p)
+  }
+  return out.join(' · ')
+}
+
+function syncSourceLabel(status: string | undefined): 'incompleto' | 'desatualizado' | null {
+  if (status === 'error') return 'incompleto'
+  if (status === 'stale') return 'desatualizado'
+  return null
+}
 
 const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   revenue_today: 'Receita Avec do dia.',
@@ -73,8 +93,8 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   packages: 'Receita de pacotes (Avec 0061).',
   mtd_revenue: 'Receita acumulada no mês.',
   mtd_ticket: 'Receita MTD ÷ atendidos MTD.',
-  cmv: 'Custo das saídas de estoque no mês (0044).',
-  cmv_share: 'CMV ÷ receita MTD.',
+  cmv: 'Proxy: custo das saídas de estoque no mês (0044).',
+  cmv_share: 'CMV proxy ÷ receita MTD.',
   payments_total: 'Soma das formas de pagamento (Avec 0081).',
   payment_gap: 'Pagamentos 0081 − receita MTD (ideal ≈ 0).',
   payment_reconcile: 'Status da conciliação 0081 vs receita.',
@@ -185,6 +205,13 @@ export function Dashboard({
     return `${base} · ${critical} crítico${critical === 1 ? '' : 's'}`
   }, [data.nextActions])
 
+  const networkSyncSource = useMemo(() => {
+    const statuses = data.units.map((u) => u.sync.status)
+    if (statuses.some((s) => s === 'stale')) return 'desatualizado' as const
+    if (statuses.some((s) => s === 'error') || data.partial) return 'incompleto' as const
+    return null
+  }, [data.units, data.partial])
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div
@@ -284,6 +311,7 @@ export function Dashboard({
                   ? `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
                   : 'Defina as metas para acompanhar progresso'
               }
+              source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.faturamento}
               tone={goalTone}
             />
@@ -305,6 +333,7 @@ export function Dashboard({
                   : `— · ${formatPct(c.attendanceRate)}`
               }
               hint={`No-show ${formatPct(c.noShowRate)} · risco ${formatCurrency(c.revenueAtRisk)}`}
+              source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.ocupacao}
               tone={c.noShowRate > 0.08 ? 'warn' : 'default'}
             />
@@ -318,6 +347,7 @@ export function Dashboard({
                   ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.ticketAvg)}`
                   : `Ticket ${formatCurrency(c.ticketAvg)} · CMV ${formatCurrency(c.cmv)}`
               }
+              source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.mtd}
             />
             {c.goalsConfigured ? (
@@ -334,7 +364,8 @@ export function Dashboard({
               <KpiStat
                 label="CMV rede (MTD)"
                 value={formatCurrency(c.cmv)}
-                hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita` : 'Avec 0044'}
+                hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita` : undefined}
+                source={sourceHint('proxy', 'Avec', networkSyncSource)}
                 legend={LEGEND.cmv}
               />
             </Panel>
@@ -342,6 +373,7 @@ export function Dashboard({
               <KpiStat
                 label="Estoque (valor)"
                 value={formatCurrency(c.stockValue)}
+                source={sourceHint('Avec', networkSyncSource)}
                 legend={LEGEND.estoqueValor}
               />
             </Panel>
@@ -350,6 +382,7 @@ export function Dashboard({
                 label="Alertas estoque"
                 value={formatNumber(c.stockAlerts)}
                 tone={c.stockAlerts >= 3 ? 'warn' : 'default'}
+                source={sourceHint('Avec')}
                 legend={LEGEND.estoqueAlertas}
               />
             </Panel>
@@ -400,24 +433,28 @@ export function Dashboard({
                 label="Vagas hoje"
                 value={c.occupancyConfigured ? String(c.openSlotsToday) : '—'}
                 tone={c.openSlotsToday >= 4 ? 'warn' : 'default'}
+                source={sourceHint('Avec', 'ROM', networkSyncSource)}
                 legend={LEGEND.vagasHoje}
               />
               <KpiStat
                 label="Vagas 2h"
                 value={c.occupancyConfigured ? String(c.openSlotsNext2h) : '—'}
                 tone={c.openSlotsNext2h >= 2 ? 'warn' : 'good'}
+                source={sourceHint('proxy', 'Avec')}
                 legend={LEGEND.vagas2h}
               />
               <KpiStat
                 label="Cancel. · No-show"
                 value={`${c.cancelledToday} · ${c.noShowsToday}`}
                 tone={c.cancelledToday + c.noShowsToday > 0 ? 'warn' : 'good'}
+                source={sourceHint('Avec', networkSyncSource)}
                 legend={LEGEND.cancelNoshow}
               />
               <KpiStat
                 label="Novos · Recorrentes"
                 value={`${c.newClients} · ${c.returningClients}`}
                 hint={`Novos ${formatPct(c.newShare)}`}
+                source={sourceHint('Avec', 'ROM')}
                 legend={LEGEND.novosRec}
               />
             </div>
@@ -443,6 +480,9 @@ export function Dashboard({
                       </p>
                       <p className="font-medium text-foreground">
                         {formatCurrency(u.today.revenue)}
+                      </p>
+                      <p className="mt-0.5 text-[0.55rem] uppercase tracking-wide text-muted/70">
+                        {sourceHint('Avec', syncSourceLabel(u.sync.status))}
                       </p>
                     </div>
                     <div>
