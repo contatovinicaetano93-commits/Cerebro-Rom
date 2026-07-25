@@ -208,7 +208,12 @@ export function Dashboard({
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
     if (statuses.some((s) => s === 'stale')) return 'desatualizado' as const
-    if (statuses.some((s) => s === 'error') || data.partial) return 'incompleto' as const
+    if (
+      statuses.some((s) => s === 'error' || s === 'partial') ||
+      data.partial
+    ) {
+      return 'incompleto' as const
+    }
     return null
   }, [data.units, data.partial])
 
