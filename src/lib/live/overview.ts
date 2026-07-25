@@ -137,7 +137,11 @@ function buildNextActions(
       })
     }
 
-    if (u.opsWeek.returnRate > 0 && u.opsWeek.returnRate < 0.45) {
+    if (
+      u.opsWeek.returnRate != null &&
+      u.opsWeek.returnRate > 0 &&
+      u.opsWeek.returnRate < 0.45
+    ) {
       actions.push({
         id: `return-${u.unit.slug}`,
         severity: 'warning',

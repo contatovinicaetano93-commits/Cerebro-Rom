@@ -197,7 +197,7 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
       select
         count(*)::int as product_count,
         count(*) filter (where current_qty <= 0)::int as zero_products,
-        coalesce(sum(greatest(current_qty, 0) * coalesce(unit_cost, 0)), 0)::float as total_value
+        coalesce(sum(greatest(current_qty, 0) * coalesce(unit_cost, avg_cost, 0)), 0)::float as total_value
       from stock_products
     `) as { product_count: number; zero_products: number; total_value: number }[]
 

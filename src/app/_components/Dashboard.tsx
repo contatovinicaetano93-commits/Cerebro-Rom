@@ -526,7 +526,7 @@ export function Dashboard({
                 const empty =
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
-                  w.returnRate === 0 &&
+                  w.returnRate == null &&
                   w.reactivationCount === 0
                 return (
                   <div

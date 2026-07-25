@@ -10,6 +10,17 @@ function n(v: unknown): number {
   return 0
 }
 
+/** Como `n`, mas preserva null/undefined (evita KPI “0%” quando o dado não veio). */
+function nOrNull(v: unknown): number | null {
+  if (v == null || v === '') return null
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string' && v.trim()) {
+    const x = Number(v)
+    return Number.isFinite(x) ? x : null
+  }
+  return null
+}
+
 function asArray(v: unknown): Record<string, unknown>[] {
   if (!Array.isArray(v)) return []
   return v.filter((x): x is Record<string, unknown> => x != null && typeof x === 'object')
@@ -45,7 +56,7 @@ function parseProfessionals(raw: unknown): OpsWeek['professionals'] {
         revenue: Math.round(revenue),
         attended,
         ticketAvg: Math.round(ticketRaw > 0 ? ticketRaw : attended > 0 ? revenue / attended : 0),
-        occupancy: n(row.occupancy),
+        occupancy: nOrNull(row.occupancy),
       }
     })
     .filter((x): x is OpsWeek['professionals'][number] => x != null)
@@ -110,7 +121,7 @@ export const EMPTY_OPS_WEEK: OpsWeek = {
   services: [],
   acquisition: [],
   reactivationCount: 0,
-  returnRate: 0,
+  returnRate: null,
   newClientsPeriod: 0,
 }
 
@@ -220,7 +231,7 @@ export async function fetchOpsWeek(sql: Sql, today: string): Promise<OpsWeek> {
     services: parseServices(p1?.services),
     acquisition: parseAcquisition(p1?.acquisition),
     reactivationCount: n(p1?.reactivation_count),
-    returnRate: n(p3?.return_rate),
+    returnRate: p3 ? nOrNull(p3.return_rate) : null,
     newClientsPeriod: n(p3?.new_clients_period),
   }
 }
