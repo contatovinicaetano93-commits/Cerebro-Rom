@@ -24,12 +24,9 @@ function getClient(databaseUrl: string): PostgresSql {
       ssl: 'require',
       max: 1,
       prepare: false,
-      idle_timeout: 60,
-      max_lifetime: 60 * 30,
-      connect_timeout: 30,
-      connection: {
-        statement_timeout: 600000,
-      },
+      idle_timeout: 20,
+      max_lifetime: 60 * 5,
+      connect_timeout: 15,
     })
     clients.set(databaseUrl, client)
   }
