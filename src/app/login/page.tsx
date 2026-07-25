@@ -27,6 +27,7 @@ function LoginForm() {
       const json = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok || json.error) {
         setError(json.error ?? 'Usuário ou senha incorretos')
+        setLoading(false)
         return
       }
       // Hard navigation — garante que o cookie da sessão vá na próxima request.
