@@ -113,7 +113,7 @@ export interface UnitSnapshot {
   }
   last30: DayMetrics[]
   sync: {
-    status: 'ok' | 'stale' | 'error'
+    status: 'ok' | 'partial' | 'stale' | 'error'
     lastSyncAt: string
     label: string
   }

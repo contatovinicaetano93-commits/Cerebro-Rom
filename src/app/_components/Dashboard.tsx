@@ -77,7 +77,7 @@ function sourceHint(
 }
 
 function syncSourceLabel(status: string | undefined): 'incompleto' | 'desatualizado' | null {
-  if (status === 'error') return 'incompleto'
+  if (status === 'error' || status === 'partial') return 'incompleto'
   if (status === 'stale') return 'desatualizado'
   return null
 }
@@ -208,9 +208,25 @@ export function Dashboard({
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
     if (statuses.some((s) => s === 'stale')) return 'desatualizado' as const
-    if (statuses.some((s) => s === 'error') || data.partial) return 'incompleto' as const
+    if (
+      statuses.some((s) => s === 'error' || s === 'partial') ||
+      data.partial
+    ) {
+      return 'incompleto' as const
+    }
     return null
   }, [data.units, data.partial])
+
+  const syncAlerts = useMemo(() => {
+    return data.units
+      .filter((u) => u.sync.status === 'error' || u.sync.status === 'partial' || u.sync.status === 'stale')
+      .map((u) => ({
+        slug: u.unit.slug,
+        short: u.unit.short,
+        status: u.sync.status,
+        label: u.sync.label,
+      }))
+  }, [data.units])
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -252,6 +268,36 @@ export function Dashboard({
       </header>
 
       <main className="relative mx-auto w-full max-w-[1100px] px-5 py-6 sm:px-8 sm:py-8">
+        {syncAlerts.length > 0 && (
+          <div className="mb-5 space-y-2" role="alert">
+            {syncAlerts.map((a) => (
+              <div
+                key={a.slug}
+                className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${
+                  a.status === 'error'
+                    ? 'border-danger/40 bg-danger/10 text-danger'
+                    : 'border-warning/40 bg-warning/10 text-warning'
+                }`}
+              >
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium">
+                    {a.status === 'error'
+                      ? `Falha de sync — ${a.short}`
+                      : a.status === 'stale'
+                        ? `Sync atrasado — ${a.short}`
+                        : `Sync parcial — ${a.short}`}
+                  </p>
+                  <p className="mt-0.5 text-xs opacity-90">{a.label}</p>
+                  <p className="mt-1 text-xs opacity-80">
+                    Não feche o dia com esses números até o sync voltar a OK.
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[0.65rem] uppercase tracking-[0.25em] text-brass">Comando</p>

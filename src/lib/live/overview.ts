@@ -60,6 +60,15 @@ function buildNextActions(
         detail: u.sync.label,
         action: 'Checar token Avec e rodar sync full',
       })
+    } else if (u.sync.status === 'partial') {
+      actions.push({
+        id: `sync-partial-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Sync parcial — ${u.unit.short}`,
+        detail: u.sync.label,
+        action: 'Conferir Admin → sync; não tratar KPIs como fechados',
+      })
     } else if (u.sync.status === 'stale') {
       const awaiting = /Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)
       actions.push({
