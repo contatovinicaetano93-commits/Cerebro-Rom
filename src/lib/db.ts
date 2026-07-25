@@ -1,4 +1,3 @@
-import 'server-only'
 import postgres, { type Sql as PostgresSql } from 'postgres'
 
 try {
@@ -25,9 +24,12 @@ function getClient(databaseUrl: string): PostgresSql {
       ssl: 'require',
       max: 1,
       prepare: false,
-      idle_timeout: 20,
+      idle_timeout: 60,
       max_lifetime: 60 * 30,
       connect_timeout: 30,
+      connection: {
+        statement_timeout: '600000',
+      },
     })
     clients.set(databaseUrl, client)
   }
