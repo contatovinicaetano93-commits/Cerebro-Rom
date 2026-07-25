@@ -28,7 +28,7 @@ function getClient(databaseUrl: string): PostgresSql {
       max_lifetime: 60 * 30,
       connect_timeout: 30,
       connection: {
-        statement_timeout: '600000',
+        statement_timeout: 600000,
       },
     })
     clients.set(databaseUrl, client)
