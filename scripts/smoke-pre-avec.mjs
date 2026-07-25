@@ -12,7 +12,14 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { neon } from '@neondatabase/serverless'
+import { setDefaultResultOrder } from 'node:dns'
+import postgres from 'postgres'
+
+try {
+  setDefaultResultOrder('ipv4first')
+} catch {
+  // ignore
+}
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dir, '..')
@@ -84,58 +91,62 @@ async function checkHttp() {
   return ok
 }
 
-async function checkNeon(label, url) {
-  console.log(`\n## Neon · ${label}\n`)
+async function checkDb(label, url) {
+  console.log(`\n## Postgres · ${label}\n`)
   if (!url?.trim()) {
     fail('URL não configurada')
     return false
   }
 
   let ok = true
-  const sql = neon(url)
+  const sql = postgres(url, { ssl: 'require', max: 1, prepare: false, connect_timeout: 20 })
 
   try {
-    await sql`select 1 as ok`
-    pass('Conexão OK')
-  } catch (e) {
-    fail(`Conexão: ${e instanceof Error ? e.message : e}`)
-    return false
-  }
+    try {
+      await sql`select 1 as ok`
+      pass('Conexão OK')
+    } catch (e) {
+      fail(`Conexão: ${e instanceof Error ? e.message : e}`)
+      return false
+    }
 
-  for (const table of REQUIRED_TABLES) {
-    const rows = await sql`
-      select to_regclass(${`public.${table}`}) is not null as ok
+    for (const table of REQUIRED_TABLES) {
+      const rows = await sql`
+        select to_regclass(${`public.${table}`}) is not null as ok
+      `
+      if (rows[0]?.ok) pass(`Tabela ${table}`)
+      else {
+        ok = false
+        fail(`Tabela ${table} ausente — rodar migrations`)
+      }
+    }
+
+    const counts = await sql`
+      select 'salon_daily_metrics' as t, count(*)::int as n from salon_daily_metrics
+      union all select 'salon_p1_daily', count(*)::int from salon_p1_daily
+      union all select 'salon_p2_daily', count(*)::int from salon_p2_daily
+      union all select 'salon_p3_daily', count(*)::int from salon_p3_daily
+      union all select 'avec_sync_runs', count(*)::int from avec_sync_runs
+      order by t
     `
-    if (rows[0]?.ok) pass(`Tabela ${table}`)
-    else {
-      ok = false
-      fail(`Tabela ${table} ausente — rodar db/delta-* no Neon`)
+
+    console.log('\n  Contagens:')
+    for (const row of counts) {
+      const n = Number(row.n)
+      const line = `    ${row.t}: ${n}`
+      if (row.t.startsWith('salon_p') && n === 0) {
+        warn(`${line} (vazio até sync full com token — OK pré-terça)`)
+      } else if (row.t === 'avec_sync_runs' && n === 0) {
+        warn(`${line} (nenhum sync ainda — OK se sem token)`)
+      } else {
+        console.log(line)
+      }
     }
+
+    return ok
+  } finally {
+    await sql.end({ timeout: 2 }).catch(() => {})
   }
-
-  const counts = await sql`
-    select 'salon_daily_metrics' as t, count(*)::int as n from salon_daily_metrics
-    union all select 'salon_p1_daily', count(*)::int from salon_p1_daily
-    union all select 'salon_p2_daily', count(*)::int from salon_p2_daily
-    union all select 'salon_p3_daily', count(*)::int from salon_p3_daily
-    union all select 'avec_sync_runs', count(*)::int from avec_sync_runs
-    order by t
-  `
-
-  console.log('\n  Contagens:')
-  for (const row of counts) {
-    const n = Number(row.n)
-    const line = `    ${row.t}: ${n}`
-    if (row.t.startsWith('salon_p') && n === 0) {
-      warn(`${line} (vazio até sync full com token — OK pré-terça)`)
-    } else if (row.t === 'avec_sync_runs' && n === 0) {
-      warn(`${line} (nenhum sync ainda — OK se sem token)`)
-    } else {
-      console.log(line)
-    }
-  }
-
-  return ok
 }
 
 async function checkCerebroOverview() {
@@ -152,8 +163,8 @@ async function main() {
 
   const results = [
     await checkHttp(),
-    await checkNeon('Brasil', process.env.NEON_BRASIL_DATABASE_URL),
-    await checkNeon('Iguatemi', process.env.NEON_IGUATEMI_DATABASE_URL),
+    await checkDb('Brasil', process.env.NEON_BRASIL_DATABASE_URL),
+    await checkDb('Iguatemi', process.env.NEON_IGUATEMI_DATABASE_URL),
   ]
 
   // overview: use npm run smoke:full

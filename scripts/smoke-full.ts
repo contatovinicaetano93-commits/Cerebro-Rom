@@ -6,8 +6,15 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { neon } from '@neondatabase/serverless'
+import { setDefaultResultOrder } from 'node:dns'
+import postgres from 'postgres'
 import { buildOverview } from '../src/lib/live/overview'
+
+try {
+  setDefaultResultOrder('ipv4first')
+} catch {
+  // ignore
+}
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dir, '..')
@@ -76,53 +83,57 @@ async function checkHttp(): Promise<boolean> {
   return ok
 }
 
-async function checkNeon(label: string, url: string | undefined): Promise<boolean> {
-  console.log(`\n## Neon · ${label}\n`)
+async function checkDb(label: string, url: string | undefined): Promise<boolean> {
+  console.log(`\n## Postgres · ${label}\n`)
   if (!url?.trim()) {
     fail('URL não configurada')
     return false
   }
 
   let ok = true
-  const sql = neon(url)
+  const sql = postgres(url, { ssl: 'require', max: 1, prepare: false, connect_timeout: 20 })
 
   try {
-    await sql`select 1 as ok`
-    pass('Conexão OK')
-  } catch (e) {
-    fail(`Conexão: ${e instanceof Error ? e.message : e}`)
-    return false
-  }
-
-  for (const table of REQUIRED_TABLES) {
-    const rows = (await sql`
-      select to_regclass(${`public.${table}`}) is not null as ok
-    `) as { ok: boolean }[]
-    if (rows[0]?.ok) pass(`Tabela ${table}`)
-    else {
-      ok = false
-      fail(`Tabela ${table} ausente`)
+    try {
+      await sql`select 1 as ok`
+      pass('Conexão OK')
+    } catch (e) {
+      fail(`Conexão: ${e instanceof Error ? e.message : e}`)
+      return false
     }
+
+    for (const table of REQUIRED_TABLES) {
+      const rows = (await sql`
+        select to_regclass(${`public.${table}`}) is not null as ok
+      `) as { ok: boolean }[]
+      if (rows[0]?.ok) pass(`Tabela ${table}`)
+      else {
+        ok = false
+        fail(`Tabela ${table} ausente`)
+      }
+    }
+
+    const counts = (await sql`
+      select 'salon_daily_metrics' as t, count(*)::int as n from salon_daily_metrics
+      union all select 'salon_p1_daily', count(*)::int from salon_p1_daily
+      union all select 'salon_p2_daily', count(*)::int from salon_p2_daily
+      union all select 'salon_p3_daily', count(*)::int from salon_p3_daily
+      union all select 'avec_sync_runs', count(*)::int from avec_sync_runs
+      order by t
+    `) as { t: string; n: number }[]
+
+    console.log('\n  Contagens:')
+    for (const row of counts) {
+      const line = `    ${row.t}: ${row.n}`
+      if (row.t.startsWith('salon_p') && row.n === 0) warn(`${line} (vazio até token — OK)`)
+      else if (row.t === 'avec_sync_runs' && row.n === 0) warn(`${line} (sem sync ainda — OK)`)
+      else console.log(line)
+    }
+
+    return ok
+  } finally {
+    await sql.end({ timeout: 2 }).catch(() => {})
   }
-
-  const counts = (await sql`
-    select 'salon_daily_metrics' as t, count(*)::int as n from salon_daily_metrics
-    union all select 'salon_p1_daily', count(*)::int from salon_p1_daily
-    union all select 'salon_p2_daily', count(*)::int from salon_p2_daily
-    union all select 'salon_p3_daily', count(*)::int from salon_p3_daily
-    union all select 'avec_sync_runs', count(*)::int from avec_sync_runs
-    order by t
-  `) as { t: string; n: number }[]
-
-  console.log('\n  Contagens:')
-  for (const row of counts) {
-    const line = `    ${row.t}: ${row.n}`
-    if (row.t.startsWith('salon_p') && row.n === 0) warn(`${line} (vazio até token — OK)`)
-    else if (row.t === 'avec_sync_runs' && row.n === 0) warn(`${line} (sem sync ainda — OK)`)
-    else console.log(line)
-  }
-
-  return ok
 }
 
 async function checkOverview(): Promise<boolean> {
@@ -149,8 +160,8 @@ async function main() {
 
   const ok = [
     await checkHttp(),
-    await checkNeon('Brasil', process.env.NEON_BRASIL_DATABASE_URL),
-    await checkNeon('Iguatemi', process.env.NEON_IGUATEMI_DATABASE_URL),
+    await checkDb('Brasil', process.env.NEON_BRASIL_DATABASE_URL),
+    await checkDb('Iguatemi', process.env.NEON_IGUATEMI_DATABASE_URL),
     await checkOverview(),
   ].every(Boolean)
 
