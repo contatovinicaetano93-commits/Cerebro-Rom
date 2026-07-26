@@ -7,18 +7,21 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check:db-driver": "node scripts/check-db-driver.mjs",
+    "check:brasil-db-host": "node scripts/check-brasil-db-host.mjs",
     "smoke": "node scripts/smoke-pre-avec.mjs",
     "smoke:full": "npx tsx scripts/smoke-full.ts"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.1.0",
     "@sentry/nextjs": "^10.65.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
+    "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.9.2",
+    "server-only": "^0.0.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
