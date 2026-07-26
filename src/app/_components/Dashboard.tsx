@@ -5,6 +5,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -599,7 +600,7 @@ export function Dashboard({
           <CollapsibleSection
             eyebrow="2 · Semana"
             title="Equipe e retenção"
-            summary="Top 10 pros · retorno · reativação"
+            summary="Top 10 pros · retorno · sem retorno (90d)"
             open={openMap.semana}
             onOpenChange={(v) => setSection('semana', v)}
           >
@@ -611,6 +612,11 @@ export function Dashboard({
                   w.services.length === 0 &&
                   w.returnRate === 0 &&
                   w.reactivationCount === 0
+                // Avec 0107 pagina até ~5000 linhas — 5000 é teto, não o total real.
+                const semRetornoLabel =
+                  w.reactivationCount >= 5000
+                    ? '5.000+'
+                    : formatNumber(w.reactivationCount)
                 return (
                   <div
                     key={u.unit.slug}
@@ -634,9 +640,12 @@ export function Dashboard({
                             </li>
                           ))}
                         </ul>
-                        <p className="text-xs text-muted">
-                          Retorno {formatPct(w.returnRate)} · reativação {w.reactivationCount} ·
-                          novos {w.newClientsPeriod}
+                        <p
+                          className="text-xs text-muted"
+                          title="Sem retorno = clientes sem visita na janela Avec 0107 (90 dias). 5.000+ = lista truncada pela paginação."
+                        >
+                          Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel} ·
+                          novos {formatNumber(w.newClientsPeriod)}
                         </p>
                       </div>
                     )}
@@ -671,25 +680,42 @@ export function Dashboard({
                       {u.unit.short}
                     </p>
                     {empty ? (
-                      <p className="mt-3 text-sm text-muted">Sem dados comerciais ainda.</p>
+                      <p className="mt-3 text-sm text-muted">
+                        Sem canais/pacotes no último sync full Avec (0056/0061).
+                      </p>
                     ) : (
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                        <ul className="space-y-1">
-                          {co.bookingChannels.slice(0, 3).map((ch) => (
-                            <li key={ch.channel} className="flex justify-between gap-2">
-                              <span className="truncate text-muted">{ch.channel}</span>
-                              <span>{ch.count}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        <ul className="space-y-1">
-                          {co.packages.slice(0, 3).map((p) => (
-                            <li key={p.name} className="flex justify-between gap-2">
-                              <span className="truncate text-muted">{p.name}</span>
-                              <span>×{p.quantity}</span>
-                            </li>
-                          ))}
-                        </ul>
+                      <div className="mt-3 space-y-3 text-sm">
+                        <div className="grid grid-cols-2 gap-3">
+                          <ul className="space-y-1">
+                            {co.bookingChannels.slice(0, 3).map((ch) => (
+                              <li key={ch.channel} className="flex justify-between gap-2">
+                                <span className="truncate text-muted">{ch.channel}</span>
+                                <span>{formatNumber(ch.count)}</span>
+                              </li>
+                            ))}
+                            {co.bookingChannels.length === 0 ? (
+                              <li className="text-xs text-muted">Sem canais</li>
+                            ) : null}
+                          </ul>
+                          <ul className="space-y-1">
+                            {co.packages.slice(0, 3).map((p) => (
+                              <li key={p.name} className="flex justify-between gap-2">
+                                <span className="truncate text-muted">{p.name}</span>
+                                <span>×{p.quantity}</span>
+                              </li>
+                            ))}
+                            {co.packages.length === 0 ? (
+                              <li className="text-xs text-muted">Sem pacotes</li>
+                            ) : null}
+                          </ul>
+                        </div>
+                        <p className="text-xs text-muted">
+                          Pacotes {formatCurrency(co.packagesRevenue)} · {formatNumber(co.packagesSold)}{' '}
+                          vendidos
+                          {co.ratingsCount > 0
+                            ? ` · nota ${co.ratingsAvg.toFixed(1)} (${formatNumber(co.ratingsCount)})`
+                            : ''}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -712,11 +738,13 @@ export function Dashboard({
               open={openMap.comparativo}
               onOpenChange={(v) => setSection('comparativo', v)}
             >
-              <div className="mb-3 hidden grid-cols-[1.2fr_1fr_1fr_0.8fr] gap-2 px-1 text-[0.65rem] uppercase tracking-[0.14em] text-muted sm:grid">
+              <div className="sticky top-0 z-10 mb-3 hidden grid-cols-[1.2fr_1fr_1fr_0.8fr] gap-2 border-b border-border/50 bg-surface/95 px-1 py-2 text-[0.65rem] uppercase tracking-[0.14em] text-muted backdrop-blur sm:grid">
                 <span>KPI</span>
                 <span className="text-brass">Brasil</span>
                 <span className="text-teal">Iguatemi</span>
-                <span className="text-right">Δ%</span>
+                <span className="text-right" title="Moeda/contagem: Δ relativa %. Taxas: pontos percentuais.">
+                  Δ
+                </span>
               </div>
               <div className="space-y-5">
                 {comparisonGroups.map(({ group, rows }) => (
@@ -756,8 +784,17 @@ export function Dashboard({
                             className={`text-right text-sm tabular-nums ${
                               row.format === 'text' ? 'text-muted' : deltaTone(row)
                             }`}
+                            title={
+                              row.format === 'pct'
+                                ? 'Diferença em pontos percentuais (não Δ relativa)'
+                                : undefined
+                            }
                           >
-                            {row.format === 'text' ? '—' : formatSignedPct(row.deltaPct)}
+                            {row.format === 'text'
+                              ? '—'
+                              : row.format === 'pct'
+                                ? `${formatSignedPct(row.deltaPct)} p.p.`
+                                : formatSignedPct(row.deltaPct)}
                           </span>
                         </li>
                       ))}
@@ -819,6 +856,11 @@ export function Dashboard({
                       }}
                       formatter={(value) => formatCurrency(Number(value ?? 0))}
                     />
+                    <Legend
+                      verticalAlign="top"
+                      height={28}
+                      wrapperStyle={{ fontSize: 12, color: '#9a9488' }}
+                    />
                     <Area
                       type="monotone"
                       dataKey="brasil"
@@ -846,7 +888,7 @@ export function Dashboard({
           <p>
             Atualizado {formatDateTime(data.generatedAt)} ·{' '}
             {data.mode === 'live'
-              ? 'Neons Brasil + Iguatemi (KPIs Avec)'
+              ? 'Brasil (Supabase) + Iguatemi (Neon) · KPIs Avec'
               : data.mode === 'degraded'
                 ? 'Sem fallback fictício'
                 : 'Mock'}
