@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getReportRun } from '@/lib/reports/store'
-import { buildReportCsv, buildReportXlsx } from '@/lib/reports/export'
+import { buildReportCsv, buildReportPrintHtml, buildReportXlsx } from '@/lib/reports/export'
 import { isCerebroDbConfigured } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -8,14 +8,15 @@ export const maxDuration = 60
 
 type Params = { params: Promise<{ id: string }> }
 
-/** Exporta captura: ?format=csv|xlsx */
+/** Exporta captura: ?format=csv|xlsx|pdf */
 export async function GET(req: Request, { params }: Params) {
   try {
     if (!isCerebroDbConfigured()) {
       return NextResponse.json({ error: 'CEREBRO_DATABASE_URL não configurada' }, { status: 503 })
     }
     const { id } = await params
-    const format = new URL(req.url).searchParams.get('format') === 'xlsx' ? 'xlsx' : 'csv'
+    const raw = new URL(req.url).searchParams.get('format') ?? 'csv'
+    const format = raw === 'xlsx' || raw === 'pdf' ? raw : 'csv'
     const run = await getReportRun(id)
     if (!run) {
       return NextResponse.json({ error: 'Relatório não encontrado' }, { status: 404 })
@@ -29,6 +30,16 @@ export async function GET(req: Request, { params }: Params) {
           'Content-Type':
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'Content-Disposition': `attachment; filename="cerebro-relatorio-${stamp}.xlsx"`,
+        },
+      })
+    }
+
+    if (format === 'pdf') {
+      const html = buildReportPrintHtml(run)
+      return new NextResponse(html, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `inline; filename="cerebro-relatorio-${stamp}.html"`,
         },
       })
     }

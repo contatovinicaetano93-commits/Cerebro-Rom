@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Download, FileSpreadsheet, Camera } from 'lucide-react'
+import { Download, FileSpreadsheet, FileText, Camera } from 'lucide-react'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 
 type ReportRunMeta = {
@@ -79,7 +79,7 @@ export function ReportsPanel() {
           <div>
             <p className="text-sm font-medium text-foreground">Relatórios</p>
             <p className="text-xs text-muted">
-              Snapshot sob demanda · export CSV / XLSX
+              Snapshot sob demanda · export CSV / PDF / XLSX
             </p>
           </div>
         </div>
@@ -150,6 +150,15 @@ export function ReportsPanel() {
                       >
                         <Download size={12} />
                         CSV
+                      </a>
+                      <a
+                        href={`/api/reports/${run.id}?format=pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground hover:border-brass/40"
+                      >
+                        <FileText size={12} />
+                        PDF
                       </a>
                       <a
                         href={`/api/reports/${run.id}?format=xlsx`}

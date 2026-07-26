@@ -319,6 +319,61 @@ export function buildReportCsv(run: ReportRunDetail): string {
   return `\uFEFF${blocks.join('\n')}\n`
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function htmlTable(rows: (string | number | null)[][]): string {
+  if (!rows.length) return ''
+  const [header, ...body] = rows
+  const th = (header ?? []).map((c) => `<th>${escapeHtml(String(c ?? ''))}</th>`).join('')
+  const trs = body
+    .map(
+      (r) =>
+        `<tr>${r.map((c) => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('')}</tr>`,
+    )
+    .join('')
+  return `<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`
+}
+
+/** HTML para impressão / Salvar como PDF (mesmo conteúdo do CSV/XLSX). */
+export function buildReportPrintHtml(run: ReportRunDetail): string {
+  const o = run.payload
+  const stamp = new Date(run.createdAt).toLocaleString('pt-BR')
+  const cmp = comparisonTable(o)
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Cérebro — ${escapeHtml(run.periodLabel)}</title>
+<style>
+  body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 28px; line-height: 1.4; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; margin: 22px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  .meta { color: #555; font-size: 13px; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 8px; }
+  td, th { text-align: left; padding: 3px 5px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { font-size: 10px; text-transform: uppercase; color: #666; }
+  @media print { body { margin: 10mm; } }
+</style>
+</head>
+<body>
+  <h1>Cérebro ROM — relatório</h1>
+  <div class="meta">${escapeHtml(run.periodLabel)} · capturado em ${escapeHtml(stamp)} · ${escapeHtml(modeLabel(o.mode, o.partial))}</div>
+  <h2>Consolidado da rede</h2>
+  ${htmlTable(redeMetricRows(o))}
+  <h2>Por unidade</h2>
+  ${htmlTable(unitTable(o))}
+  ${cmp ? `<h2>Comparativo Brasil × Iguatemi</h2>${htmlTable(cmp)}` : ''}
+  <script>window.onload = function () { setTimeout(function () { window.print(); }, 250); };</script>
+</body>
+</html>`
+}
+
 function styleHeaderRow(row: ExcelJS.Row) {
   row.font = { bold: true, color: { argb: 'FF1A1A1A' } }
   row.fill = {
