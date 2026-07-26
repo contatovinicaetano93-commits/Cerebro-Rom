@@ -340,6 +340,18 @@ function htmlTable(rows: (string | number | null)[][]): string {
   return `<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`
 }
 
+/** Tabela sem cabeçalho — capa / blocos chave-valor (linhas vazias omitidas). */
+function htmlPlainRows(rows: (string | number | null)[][]): string {
+  const trs = rows
+    .filter((r) => r.length > 0)
+    .map(
+      (r) =>
+        `<tr>${r.map((c) => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('')}</tr>`,
+    )
+    .join('')
+  return trs ? `<table><tbody>${trs}</tbody></table>` : ''
+}
+
 /** HTML para impressão / Salvar como PDF (mesmo conteúdo do CSV/XLSX). */
 export function buildReportPrintHtml(run: ReportRunDetail): string {
   const o = run.payload
@@ -364,6 +376,10 @@ export function buildReportPrintHtml(run: ReportRunDetail): string {
 <body>
   <h1>Cérebro ROM — relatório</h1>
   <div class="meta">${escapeHtml(run.periodLabel)} · capturado em ${escapeHtml(stamp)} · ${escapeHtml(modeLabel(o.mode, o.partial))}</div>
+  <h2>Capa</h2>
+  ${htmlPlainRows(capaRows(run))}
+  <h2>Legenda dos indicadores</h2>
+  ${htmlTable([['Indicador', 'Significado'], ...LEGEND_ROWS])}
   <h2>Consolidado da rede</h2>
   ${htmlTable(redeMetricRows(o))}
   <h2>Por unidade</h2>
