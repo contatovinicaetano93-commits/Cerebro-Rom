@@ -7,7 +7,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 | Sistema | Sem Avec | Comportamento |
 |---------|----------|---------------|
 | ROM Brasil / Iguatemi | ✅ | Agenda/contatos via WhatsApp/Telegram; sync Avec aguarda token |
-| Cérebro | ✅ | Live parcial (Neon); Camada A fraca; B/C vazios até full sync |
+| Cérebro | ✅ | Live parcial (Brasil=Supabase / Iguatemi=Neon); Camada A fraca; B/C vazios até full sync |
 | Webhooks + cron | ✅ | Infra pronta; dispara sync quando token existir |
 
 ## Sábado — código e deploy
@@ -18,7 +18,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 - [ ] Login Waltter no Cérebro OK
 - [ ] Smoke test: `npm run smoke` e `npm run smoke:full` no cerebro-rom
 
-### Verificação Neon (11/07)
+### Verificação DB (Brasil = Supabase pooler; Iguatemi = Neon)
 
 | | Brasil (rom-club) | Iguatemi |
 |--|-------------------|----------|
@@ -30,12 +30,13 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 
 ## Domingo — banco e simulação
 
-- [ ] Neon Brasil: `schema.sql` + `db/delta-p1-kpis.sql`, `delta-p2-kpis.sql`, `delta-p3-kpis.sql`
+- [ ] Brasil (Supabase): `schema.sql` + deltas P1/P2/P3
 - [ ] Neon Iguatemi: mesmos deltas (banco **separado**)
 - [ ] Local com mock (opcional): `AVEC_MOCK=1` → POST `/api/avec/sync?mode=full` → conferir Cérebro Semana/Comercial
 
 ```bash
-# no repo da unidade, com Neon configurado
+# no repo da unidade, com DATABASE_URL / NEON_* configurado
+# Brasil: npm run check:brasil-db-host
 AVEC_MOCK=1 npm run dev
 # Admin → Rodar sync full
 # Cérebro local: NEON_*_DATABASE_URL apontando pro mesmo Neon
