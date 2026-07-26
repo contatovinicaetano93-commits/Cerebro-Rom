@@ -188,7 +188,9 @@ async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
         birthday_count
       from salon_p2_daily
       where day <= ${today}::date
+        and jsonb_typeof(coalesce(packages, '[]'::jsonb)) = 'array'
         and jsonb_array_length(coalesce(packages, '[]'::jsonb)) > 0
+        and jsonb_typeof(coalesce(booking_channels, '[]'::jsonb)) = 'array'
         and jsonb_array_length(coalesce(booking_channels, '[]'::jsonb)) > 0
       order by day desc
       limit 1
@@ -205,6 +207,7 @@ async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
         birthday_count
       from salon_p2_daily
       where day <= ${today}::date
+        and jsonb_typeof(coalesce(packages, '[]'::jsonb)) = 'array'
         and jsonb_array_length(coalesce(packages, '[]'::jsonb)) > 0
       order by day desc
       limit 1
