@@ -52,7 +52,16 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
       return null
     }
-    return Math.round((u.opsFinance.paymentsTotal - u.opsFinance.mtdRevenue) * 100) / 100
+    // Gap like-for-like (dias com 0081 ∩ receita). Evita falso alarme por sync incompleto.
+    const pay =
+      u.opsFinance.paymentsReconcileBase > 0 || u.opsFinance.revenueReconcileBase > 0
+        ? u.opsFinance.paymentsReconcileBase
+        : u.opsFinance.paymentsTotal
+    const rev =
+      u.opsFinance.revenueReconcileBase > 0
+        ? u.opsFinance.revenueReconcileBase
+        : u.opsFinance.mtdRevenue
+    return Math.round((pay - rev) * 100) / 100
   }
 
   const reconcileLabel = (u: UnitSnapshot): string | null => {

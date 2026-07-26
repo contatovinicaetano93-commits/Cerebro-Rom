@@ -158,6 +158,8 @@ function buildUnit(
       cmv,
       cmvShare: mtdRevenue > 0 ? cmv / mtdRevenue : null,
       paymentsTotal: Math.round(mtdRevenue * 0.98),
+      paymentsReconcileBase: Math.round(mtdRevenue * 0.98),
+      revenueReconcileBase: mtdRevenue,
       paymentReconcile: 'aligned',
       topPaymentMethod: 'Cartão',
       available: true,

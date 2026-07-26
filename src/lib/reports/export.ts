@@ -130,7 +130,7 @@ const LEGEND_ROWS: [string, string][] = [
   ['CMV', 'Custo das saídas de estoque no mês (Avec 0044) — proxy de CMV.'],
   ['CMV/receita', 'CMV ÷ receita MTD.'],
   ['Pagamentos 0081', 'Soma das formas de pagamento (relatório Avec 0081).'],
-  ['Conciliação', 'Status 0081 vs receita MTD (ideal ≈ alinhado).'],
+  ['Conciliação', 'Status 0081 vs receita nos dias com as duas séries (ideal ≈ alinhado).'],
   ['Forma #1', 'Forma de pagamento com maior volume no período.'],
   ['Pacotes', 'Receita de pacotes (Avec 0061).'],
   ['Retorno', 'Taxa de retorno de clientes (Avec / P3).'],

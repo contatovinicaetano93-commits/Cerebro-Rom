@@ -76,7 +76,14 @@ export interface OpsFinance {
   cmv: number
   /** CMV ÷ receita MTD — null se sem receita. */
   cmvShare: number | null
+  /** Soma bruta 0081 nos dias com mix (pode cobrir menos dias que a receita). */
   paymentsTotal: number
+  /**
+   * Base like-for-like da conciliação: soma 0081 e receita só nos dias
+   * em que ambas as séries existem (evita falso "Divergente" por gap de sync).
+   */
+  paymentsReconcileBase: number
+  revenueReconcileBase: number
   paymentReconcile: PaymentReconcileStatus
   topPaymentMethod: string | null
   available: boolean

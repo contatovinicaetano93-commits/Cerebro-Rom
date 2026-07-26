@@ -84,6 +84,8 @@ export const EMPTY_OPS_FINANCE: OpsFinance = {
   cmv: 0,
   cmvShare: null,
   paymentsTotal: 0,
+  paymentsReconcileBase: 0,
+  revenueReconcileBase: 0,
   paymentReconcile: 'unknown',
   topPaymentMethod: null,
   available: false,
@@ -136,29 +138,38 @@ export async function fetchOpsFinance(
   }
 
   let paymentsTotal = 0
+  let paymentsReconcileBase = 0
+  let revenueReconcileBase = 0
   let topPaymentMethod: string | null = null
   let mixOk = false
   if (await tableExists(sql, 'salon_p2_daily')) {
     try {
-      const rows = (await sql`
-        select payment_mix
+      const payRows = (await sql`
+        select day::text as day, payment_mix
         from salon_p2_daily
         where day >= ${monthStart}::date and day <= ${today}::date
         order by day desc
-      `) as { payment_mix: unknown }[]
+      `) as { day: string; payment_mix: unknown }[]
 
+      const payByDay = new Map<string, number>()
       const byMethod = new Map<string, number>()
-      for (const row of rows) {
+      for (const row of payRows) {
         const mix = Array.isArray(row.payment_mix) ? row.payment_mix : []
+        let dayPay = 0
         for (const item of mix) {
           if (item == null || typeof item !== 'object') continue
           const rec = item as Record<string, unknown>
           const method = typeof rec.method === 'string' ? rec.method.trim() : ''
           if (!method) continue
-          byMethod.set(method, (byMethod.get(method) ?? 0) + n(rec.amount))
+          const amount = n(rec.amount)
+          dayPay += amount
+          byMethod.set(method, (byMethod.get(method) ?? 0) + amount)
         }
+        const day = String(row.day).slice(0, 10)
+        // Dia com snapshot 0081 (mesmo mix vazio) conta na cobertura do sync.
+        if (mix.length > 0) payByDay.set(day, Math.round(dayPay * 100) / 100)
       }
-      mixOk = rows.length > 0
+      mixOk = payRows.length > 0
       for (const [method, amount] of byMethod) {
         paymentsTotal += amount
         if (topPaymentMethod == null || amount > (byMethod.get(topPaymentMethod) ?? 0)) {
@@ -166,12 +177,36 @@ export async function fetchOpsFinance(
         }
       }
       paymentsTotal = Math.round(paymentsTotal * 100) / 100
+
+      // Conciliação like-for-like: só dias com 0081 e receita diária.
+      if (await tableExists(sql, 'salon_daily_metrics') && payByDay.size > 0) {
+        const revRows = (await sql`
+          select day::text as day, coalesce(revenue, 0)::float as revenue
+          from salon_daily_metrics
+          where day >= ${monthStart}::date and day <= ${today}::date
+        `) as { day: string; revenue: number }[]
+        const revByDay = new Map(
+          revRows.map((r) => [String(r.day).slice(0, 10), n(r.revenue)]),
+        )
+        for (const [day, pay] of payByDay) {
+          if (!revByDay.has(day)) continue
+          paymentsReconcileBase += pay
+          revenueReconcileBase += revByDay.get(day) ?? 0
+        }
+        paymentsReconcileBase = Math.round(paymentsReconcileBase * 100) / 100
+        revenueReconcileBase = Math.round(revenueReconcileBase * 100) / 100
+      }
     } catch {
       // ok
     }
   }
 
   const cmvShare = mtdRevenue > 0 ? cmv / mtdRevenue : null
+  const reconcileRevenue = revenueReconcileBase > 0 ? revenueReconcileBase : mtdRevenue
+  const reconcilePayments =
+    paymentsReconcileBase > 0 || revenueReconcileBase > 0
+      ? paymentsReconcileBase
+      : paymentsTotal
 
   return {
     mtdRevenue,
@@ -180,7 +215,9 @@ export async function fetchOpsFinance(
     cmv,
     cmvShare,
     paymentsTotal,
-    paymentReconcile: reconcile(mtdRevenue, paymentsTotal),
+    paymentsReconcileBase,
+    revenueReconcileBase,
+    paymentReconcile: reconcile(reconcileRevenue, reconcilePayments),
     topPaymentMethod,
     available: cmvOk || mixOk || mtdRevenue > 0,
   }
