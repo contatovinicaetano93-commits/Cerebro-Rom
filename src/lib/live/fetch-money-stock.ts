@@ -140,6 +140,8 @@ export async function fetchOpsFinance(
   let paymentsTotal = 0
   let paymentsReconcileBase = 0
   let revenueReconcileBase = 0
+  let overlapDays = 0
+  let bothSeriesPresent = false
   let topPaymentMethod: string | null = null
   let mixOk = false
   if (await tableExists(sql, 'salon_p2_daily')) {
@@ -188,8 +190,11 @@ export async function fetchOpsFinance(
         const revByDay = new Map(
           revRows.map((r) => [String(r.day).slice(0, 10), n(r.revenue)]),
         )
+        // Ambas as séries no mês: se a interseção for vazia, não comparar MTD.
+        bothSeriesPresent = revByDay.size > 0
         for (const [day, pay] of payByDay) {
           if (!revByDay.has(day)) continue
+          overlapDays += 1
           paymentsReconcileBase += pay
           revenueReconcileBase += revByDay.get(day) ?? 0
         }
@@ -202,11 +207,13 @@ export async function fetchOpsFinance(
   }
 
   const cmvShare = mtdRevenue > 0 ? cmv / mtdRevenue : null
-  const reconcileRevenue = revenueReconcileBase > 0 ? revenueReconcileBase : mtdRevenue
-  const reconcilePayments =
-    paymentsReconcileBase > 0 || revenueReconcileBase > 0
-      ? paymentsReconcileBase
-      : paymentsTotal
+  const useOverlap = overlapDays > 0
+  const reconcileRevenue = useOverlap ? revenueReconcileBase : mtdRevenue
+  const reconcilePayments = useOverlap ? paymentsReconcileBase : paymentsTotal
+  const paymentReconcile =
+    bothSeriesPresent && overlapDays === 0
+      ? 'unknown'
+      : reconcile(reconcileRevenue, reconcilePayments)
 
   return {
     mtdRevenue,
@@ -217,7 +224,7 @@ export async function fetchOpsFinance(
     paymentsTotal,
     paymentsReconcileBase,
     revenueReconcileBase,
-    paymentReconcile: reconcile(reconcileRevenue, reconcilePayments),
+    paymentReconcile,
     topPaymentMethod,
     available: cmvOk || mixOk || mtdRevenue > 0,
   }

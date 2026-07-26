@@ -53,14 +53,14 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       return null
     }
     // Gap like-for-like (dias com 0081 ∩ receita). Evita falso alarme por sync incompleto.
-    const pay =
+    const useOverlap =
       u.opsFinance.paymentsReconcileBase > 0 || u.opsFinance.revenueReconcileBase > 0
-        ? u.opsFinance.paymentsReconcileBase
-        : u.opsFinance.paymentsTotal
-    const rev =
-      u.opsFinance.revenueReconcileBase > 0
-        ? u.opsFinance.revenueReconcileBase
-        : u.opsFinance.mtdRevenue
+    const pay = useOverlap
+      ? u.opsFinance.paymentsReconcileBase
+      : u.opsFinance.paymentsTotal
+    const rev = useOverlap
+      ? u.opsFinance.revenueReconcileBase
+      : u.opsFinance.mtdRevenue
     return Math.round((pay - rev) * 100) / 100
   }
 
