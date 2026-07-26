@@ -4,7 +4,11 @@ import { useMemo, useState } from 'react'
 import {
   Area,
   AreaChart,
+  Bar,
   CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -25,7 +29,14 @@ import { LogoutButton } from './LogoutButton'
 import { GoalsEditor } from './GoalsEditor'
 import { ReportsPanel } from './ReportsPanel'
 
-type SectionKey = 'acoes' | 'hoje' | 'semana' | 'comercial' | 'comparativo' | 'trend'
+type SectionKey =
+  | 'acoes'
+  | 'hoje'
+  | 'semana'
+  | 'comercial'
+  | 'comparativo'
+  | 'trendYear'
+  | 'trend'
 
 const DEFAULT_OPEN: Record<SectionKey, boolean> = {
   acoes: true,
@@ -33,6 +44,7 @@ const DEFAULT_OPEN: Record<SectionKey, boolean> = {
   semana: false,
   comercial: false,
   comparativo: true,
+  trendYear: true,
   trend: false,
 }
 
@@ -280,6 +292,7 @@ export function Dashboard({
                 semana: true,
                 comercial: true,
                 comparativo: true,
+                trendYear: true,
                 trend: true,
               })
             }
@@ -290,6 +303,7 @@ export function Dashboard({
                 semana: false,
                 comercial: false,
                 comparativo: false,
+                trendYear: false,
                 trend: false,
               })
             }
@@ -690,12 +704,107 @@ export function Dashboard({
           </section>
         ) : null}
 
+        {data.trendYear.length > 0 ? (
+          <section className="mt-4">
+            <CollapsibleSection
+              eyebrow="Análise"
+              title="Receita no ano"
+              summary="Brasil × Iguatemi · mês a mês"
+              open={openMap.trendYear}
+              onOpenChange={(v) => setSection('trendYear', v)}
+            >
+              <p className="mb-3 text-xs text-muted">
+                Barras = receita de cada unidade. Linha = diferença (Brasil − Iguatemi). Meses sem
+                sync no ROM aparecem zerados.
+              </p>
+              <div className="h-64 w-full sm:h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={data.trendYear}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid stroke="rgba(42,47,56,0.8)" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fill: '#9a9488', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      yAxisId="rev"
+                      tick={{ fill: '#9a9488', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) =>
+                        Math.abs(Number(v)) >= 1_000_000
+                          ? `${(Number(v) / 1_000_000).toFixed(1)}M`
+                          : `${Math.round(Number(v) / 1000)}k`
+                      }
+                      width={40}
+                    />
+                    <YAxis
+                      yAxisId="delta"
+                      orientation="right"
+                      tick={{ fill: '#9a9488', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+                      width={36}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: '#16191f',
+                        border: '1px solid #2a2f38',
+                        borderRadius: 12,
+                        color: '#f2efe8',
+                      }}
+                      formatter={(value, name) => [
+                        formatCurrency(Number(value ?? 0)),
+                        String(name),
+                      ]}
+                    />
+                    <Legend
+                      wrapperStyle={{ fontSize: 12, color: '#9a9488' }}
+                      iconType="circle"
+                    />
+                    <Bar
+                      yAxisId="rev"
+                      dataKey="brasil"
+                      name="Brasil"
+                      fill="#c9a45c"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={28}
+                    />
+                    <Bar
+                      yAxisId="rev"
+                      dataKey="iguatemi"
+                      name="Iguatemi"
+                      fill="#6fafa0"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={28}
+                    />
+                    <Line
+                      yAxisId="delta"
+                      type="monotone"
+                      dataKey="delta"
+                      name="Δ Brasil−IG"
+                      stroke="#e8d5a8"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: '#e8d5a8' }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </CollapsibleSection>
+          </section>
+        ) : null}
+
         {data.trend30.length > 0 ? (
           <section className="mt-4">
             <CollapsibleSection
-              eyebrow="Tendência"
+              eyebrow="Operação"
               title="Receita 30 dias"
-              summary="Brasil vs Iguatemi"
+              summary="Dia a dia · Brasil vs Iguatemi"
               open={openMap.trend}
               onOpenChange={(v) => setSection('trend', v)}
             >

@@ -181,6 +181,30 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     )
   }
 
+  const yearStart = `${today.slice(0, 4)}-01-01`
+  let yearMonths: UnitSnapshot['yearMonths'] = []
+  try {
+    const monthRows = (await sql`
+      select
+        to_char(day, 'YYYY-MM') as month,
+        coalesce(sum(revenue), 0)::float as revenue,
+        coalesce(sum(attended), 0)::int as attended,
+        count(*)::int as days
+      from salon_daily_metrics
+      where day >= ${yearStart}::date and day <= ${today}::date
+      group by 1
+      order by 1
+    `) as { month: string; revenue: number; attended: number; days: number }[]
+    yearMonths = monthRows.map((r) => ({
+      month: String(r.month),
+      revenue: Math.round(n(r.revenue) * 100) / 100,
+      attended: n(r.attended),
+      days: n(r.days),
+    }))
+  } catch {
+    yearMonths = []
+  }
+
   const todayMetrics = last30[last30.length - 1]!
   let appointmentsNext2h = 0
   try {
@@ -298,6 +322,7 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     opsStock,
     mtd,
     last30,
+    yearMonths,
     sync,
   }
 }

@@ -112,6 +112,8 @@ export interface UnitSnapshot {
     goalSet: boolean
   }
   last30: DayMetrics[]
+  /** Receita/atendidos agregados por mês no ano corrente (salon_daily_metrics). */
+  yearMonths: { month: string; revenue: number; attended: number; days: number }[]
   sync: {
     status: 'ok' | 'stale' | 'error'
     lastSyncAt: string
@@ -194,6 +196,18 @@ export interface CerebroOverview {
   }
   units: UnitSnapshot[]
   trend30: { day: string; brasil: number; iguatemi: number }[]
+  /**
+   * Receita mês a mês no ano (Brasil × Iguatemi × Δ).
+   * Meses sem sync aparecem com 0 — útil para ver lacunas.
+   */
+  trendYear: {
+    month: string
+    label: string
+    brasil: number
+    iguatemi: number
+    /** Brasil − Iguatemi (positivo = Brasil à frente). */
+    delta: number
+  }[]
   /** Próximas ações (alerta + leitura), ordenadas por severidade */
   nextActions: AlertItem[]
   /** Ausente quando só uma unidade está disponível (mock sempre tem as duas). */

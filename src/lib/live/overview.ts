@@ -7,6 +7,21 @@ import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
 const SEV = { critical: 0, warning: 1, info: 2 }
 
+const MONTH_LABEL_PT = [
+  'Jan',
+  'Fev',
+  'Mar',
+  'Abr',
+  'Mai',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Set',
+  'Out',
+  'Nov',
+  'Dez',
+]
+
 function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
   const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
   const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
@@ -28,6 +43,30 @@ function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
     brasil: brasilByDay.get(day) ?? 0,
     iguatemi: iguatemiByDay.get(day) ?? 0,
   }))
+}
+
+/** Meses Jan→mês atual do ano, com receita BR × IG e Δ (Brasil − Iguatemi). */
+function buildTrendYear(units: UnitSnapshot[], today = todayIsoSaoPaulo()): CerebroOverview['trendYear'] {
+  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
+  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
+  const brMap = new Map(brasil?.yearMonths.map((m) => [m.month, m.revenue]) ?? [])
+  const igMap = new Map(iguatemi?.yearMonths.map((m) => [m.month, m.revenue]) ?? [])
+  const year = today.slice(0, 4)
+  const lastMonth = Number(today.slice(5, 7)) || 1
+  const out: CerebroOverview['trendYear'] = []
+  for (let m = 1; m <= lastMonth; m++) {
+    const month = `${year}-${String(m).padStart(2, '0')}`
+    const b = brMap.get(month) ?? 0
+    const i = igMap.get(month) ?? 0
+    out.push({
+      month,
+      label: MONTH_LABEL_PT[m - 1] ?? month,
+      brasil: Math.round(b),
+      iguatemi: Math.round(i),
+      delta: Math.round(b - i),
+    })
+  }
+  return out
 }
 
 /** Uma lista só: o que o Waltter deve fazer agora. */
@@ -307,6 +346,7 @@ function degradedOverview(
     consolidated: emptyConsolidated(),
     units: [],
     trend30: [],
+    trendYear: [],
     nextActions: [
       {
         id: alertId,
@@ -355,6 +395,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
 
   const consolidated = consolidate(units)
   const trend30 = buildTrend30(units)
+  const trendYear = buildTrendYear(units)
 
   const nextActions = [
     ...fetchErrors,
@@ -388,6 +429,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
     consolidated,
     units,
     trend30,
+    trendYear,
     nextActions: nextActions
       .sort((a, b) => SEV[a.severity] - SEV[b.severity])
       .slice(0, 8),

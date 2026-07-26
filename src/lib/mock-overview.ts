@@ -183,6 +183,23 @@ function buildUnit(
       goalSet: dailyGoal > 0,
     },
     last30,
+    yearMonths: (() => {
+      const todayIso = today.day
+      const year = todayIso.slice(0, 4)
+      const lastM = Number(todayIso.slice(5, 7)) || 1
+      const out: UnitSnapshot['yearMonths'] = []
+      for (let m = 1; m <= lastM; m++) {
+        const factor = 0.75 + seeded(slug === 'rom-brasil' ? m : m + 20) * 0.5
+        const monthRevenue = Math.round(baseRevenue * 22 * factor)
+        out.push({
+          month: `${year}-${String(m).padStart(2, '0')}`,
+          revenue: monthRevenue,
+          attended: Math.round(monthRevenue / (baseRevenue * 0.9)),
+          days: m === lastM ? dayOfMonth(todayIso) : 28,
+        })
+      }
+      return out
+    })(),
     sync,
   }
 }
@@ -274,6 +291,18 @@ export function buildMockOverview(): CerebroOverview {
       brasil: row.revenue,
       iguatemi: iguatemi.last30[idx]!.revenue,
     })),
+    trendYear: brasil.yearMonths.map((row, idx) => {
+      const ig = iguatemi.yearMonths[idx]?.revenue ?? 0
+      return {
+        month: row.month,
+        label: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][
+          Number(row.month.slice(5, 7)) - 1
+        ]!,
+        brasil: Math.round(row.revenue),
+        iguatemi: Math.round(ig),
+        delta: Math.round(row.revenue - ig),
+      }
+    }),
     nextActions: [
       {
         id: 'a1',
