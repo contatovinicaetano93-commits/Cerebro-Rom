@@ -5,10 +5,10 @@ Fonte de verdade. UI: **Comando → Metas → Comparativo → Hoje → Semana �
 ```
 Avec (por unidade)
   → ROM sync (fast = A · full = A+B+C + estoque)
-  → Neon da unidade
+  → banco da unidade (Brasil: Supabase · Iguatemi: Neon)
   → Cérebro Promise.allSettled (read-only KPIs)
     · escrita: cerebro_goals (metas nas unidades)
-    · escrita: report_runs no Neon Cérebro (snapshots sob demanda)
+    · escrita: report_runs no DB Cérebro (snapshots sob demanda)
 ```
 
 ## Camadas
@@ -27,7 +27,7 @@ Comparativo inclui também **receita perdida** (cancel + no-show × ticket) e **
 
 ## Metas
 
-- Preenchidas no painel (`PUT /api/goals`) → tabela `cerebro_goals` em cada Neon.
+- Preenchidas no painel (`PUT /api/goals`) → tabela `cerebro_goals` em cada banco de unidade.
 - Sem meta salva: progresso fica vazio (sem fallback inventado de R$ 5.000).
 - Env `BRASIL_DAILY_GOAL` / `IGUATEMI_DAILY_*` só como bootstrap opcional.
 
@@ -42,7 +42,7 @@ Scorecard **Brasil | Iguatemi | Δ%** por grupo: ops · comercial · financeiro 
 - Tabela/KPI ausente → bloco vazio / `null` no scorecard, página não quebra.
 - Sync `partial` / atrasado → `stale` na UI.
 
-## Neon
+## Tabelas (unidade)
 
 | Tabela | Camada |
 |--------|--------|
@@ -54,7 +54,7 @@ Scorecard **Brasil | Iguatemi | Δ%** por grupo: ops · comercial · financeiro 
 | `avec_report_snapshots` (0045) | drift estoque |
 | `cerebro_goals` | metas (write) |
 
-## Neon Cérebro (`CEREBRO_DATABASE_URL`)
+## DB Cérebro (`CEREBRO_DATABASE_URL`)
 
 Snapshots sob demanda do overview (KPIs do painel). Export CSV/XLSX.
 

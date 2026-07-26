@@ -763,7 +763,7 @@ export function Dashboard({
           <p>
             Atualizado {formatDateTime(data.generatedAt)} ·{' '}
             {data.mode === 'live'
-              ? 'Neons Brasil + Iguatemi (KPIs Avec)'
+              ? 'Brasil (Supabase) + Iguatemi (Neon) · KPIs Avec'
               : data.mode === 'degraded'
                 ? 'Sem fallback fictício'
                 : 'Mock'}

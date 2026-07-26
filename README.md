@@ -9,16 +9,19 @@ Painel executivo para o **Waltter** conduzir **ROM Brasil** + **ROM Iguatemi** c
 | **Live** | `NEON_BRASIL_DATABASE_URL` e/ou `NEON_IGUATEMI_DATABASE_URL` no `.env.local` |
 | **Mock** | Sem URLs, `CEREBRO_FORCE_MOCK=1`, ou falha total do live (fallback) |
 
-Live lê os Neons das unidades. Escritas do Cérebro:
-- `cerebro_goals` em cada Neon de unidade (metas no painel)
-- `report_runs` / `report_unit_metrics` no Neon próprio (`CEREBRO_DATABASE_URL`) — snapshots sob demanda
+Live lê os bancos das unidades. **Brasil = Supabase (Postgres)**; **Iguatemi = Neon**.
+Os env vars podem continuar `NEON_*` (nome histórico) — `NEON_BRASIL_DATABASE_URL` pode apontar para a URL do Supabase.
+
+Escritas do Cérebro:
+- `cerebro_goals` em cada banco de unidade (metas no painel)
+- `report_runs` / `report_unit_metrics` no Postgres próprio do Cérebro (`CEREBRO_DATABASE_URL`) — snapshots sob demanda
 
 ```
-ROM Brasil (Neon rom-club)     ──SELECT──┐
+ROM Brasil (Supabase)          ──SELECT──┐
                                          ├──► GET /api/overview ──► Cérebro
-ROM Iguatemi (Neon ROM-IGUATEMI) ─SELECT─┘
+ROM Iguatemi (Neon)            ─SELECT───┘
                                          ├──► PUT /api/goals → cerebro_goals (por unidade)
-                                         └──► POST /api/reports → Neon Cérebro (snapshots)
+                                         └──► POST /api/reports → Cérebro DB (snapshots)
 ```
 
 ## KPIs
@@ -55,7 +58,7 @@ Abra [http://localhost:3000](http://localhost:3000) → redireciona para `/login
 | `CEREBRO_ADMIN_PASSWORD` | *(obrigatório em produção)* |
 | `CEREBRO_SESSION_SECRET` | opcional — secret da sessão (senão usa a senha) |
 
-Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias). Login: rate limit 10/15min por IP (Neon Cérebro). `/api/health` exige login.
+Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias). Login: rate limit 10/15min por IP (DB Cérebro). `/api/health` exige login.
 
 Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergência).
 
@@ -68,7 +71,7 @@ Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergê
 
 ## Stack
 
-Next.js (App Router) + TypeScript + Tailwind + Recharts + `@neondatabase/serverless`.
+Next.js (App Router) + TypeScript + Tailwind + Recharts + Postgres (`postgres.js` / Neon serverless conforme a URL).
 
 ## Pastas
 
@@ -80,6 +83,6 @@ Next.js (App Router) + TypeScript + Tailwind + Recharts + `@neondatabase/serverl
 
 ## Nota sobre dados atuais
 
-Enquanto o **AVEC_API_TOKEN** não chegar, o painel live mostra o que já existe no Neon
+Enquanto o **AVEC_API_TOKEN** não chegar, o painel live mostra o que já existe nos bancos
 (agenda/contatos) e alertas de “aguardando token”.  
 Guia: [`docs/quando-token-avec.md`](docs/quando-token-avec.md).

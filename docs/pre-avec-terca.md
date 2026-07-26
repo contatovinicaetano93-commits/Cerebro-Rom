@@ -7,7 +7,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 | Sistema | Sem Avec | Comportamento |
 |---------|----------|---------------|
 | ROM Brasil / Iguatemi | ✅ | Agenda/contatos via WhatsApp/Telegram; sync Avec aguarda token |
-| Cérebro | ✅ | Live parcial (Neon); Camada A fraca; B/C vazios até full sync |
+| Cérebro | ✅ | Live parcial (bancos das unidades); Camada A fraca; B/C vazios até full sync |
 | Webhooks + cron | ✅ | Infra pronta; dispara sync quando token existir |
 
 ## Sábado — código e deploy
@@ -30,15 +30,15 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 
 ## Domingo — banco e simulação
 
-- [ ] Neon Brasil: `schema.sql` + `db/delta-p1-kpis.sql`, `delta-p2-kpis.sql`, `delta-p3-kpis.sql`
+- [ ] Brasil (Supabase): `schema.sql` + `db/delta-p1-kpis.sql`, `delta-p2-kpis.sql`, `delta-p3-kpis.sql`
 - [ ] Neon Iguatemi: mesmos deltas (banco **separado**)
 - [ ] Local com mock (opcional): `AVEC_MOCK=1` → POST `/api/avec/sync?mode=full` → conferir Cérebro Semana/Comercial
 
 ```bash
-# no repo da unidade, com Neon configurado
+# no repo da unidade, com DATABASE_URL configurada
 AVEC_MOCK=1 npm run dev
 # Admin → Rodar sync full
-# Cérebro local: NEON_*_DATABASE_URL apontando pro mesmo Neon
+# Cérebro local: NEON_*_DATABASE_URL (Brasil pode ser URL Supabase; Iguatemi = Neon)
 ```
 
 ## Segunda — webhooks (antes do token)
@@ -51,7 +51,7 @@ Conferir readiness (admin logado):
 
 - ROM Brasil: `GET /api/health` → `readiness.cron_ready`, `webhook_ready`, `avec.kpi_layers`
 - ROM Iguatemi: idem — hoje `last_full` provavelmente null
-- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. Com sessão: unidades Neon conectadas
+- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. Com sessão: unidades conectadas
 
 | Unidade | URL webhook | Header |
 |---------|-------------|--------|
@@ -83,7 +83,7 @@ Variáveis já devem estar na Vercel **antes** de terça:
 
 ### Cérebro
 
-1. Já lê os dois Neons — só validar badge **Live** + KPIs > 0
+1. Já lê Brasil (Supabase) + Iguatemi (Neon) — só validar badge **Live** + KPIs > 0
 2. Comparativo Brasil vs Iguatemi preenchido
 3. Seções Semana e Comercial com dados após full sync
 
