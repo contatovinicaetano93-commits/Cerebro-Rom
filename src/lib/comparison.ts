@@ -7,10 +7,17 @@ export function rate(num: number, den: number): number {
   return clamp01(num / den)
 }
 
-function deltaPct(brasil: number | null, iguatemi: number | null): number | null {
+/** Δ relativo (moeda / contagens): (BR − IG) / |IG|. */
+function deltaRelative(brasil: number | null, iguatemi: number | null): number | null {
   if (brasil == null || iguatemi == null) return null
   if (iguatemi === 0) return brasil === 0 ? 0 : null
   return (brasil - iguatemi) / Math.abs(iguatemi)
+}
+
+/** Δ absoluto em pontos (taxas 0–1): 25% vs 24% → +0.01 (= +1 p.p.). */
+function deltaPoints(brasil: number | null, iguatemi: number | null): number | null {
+  if (brasil == null || iguatemi == null) return null
+  return brasil - iguatemi
 }
 
 function row(
@@ -21,7 +28,9 @@ function row(
     deltaPct:
       partial.deltaPct !== undefined
         ? partial.deltaPct
-        : deltaPct(partial.brasil, partial.iguatemi),
+        : partial.format === 'pct'
+          ? deltaPoints(partial.brasil, partial.iguatemi)
+          : deltaRelative(partial.brasil, partial.iguatemi),
   }
 }
 

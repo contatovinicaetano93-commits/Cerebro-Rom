@@ -131,9 +131,12 @@ function buildNextActions(
         id: `react-${u.unit.slug}`,
         severity: 'info',
         unit: u.unit.slug,
-        title: `Reativar — ${u.unit.short}`,
-        detail: `${u.opsWeek.reactivationCount} sem retorno`,
-        action: 'Lista WhatsApp esta semana',
+        title: `Sem retorno — ${u.unit.short}`,
+        detail:
+          u.opsWeek.reactivationCount >= 5000
+            ? '5.000+ sem retorno (90d · lista Avec truncada)'
+            : `${u.opsWeek.reactivationCount} sem retorno (90d)`,
+        action: 'Lista WhatsApp / campanha de retorno',
       })
     }
 

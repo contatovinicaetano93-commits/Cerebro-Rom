@@ -176,7 +176,34 @@ async function fetchLatestP1(sql: Sql, today: string): Promise<P1Row | null> {
 async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
   if (!(await tableExists(sql, 'salon_p2_daily'))) return null
   try {
+    // Prefere dia com canais/pacotes/notas — evita linha só do 0081 (payment_mix)
+    // que zera o comercial do dia e esconde o snapshot full anterior.
     const rows = (await sql`
+      select
+        booking_channels,
+        packages,
+        packages_sold,
+        ratings_avg,
+        ratings_count,
+        birthday_count
+      from salon_p2_daily
+      where day <= ${today}::date
+        and (
+          (
+            jsonb_typeof(coalesce(booking_channels, '[]'::jsonb)) = 'array'
+            and jsonb_array_length(coalesce(booking_channels, '[]'::jsonb)) > 0
+          )
+          or (
+            jsonb_typeof(coalesce(packages, '[]'::jsonb)) = 'array'
+            and jsonb_array_length(coalesce(packages, '[]'::jsonb)) > 0
+          )
+          or coalesce(ratings_count, 0) > 0
+        )
+      order by day desc
+      limit 1
+    `) as P2Row[]
+    if (rows[0]) return rows[0]
+    const fallback = (await sql`
       select
         booking_channels,
         packages,
@@ -189,7 +216,7 @@ async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
       order by day desc
       limit 1
     `) as P2Row[]
-    return rows[0] ?? null
+    return fallback[0] ?? null
   } catch {
     return null
   }
@@ -230,8 +257,16 @@ export async function fetchOpsCommerce(sql: Sql, today: string): Promise<OpsComm
   if (!p2) return EMPTY_OPS_COMMERCE
 
   const bookingChannels = parseBookingChannels(p2.booking_channels)
-  const packages = parsePackages(p2.packages)
-  const packagesRevenue = packages.reduce((a, p) => a + p.revenue, 0)
+  // Lista curta na UI; receita soma TODOS os pacotes do JSON (não só o top exibido).
+  const packagesAll = asArray(p2.packages)
+    .map((row) => {
+      const name = str(row.name)
+      if (!name) return null
+      return { name, quantity: n(row.quantity), revenue: Math.round(n(row.revenue)) }
+    })
+    .filter((x): x is OpsCommerce['packages'][number] => x != null)
+  const packages = packagesAll.slice(0, 5)
+  const packagesRevenue = packagesAll.reduce((a, p) => a + p.revenue, 0)
 
   return {
     bookingChannels,
