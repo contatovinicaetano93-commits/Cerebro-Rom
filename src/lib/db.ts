@@ -48,6 +48,9 @@ function wrap(sql: PostgresSql): Sql {
  * Postgres client. Live paths always pass an explicit unit URL.
  * Platform helpers (audit/migrations) may omit it and fall back to env.
  * Aceita Neon TCP ou Supabase pooler (IPv4).
+ *
+ * Do NOT switch back to neon() from @neondatabase/serverless for Brasil:
+ * neon() is HTTP-only and fails against *.supabase.com / pooler hosts.
  */
 export function getSql(databaseUrl?: string): Sql {
   const url =
