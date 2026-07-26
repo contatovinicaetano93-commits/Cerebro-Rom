@@ -264,7 +264,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
   ]
 
-  const deltaRevenuePct = deltaPct(brasil.mtd.revenue, iguatemi.mtd.revenue)
+  const deltaRevenuePct = deltaRelative(brasil.mtd.revenue, iguatemi.mtd.revenue)
 
   return { rows, deltaRevenuePct }
 }
