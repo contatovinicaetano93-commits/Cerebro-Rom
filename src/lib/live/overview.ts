@@ -1,6 +1,6 @@
 import { buildMockOverview } from '@/lib/mock-overview'
-import { fetchLiveUnit } from '@/lib/live/fetch-unit'
-import { getUnitConfigs, todayIsoSaoPaulo } from '@/lib/unit-config'
+import { fetchLiveUnit, offlineUnitSnapshot } from '@/lib/live/fetch-unit'
+import { getUnitConfigs, todayIsoSaoPaulo, UNIT_META } from '@/lib/unit-config'
 import { rate, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
@@ -345,55 +345,80 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
   }
 
   const settled = await Promise.allSettled(configured.map((c) => fetchLiveUnit(c)))
-  const units: UnitSnapshot[] = []
+  const liveBySlug = new Map<string, UnitSnapshot>()
   const fetchErrors: AlertItem[] = []
 
   settled.forEach((result, idx) => {
     const cfg = configured[idx]!
     if (result.status === 'fulfilled') {
-      units.push(result.value)
+      liveBySlug.set(cfg.meta.slug, result.value)
     } else {
+      const detail = String(result.reason?.message ?? result.reason)
       fetchErrors.push({
         id: `fetch-${cfg.meta.slug}`,
         severity: 'critical',
         unit: cfg.meta.slug,
-        title: `Neon offline — ${cfg.meta.name}`,
-        detail: String(result.reason?.message ?? result.reason),
+        title: `DB offline — ${cfg.meta.name}`,
+        detail,
         action: 'Validar connection string',
       })
+      liveBySlug.set(
+        cfg.meta.slug,
+        offlineUnitSnapshot(cfg.meta, `Offline — ${detail.slice(0, 80)}`),
+      )
     }
   })
 
-  if (units.length === 0) {
+  // Sempre Brasil + Iguatemi no painel (mesmo slot, mesmos campos).
+  for (const cfg of configs) {
+    if (liveBySlug.has(cfg.meta.slug)) continue
+    const detail = cfg.databaseUrl
+      ? 'Sem resposta'
+      : 'NEON_*_DATABASE_URL ausente'
+    fetchErrors.push({
+      id: `missing-${cfg.meta.slug}`,
+      severity: 'critical',
+      unit: cfg.meta.slug,
+      title: `Unidade ausente — ${cfg.meta.name}`,
+      detail,
+      action: 'Completar connection string na Vercel',
+    })
+    liveBySlug.set(cfg.meta.slug, offlineUnitSnapshot(cfg.meta, detail))
+  }
+
+  const units = [UNIT_META['rom-brasil'], UNIT_META['rom-iguatemi']].map(
+    (meta) => liveBySlug.get(meta.slug) ?? offlineUnitSnapshot(meta, 'Sem dados'),
+  )
+
+  const liveUnits = units.filter((u) => !u.sync.offline)
+  if (liveUnits.length === 0) {
     throw new Error('Nenhuma unidade live respondeu')
   }
 
-  units.sort((a, b) => a.unit.slug.localeCompare(b.unit.slug))
-
-  const consolidated = consolidate(units)
-  const trend30 = buildTrend30(units)
+  const consolidated = consolidate(liveUnits)
+  const trend30 = buildTrend30(liveUnits)
 
   const nextActions = [
     ...fetchErrors,
     ...buildNextActions(
-      units,
+      liveUnits,
       consolidated.todayGoal,
       consolidated.todayRevenue,
       consolidated.goalsConfigured,
     ),
   ]
-  if (units.length < 2) {
+  if (liveUnits.length < 2) {
     nextActions.unshift({
       id: 'partial-units',
       severity: 'warning',
       unit: 'both',
       title: 'Consolidado parcial',
-      detail: `Só ${units[0]?.unit.short ?? 'uma unidade'} no painel`,
+      detail: `Só ${liveUnits[0]?.unit.short ?? 'uma unidade'} ao vivo — a outra está no painel como offline`,
       action: 'Completar NEON_*_DATABASE_URL',
     })
   }
 
-  const partial = units.length < configs.length || fetchErrors.length > 0
+  const partial = liveUnits.length < 2 || fetchErrors.length > 0
 
   return {
     generatedAt: new Date().toISOString(),

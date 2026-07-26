@@ -116,6 +116,8 @@ export interface UnitSnapshot {
     status: 'ok' | 'stale' | 'error'
     lastSyncAt: string
     label: string
+    /** true quando a unidade não respondeu (placeholder no painel). */
+    offline?: boolean
   }
 }
 
