@@ -11,7 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import { Activity, AlertTriangle, ArrowRight, Brain, RefreshCw } from 'lucide-react'
-import type { CerebroOverview, ComparisonGroup, ComparisonRow } from '@/lib/types'
+import type { AlertItem, CerebroOverview, ComparisonGroup, ComparisonRow } from '@/lib/types'
 import {
   formatCurrency,
   formatDateTime,
@@ -112,6 +112,26 @@ function severityStyles(severity: 'critical' | 'warning' | 'info') {
 
 function unitAccent(slug: string) {
   return slug === 'rom-brasil' ? 'text-brass' : 'text-teal'
+}
+
+function unitChip(unit: AlertItem['unit']) {
+  if (unit === 'both') {
+    return (
+      <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted">
+        Rede
+      </span>
+    )
+  }
+  const label = unit === 'rom-brasil' ? 'Brasil' : 'Iguatemi'
+  const cls =
+    unit === 'rom-brasil'
+      ? 'border-brass/40 bg-brass/10 text-brass'
+      : 'border-teal/40 bg-teal/10 text-teal'
+  return (
+    <span className={`rounded-md border px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide ${cls}`}>
+      {label}
+    </span>
+  )
 }
 
 function formatRowValue(
@@ -406,7 +426,10 @@ export function Dashboard({
                   >
                     <AlertTriangle size={15} className="mt-0.5 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground">{a.title}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-foreground">{a.title}</p>
+                        {unitChip(a.unit)}
+                      </div>
                       <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
                       <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/80">
                         <ArrowRight size={11} />

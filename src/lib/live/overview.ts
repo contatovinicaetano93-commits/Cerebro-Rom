@@ -207,9 +207,26 @@ function buildNextActions(
     }
   }
 
-  return actions
-    .sort((a, b) => SEV[a.severity] - SEV[b.severity])
-    .slice(0, 8)
+  return sortNextActions(actions)
+}
+
+/** Severidade → família do alerta → unidade (BR, IG, both) — sem cortar a lista. */
+function sortNextActions(actions: AlertItem[]): AlertItem[] {
+  const unitOrder = (unit: AlertItem['unit']) => {
+    if (unit === 'rom-brasil') return 0
+    if (unit === 'rom-iguatemi') return 1
+    return 2
+  }
+  /** id `vagas-2h-rom-brasil` → família `vagas-2h` para manter BR/IG juntos. */
+  const family = (id: string) => id.replace(/-(rom-brasil|rom-iguatemi|both)$/i, '')
+
+  return [...actions].sort((a, b) => {
+    const bySev = SEV[a.severity] - SEV[b.severity]
+    if (bySev !== 0) return bySev
+    const byFam = family(a.id).localeCompare(family(b.id), 'pt-BR')
+    if (byFam !== 0) return byFam
+    return unitOrder(a.unit) - unitOrder(b.unit)
+  })
 }
 
 function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
@@ -388,9 +405,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
     consolidated,
     units,
     trend30,
-    nextActions: nextActions
-      .sort((a, b) => SEV[a.severity] - SEV[b.severity])
-      .slice(0, 8),
+    nextActions: sortNextActions(nextActions),
     comparison: buildComparison(units),
   }
 }
