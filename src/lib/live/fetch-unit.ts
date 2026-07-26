@@ -8,9 +8,9 @@ import {
   type UnitRuntimeConfig,
 } from '@/lib/unit-config'
 import { fetchOpsCommerce, fetchOpsWeek } from '@/lib/live/parse-kpi-layers'
-import { fetchOpsFinance, fetchOpsStock } from '@/lib/live/fetch-money-stock'
+import { EMPTY_OPS_FINANCE, EMPTY_OPS_STOCK, fetchOpsFinance, fetchOpsStock } from '@/lib/live/fetch-money-stock'
 import { readGoalsFromDb, resolveGoals } from '@/lib/goals'
-import type { DayMetrics, OpsToday, UnitSnapshot } from '@/lib/types'
+import type { DayMetrics, OpsToday, UnitMeta, UnitSnapshot } from '@/lib/types'
 
 function n(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -112,6 +112,55 @@ function rowToDay(
     capacitySet,
     leads,
     converted,
+  }
+}
+
+/** Placeholder simétrico quando a unidade não responde — mesmos campos, sem inventar números. */
+export function offlineUnitSnapshot(meta: UnitMeta, detail: string): UnitSnapshot {
+  const today = todayIsoSaoPaulo()
+  const day = emptyDay(today, 0, 0, false, false)
+  return {
+    unit: meta,
+    today: day,
+    opsToday: buildOpsToday(day, 0),
+    opsWeek: {
+      professionals: [],
+      services: [],
+      acquisition: [],
+      reactivationCount: 0,
+      returnRate: 0,
+      newClientsPeriod: 0,
+    },
+    opsCommerce: {
+      bookingChannels: [],
+      packages: [],
+      packagesSold: 0,
+      packagesRevenue: 0,
+      ratingsAvg: 0,
+      ratingsCount: 0,
+      birthdayCount: 0,
+      topBookingChannel: null,
+    },
+    opsFinance: { ...EMPTY_OPS_FINANCE },
+    opsStock: { ...EMPTY_OPS_STOCK },
+    mtd: {
+      revenue: 0,
+      attended: 0,
+      noShows: 0,
+      appointments: 0,
+      newClients: 0,
+      returningClients: 0,
+      cancelled: 0,
+      goal: 0,
+      goalSet: false,
+    },
+    last30: [],
+    sync: {
+      status: 'error',
+      lastSyncAt: '',
+      label: detail,
+      offline: true,
+    },
   }
 }
 

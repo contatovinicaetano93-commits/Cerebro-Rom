@@ -11,7 +11,14 @@ import {
   YAxis,
 } from 'recharts'
 import { Activity, AlertTriangle, ArrowRight, Brain, RefreshCw } from 'lucide-react'
-import type { AlertItem, CerebroOverview, ComparisonGroup, ComparisonRow } from '@/lib/types'
+import type {
+  AlertItem,
+  CerebroOverview,
+  ComparisonGroup,
+  ComparisonRow,
+  UnitSlug,
+  UnitSnapshot,
+} from '@/lib/types'
 import {
   formatCurrency,
   formatDateTime,
@@ -58,9 +65,21 @@ const LEGEND = {
   cancelNoshow: 'Cancelamentos e faltas do dia (Avec).',
   novosRec: 'Clientes novos vs recorrentes no dia.',
   unitHoje: 'Faturamento Avec da unidade hoje.',
+  unitVagas: 'Capacidade (Metas) − agendamentos do dia nesta unidade.',
   unit2h: 'Vagas livres estimadas nas próximas 2 horas nesta unidade.',
-  unitCancel: 'Cancelamentos do dia nesta unidade.',
+  unitCancel: 'Cancelamentos e no-shows do dia nesta unidade.',
+  unitNovos: 'Clientes novos vs recorrentes no dia nesta unidade.',
 } as const
+
+const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
+const HOJE_UNIT_LABEL: Record<UnitSlug, string> = {
+  'rom-brasil': 'Brasil',
+  'rom-iguatemi': 'Iguatemi',
+}
+
+function unitForHoje(units: UnitSnapshot[], slug: UnitSlug): UnitSnapshot | null {
+  return units.find((u) => u.unit.slug === slug) ?? null
+}
 
 /** Rótulo curto de fonte (Avec / proxy / incompleto / desatualizado). */
 function sourceHint(
@@ -447,90 +466,131 @@ export function Dashboard({
           <CollapsibleSection
             eyebrow="1 · Hoje"
             title="Ação do dia"
-            summary={`${c.openSlotsToday} vagas · ${c.openSlotsNext2h} nas 2h · ${c.cancelledToday} cancel.`}
+            summary="Brasil e Iguatemi — mesmos indicadores"
             open={openMap.hoje}
             onOpenChange={(v) => setSection('hoje', v)}
           >
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <KpiStat
-                label="Vagas hoje"
-                value={c.occupancyConfigured ? String(c.openSlotsToday) : '—'}
-                tone={c.openSlotsToday >= 4 ? 'warn' : 'default'}
-                source={sourceHint('Avec', 'ROM', networkSyncSource)}
-                legend={LEGEND.vagasHoje}
-              />
-              <KpiStat
-                label="Vagas 2h"
-                value={c.occupancyConfigured ? String(c.openSlotsNext2h) : '—'}
-                tone={c.openSlotsNext2h >= 2 ? 'warn' : 'good'}
-                source={sourceHint('proxy', 'Avec')}
-                legend={LEGEND.vagas2h}
-              />
-              <KpiStat
-                label="Cancel. · No-show"
-                value={`${c.cancelledToday} · ${c.noShowsToday}`}
-                tone={c.cancelledToday + c.noShowsToday > 0 ? 'warn' : 'good'}
-                source={sourceHint('Avec', networkSyncSource)}
-                legend={LEGEND.cancelNoshow}
-              />
-              <KpiStat
-                label="Novos · Recorrentes"
-                value={`${c.newClients} · ${c.returningClients}`}
-                hint={`Novos ${formatPct(c.newShare)}`}
-                source={sourceHint('Avec', 'ROM')}
-                legend={LEGEND.novosRec}
-              />
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {data.units.map((u) => (
-                <div
-                  key={u.unit.slug}
-                  className="rounded-xl border border-border/50 bg-panel-2/50 px-3 py-3 text-center text-xs"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={`uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
-                      {u.unit.short}
-                    </p>
-                    <p className="text-muted">{u.sync.label}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {HOJE_UNIT_ORDER.map((slug) => {
+                const u = unitForHoje(data.units, slug)
+                const label = u?.unit.short ?? HOJE_UNIT_LABEL[slug]
+                const offline = !u || Boolean(u.sync.offline)
+                const src = offline
+                  ? 'offline'
+                  : sourceHint('Avec', 'ROM', syncSourceLabel(u.sync.status))
+                const dash = '—'
+                const revenue = offline ? dash : formatCurrency(u.today.revenue)
+                const vagasHoje =
+                  !offline && u.today.capacitySet ? String(u.opsToday.openSlotsToday) : dash
+                const vagas2h =
+                  !offline && u.today.capacitySet ? String(u.opsToday.openSlotsNext2h) : dash
+                const cancelNoshow = offline
+                  ? dash
+                  : `${u.today.cancelled} · ${u.today.noShows}`
+                const novosRec = offline
+                  ? dash
+                  : `${u.today.newClients} · ${u.today.returningClients}`
+                const borderAccent =
+                  slug === 'rom-brasil' ? 'border-brass/35' : 'border-teal/35'
+
+                return (
+                  <div
+                    key={slug}
+                    className={`rounded-xl border ${borderAccent} bg-panel-2/50 px-4 py-4`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p
+                          className={`text-sm font-medium uppercase tracking-[0.18em] ${unitAccent(slug)}`}
+                        >
+                          {label}
+                        </p>
+                        <p className="mt-0.5 text-[0.65rem] text-muted">
+                          {offline ? 'Sem dados ao vivo' : u.sync.label}
+                        </p>
+                      </div>
+                      {offline ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Offline
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4">
+                      <div>
+                        <p
+                          className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
+                          title={LEGEND.unitHoje}
+                        >
+                          Faturamento
+                        </p>
+                        <p className="mt-1 font-display text-xl tracking-tight text-foreground sm:text-2xl">
+                          {revenue}
+                        </p>
+                        <p className="mt-0.5 text-[0.55rem] uppercase tracking-wide text-muted/70">
+                          {src}
+                        </p>
+                      </div>
+                      <div>
+                        <p
+                          className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
+                          title={LEGEND.unitVagas}
+                        >
+                          Vagas hoje
+                        </p>
+                        <p
+                          className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
+                            !offline && u.opsToday.openSlotsToday >= 4
+                              ? 'text-warning'
+                              : 'text-foreground'
+                          }`}
+                        >
+                          {vagasHoje}
+                        </p>
+                      </div>
+                      <div>
+                        <p
+                          className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
+                          title={LEGEND.unit2h}
+                        >
+                          Vagas 2h
+                        </p>
+                        <p className="mt-1 font-display text-xl tracking-tight text-foreground sm:text-2xl">
+                          {vagas2h}
+                        </p>
+                      </div>
+                      <div>
+                        <p
+                          className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
+                          title={LEGEND.unitCancel}
+                        >
+                          Cancel. · No-show
+                        </p>
+                        <p
+                          className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
+                            !offline && u.today.cancelled + u.today.noShows > 0
+                              ? 'text-warning'
+                              : 'text-foreground'
+                          }`}
+                        >
+                          {cancelNoshow}
+                        </p>
+                      </div>
+                      <div className="col-span-2">
+                        <p
+                          className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
+                          title={LEGEND.unitNovos}
+                        >
+                          Novos · Recorrentes
+                        </p>
+                        <p className="mt-1 font-display text-xl tracking-tight text-foreground sm:text-2xl">
+                          {novosRec}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-left">
-                    <div>
-                      <p
-                        className="cursor-help text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
-                        title={LEGEND.unitHoje}
-                      >
-                        Hoje
-                      </p>
-                      <p className="font-medium text-foreground">
-                        {formatCurrency(u.today.revenue)}
-                      </p>
-                      <p className="mt-0.5 text-[0.55rem] uppercase tracking-wide text-muted/70">
-                        {sourceHint('Avec', syncSourceLabel(u.sync.status))}
-                      </p>
-                    </div>
-                    <div>
-                      <p
-                        className="cursor-help text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
-                        title={LEGEND.unit2h}
-                      >
-                        2h
-                      </p>
-                      <p className="font-medium text-foreground">
-                        {u.today.capacitySet ? u.opsToday.openSlotsNext2h : '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p
-                        className="cursor-help text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
-                        title={LEGEND.unitCancel}
-                      >
-                        Cancel.
-                      </p>
-                      <p className="font-medium text-foreground">{u.today.cancelled}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </CollapsibleSection>
         </section>
