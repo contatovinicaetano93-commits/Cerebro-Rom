@@ -171,6 +171,7 @@ export interface CerebroOverview {
     mtdRevenue: number
     mtdGoal: number
     mtdGoalProgress: number
+    mtdTicketAvg: number
     attendanceRate: number
     noShowRate: number
     occupancyRate: number

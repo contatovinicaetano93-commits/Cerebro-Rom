@@ -96,7 +96,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'occupancy',
-      label: 'Ocupação',
+      label: 'Ocupação hoje',
       group: 'ops',
       brasil: occ(brasil),
       iguatemi: occ(iguatemi),
@@ -105,7 +105,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'noshow',
-      label: 'No-show',
+      label: 'No-show hoje',
       group: 'ops',
       brasil: noShow(brasil),
       iguatemi: noShow(iguatemi),
@@ -114,7 +114,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'lost_revenue',
-      label: 'Receita perdida',
+      label: 'Receita perdida hoje',
       group: 'ops',
       brasil: lostRevenue(brasil),
       iguatemi: lostRevenue(iguatemi),
@@ -123,7 +123,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'ticket',
-      label: 'Ticket médio',
+      label: 'Ticket médio hoje',
       group: 'ops',
       brasil: brasil.today.ticketAvg || null,
       iguatemi: iguatemi.today.ticketAvg || null,
@@ -132,7 +132,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'return',
-      label: 'Taxa de retorno',
+      label: 'Retorno (rolling)',
       group: 'comercial',
       brasil: brasil.opsWeek.returnRate || null,
       iguatemi: iguatemi.opsWeek.returnRate || null,
@@ -141,7 +141,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'packages',
-      label: 'Pacotes (receita)',
+      label: 'Pacotes rolling (receita)',
       group: 'comercial',
       brasil: brasil.opsCommerce.packagesRevenue,
       iguatemi: iguatemi.opsCommerce.packagesRevenue,
@@ -168,7 +168,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'cmv',
-      label: 'CMV (saídas)',
+      label: 'CMV MTD (saídas)',
       group: 'financeiro',
       brasil: brasil.opsFinance.available ? brasil.opsFinance.cmv : null,
       iguatemi: iguatemi.opsFinance.available ? iguatemi.opsFinance.cmv : null,
@@ -177,7 +177,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'cmv_share',
-      label: 'CMV / receita',
+      label: 'CMV / receita MTD',
       group: 'financeiro',
       brasil: brasil.opsFinance.cmvShare,
       iguatemi: iguatemi.opsFinance.cmvShare,
@@ -186,7 +186,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'payments_total',
-      label: 'Pagamentos 0081',
+      label: 'Pagamentos 0081 MTD',
       group: 'financeiro',
       brasil: brasil.opsFinance.available ? brasil.opsFinance.paymentsTotal : null,
       iguatemi: iguatemi.opsFinance.available ? iguatemi.opsFinance.paymentsTotal : null,
@@ -195,7 +195,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'payment_gap',
-      label: 'Gap 0081 vs receita',
+      label: 'Gap 0081 vs receita MTD',
       group: 'financeiro',
       brasil: paymentGap(brasil),
       iguatemi: paymentGap(iguatemi),

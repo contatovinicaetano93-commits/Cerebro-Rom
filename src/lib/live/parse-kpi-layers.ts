@@ -176,7 +176,42 @@ async function fetchLatestP1(sql: Sql, today: string): Promise<P1Row | null> {
 async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
   if (!(await tableExists(sql, 'salon_p2_daily'))) return null
   try {
+    // P2 é snapshot rolling; linhas parciais recentes podem vir com packages=[].
+    // Evita que esse near-latest sombreie o último snapshot comercial útil.
     const rows = (await sql`
+      select
+        booking_channels,
+        packages,
+        packages_sold,
+        ratings_avg,
+        ratings_count,
+        birthday_count
+      from salon_p2_daily
+      where day <= ${today}::date
+        and jsonb_array_length(coalesce(packages, '[]'::jsonb)) > 0
+        and jsonb_array_length(coalesce(booking_channels, '[]'::jsonb)) > 0
+      order by day desc
+      limit 1
+    `) as P2Row[]
+    if (rows[0]) return rows[0]
+
+    const withPackages = (await sql`
+      select
+        booking_channels,
+        packages,
+        packages_sold,
+        ratings_avg,
+        ratings_count,
+        birthday_count
+      from salon_p2_daily
+      where day <= ${today}::date
+        and jsonb_array_length(coalesce(packages, '[]'::jsonb)) > 0
+      order by day desc
+      limit 1
+    `) as P2Row[]
+    if (withPackages[0]) return withPackages[0]
+
+    const fallback = (await sql`
       select
         booking_channels,
         packages,
@@ -189,7 +224,7 @@ async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
       order by day desc
       limit 1
     `) as P2Row[]
-    return rows[0] ?? null
+    return fallback[0] ?? null
   } catch {
     return null
   }

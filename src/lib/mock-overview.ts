@@ -225,6 +225,7 @@ export function buildMockOverview(): CerebroOverview {
   const todayGoal = units.reduce((a, u) => a + u.today.dailyGoal, 0)
   const mtdRevenue = units.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdGoal = units.reduce((a, u) => a + u.mtd.goal, 0)
+  const mtdAttended = units.reduce((a, u) => a + u.mtd.attended, 0)
   const attended = units.reduce((a, u) => a + u.today.attended, 0)
   const appointments = units.reduce((a, u) => a + u.today.appointments, 0)
   const noShows = units.reduce((a, u) => a + u.today.noShows, 0)
@@ -249,6 +250,7 @@ export function buildMockOverview(): CerebroOverview {
       mtdRevenue,
       mtdGoal,
       mtdGoalProgress: rate(mtdRevenue, mtdGoal),
+      mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0,
       attendanceRate: rate(attended, appointments),
       noShowRate: rate(noShows, appointments),
       occupancyRate: rate(appointments, capacity),

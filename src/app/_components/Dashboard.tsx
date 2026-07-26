@@ -48,9 +48,9 @@ const LEGEND = {
   faturamento:
     'Soma da receita Avec do dia nas unidades ao vivo.',
   ocupacao:
-    'Ocupação = agenda ÷ capacidade (Metas). Comparecimento = atendidos ÷ agendados. Risco = no-shows × ticket.',
-  mtd: 'Receita acumulada no mês (MTD). Ticket = receita ÷ atendidos.',
-  cmv: 'Proxy: custo das saídas de estoque no mês (Avec 0044) — não é CMV fiscal.',
+    'Métricas de hoje: ocupação = agenda do dia ÷ capacidade; comparecimento = atendidos do dia ÷ agendados do dia.',
+  mtd: 'Mês acumulado (MTD): receita e ticket do mês corrente. Ticket MTD = receita MTD ÷ atendidos MTD.',
+  cmv: 'Mês acumulado (MTD): proxy do custo das saídas de estoque no mês (Avec 0044) — não é CMV fiscal.',
   estoqueValor: 'Valor da posição de estoque sincronizada da Avec.',
   estoqueAlertas: 'Produtos abaixo do mínimo (alertas ativos no ROM Estoque).',
   vagasHoje: 'Capacidade do dia (Metas) − agendamentos do dia.',
@@ -85,20 +85,20 @@ function syncSourceLabel(status: string | undefined): 'incompleto' | 'desatualiz
 const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   revenue_today: 'Receita Avec do dia.',
   goal_pct: 'Receita do dia ÷ meta diária (Metas).',
-  occupancy: 'Agendamentos ÷ capacidade (Metas).',
+  occupancy: 'Agendamentos de hoje ÷ capacidade do dia (Metas).',
   noshow: 'No-shows ÷ agendamentos do dia.',
   lost_revenue: '(Cancelamentos + no-shows) × ticket médio do dia.',
   ticket: 'Receita ÷ atendidos (hoje).',
-  return: 'Taxa de retorno (Avec / P3).',
-  packages: 'Receita de pacotes (Avec 0061).',
-  mtd_revenue: 'Receita acumulada no mês.',
+  return: 'Taxa de retorno do snapshot Avec / P3 (janela rolling).',
+  packages: 'Receita de pacotes do snapshot Avec 0061 (janela rolling).',
+  mtd_revenue: 'Receita acumulada no mês (MTD).',
   mtd_ticket: 'Receita MTD ÷ atendidos MTD.',
-  cmv: 'Proxy: custo das saídas de estoque no mês (0044).',
+  cmv: 'Proxy MTD: custo das saídas de estoque no mês (0044).',
   cmv_share: 'CMV proxy ÷ receita MTD.',
-  payments_total: 'Soma das formas de pagamento (Avec 0081).',
+  payments_total: 'Soma MTD das formas de pagamento (Avec 0081).',
   payment_gap: 'Pagamentos 0081 − receita MTD (ideal ≈ 0).',
-  payment_reconcile: 'Status da conciliação 0081 vs receita.',
-  top_payment: 'Forma de pagamento com maior volume no período.',
+  payment_reconcile: 'Status da conciliação 0081 vs receita MTD.',
+  top_payment: 'Forma de pagamento com maior volume no MTD.',
   stock_value: 'Valor em estoque (posição Avec).',
   stock_alerts: 'Alertas ativos de estoque baixo.',
   stock_zero: 'SKUs com saldo zero.',
@@ -326,13 +326,13 @@ export function Dashboard({
           </Panel>
           <Panel>
             <KpiStat
-              label="Ocupação · Comparec."
+              label="Ocupação hoje · comparec."
               value={
                 c.occupancyConfigured
                   ? `${formatPct(c.occupancyRate)} · ${formatPct(c.attendanceRate)}`
                   : `— · ${formatPct(c.attendanceRate)}`
               }
-              hint={`No-show ${formatPct(c.noShowRate)} · risco ${formatCurrency(c.revenueAtRisk)}`}
+              hint={`No-show do dia ${formatPct(c.noShowRate)} · risco hoje ${formatCurrency(c.revenueAtRisk)}`}
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.ocupacao}
               tone={c.noShowRate > 0.08 ? 'warn' : 'default'}
@@ -340,12 +340,12 @@ export function Dashboard({
           </Panel>
           <Panel>
             <KpiStat
-              label="MTD · Ticket"
+              label="Receita MTD · Ticket MTD"
               value={formatCurrency(c.mtdRevenue)}
               hint={
                 c.goalsConfigured
-                  ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.ticketAvg)}`
-                  : `Ticket ${formatCurrency(c.ticketAvg)} · CMV ${formatCurrency(c.cmv)}`
+                  ? `${formatPct(c.mtdGoalProgress)} da meta MTD · ticket MTD ${formatCurrency(c.mtdTicketAvg)}`
+                  : `Ticket MTD ${formatCurrency(c.mtdTicketAvg)} · CMV MTD ${formatCurrency(c.cmv)}`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.mtd}
@@ -364,7 +364,7 @@ export function Dashboard({
               <KpiStat
                 label="CMV rede (MTD)"
                 value={formatCurrency(c.cmv)}
-                hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita` : undefined}
+                hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita MTD` : undefined}
                 source={sourceHint('proxy', 'Avec', networkSyncSource)}
                 legend={LEGEND.cmv}
               />
@@ -437,21 +437,21 @@ export function Dashboard({
                 legend={LEGEND.vagasHoje}
               />
               <KpiStat
-                label="Vagas 2h"
+                label="Vagas próximas 2h"
                 value={c.occupancyConfigured ? String(c.openSlotsNext2h) : '—'}
                 tone={c.openSlotsNext2h >= 2 ? 'warn' : 'good'}
                 source={sourceHint('proxy', 'Avec')}
                 legend={LEGEND.vagas2h}
               />
               <KpiStat
-                label="Cancel. · No-show"
+                label="Cancel. do dia · no-show"
                 value={`${c.cancelledToday} · ${c.noShowsToday}`}
                 tone={c.cancelledToday + c.noShowsToday > 0 ? 'warn' : 'good'}
                 source={sourceHint('Avec', networkSyncSource)}
                 legend={LEGEND.cancelNoshow}
               />
               <KpiStat
-                label="Novos · Recorrentes"
+                label="Novos · recorrentes hoje"
                 value={`${c.newClients} · ${c.returningClients}`}
                 hint={`Novos ${formatPct(c.newShare)}`}
                 source={sourceHint('Avec', 'ROM')}
@@ -476,7 +476,7 @@ export function Dashboard({
                         className="cursor-help text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
                         title={LEGEND.unitHoje}
                       >
-                        Hoje
+                        Hoje (dia)
                       </p>
                       <p className="font-medium text-foreground">
                         {formatCurrency(u.today.revenue)}
@@ -514,9 +514,9 @@ export function Dashboard({
 
         <section className="mt-4">
           <CollapsibleSection
-            eyebrow="2 · Semana"
+            eyebrow="2 · Rolling"
             title="Equipe e retenção"
-            summary="Top 10 pros · retorno · reativação"
+            summary="Top 10 pros · retorno · reativação (janela rolling)"
             open={openMap.semana}
             onOpenChange={(v) => setSection('semana', v)}
           >
@@ -566,9 +566,9 @@ export function Dashboard({
 
         <section className="mt-4">
           <CollapsibleSection
-            eyebrow="3 · Comercial"
+            eyebrow="3 · Comercial rolling"
             title="Canais e qualidade"
-            summary="Booking · pacotes · notas"
+            summary="Booking · pacotes · notas (snapshot rolling)"
             open={openMap.comercial}
             onOpenChange={(v) => setSection('comercial', v)}
           >
@@ -591,6 +591,9 @@ export function Dashboard({
                       <p className="mt-3 text-sm text-muted">Sem dados comerciais ainda.</p>
                     ) : (
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                        <p className="col-span-2 text-xs text-muted">
+                          Snapshot rolling Avec: canais e pacotes não são métricas do dia.
+                        </p>
                         <ul className="space-y-1">
                           {co.bookingChannels.slice(0, 3).map((ch) => (
                             <li key={ch.channel} className="flex justify-between gap-2">
