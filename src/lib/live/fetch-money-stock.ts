@@ -48,22 +48,29 @@ function parseMoneyField(row: Record<string, unknown>): number {
   return 0
 }
 
+/** Snapshots 0045 mais velhos que isto → unknown (não inventar drift com stock antigo). */
+const STOCK_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
 /** Soma valorização oficial Avec 0045 a partir do snapshot bruto (quando existir). */
 async function fetchOfficialStockTotal(sql: Sql): Promise<number | null> {
   if (!(await tableExists(sql, 'avec_report_snapshots'))) return null
   try {
     const rows = (await sql`
-      select payload
+      select payload, created_at
       from avec_report_snapshots
       where report_id = '0045'
       order by created_at desc
       limit 1
-    `) as { payload: unknown }[]
-    const payload = rows[0]?.payload
-    if (!Array.isArray(payload) || payload.length === 0) return null
+    `) as { payload: unknown; created_at: string | Date | null }[]
+    const row = rows[0]
+    if (!row || !Array.isArray(row.payload) || row.payload.length === 0) return null
+    const captured = row.created_at ? new Date(row.created_at).getTime() : NaN
+    if (Number.isFinite(captured) && Date.now() - captured > STOCK_SNAPSHOT_MAX_AGE_MS) {
+      return null
+    }
     let sum = 0
     let hit = 0
-    for (const item of payload) {
+    for (const item of row.payload) {
       if (item == null || typeof item !== 'object') continue
       const money = parseMoneyField(item as Record<string, unknown>)
       if (money > 0) {

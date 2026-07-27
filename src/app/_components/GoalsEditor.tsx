@@ -46,15 +46,19 @@ export function GoalsEditor({
     setOkMsg(null)
     setSaving('both')
     try {
-      const jobs: Promise<void>[] = []
+      const targets: Array<{ slug: UnitSlug; draft: Draft }> = []
       if (data.units.some((u) => u.unit.slug === 'rom-brasil' && !u.sync.offline)) {
-        jobs.push(saveUnit('rom-brasil', brasil))
+        targets.push({ slug: 'rom-brasil', draft: brasil })
       }
       if (data.units.some((u) => u.unit.slug === 'rom-iguatemi' && !u.sync.offline)) {
-        jobs.push(saveUnit('rom-iguatemi', iguatemi))
+        targets.push({ slug: 'rom-iguatemi', draft: iguatemi })
       }
-      await Promise.all(jobs)
-      setOkMsg('Metas salvas')
+      if (targets.length === 0) {
+        setError('Nenhuma unidade online para gravar metas agora.')
+        return
+      }
+      await Promise.all(targets.map((t) => saveUnit(t.slug, t.draft)))
+      setOkMsg(`Metas salvas em ${targets.length} unidade(s).`)
       onSaved()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -75,13 +79,29 @@ export function GoalsEditor({
           <div>
             <p className="text-sm font-medium text-foreground">Metas das unidades</p>
             <p className="text-xs text-muted">
-              {data.consolidated.goalsConfigured
-                ? `Brasil ${formatCurrency(
-                    data.units.find((u) => u.unit.slug === 'rom-brasil')?.today.dailyGoal ?? 0,
-                  )} · Iguatemi ${formatCurrency(
-                    data.units.find((u) => u.unit.slug === 'rom-iguatemi')?.today.dailyGoal ?? 0,
-                  )}`
-                : 'Defina meta diária e capacidade — sem placeholder'}
+              {(() => {
+                const br = data.units.find((u) => u.unit.slug === 'rom-brasil')
+                const ig = data.units.find((u) => u.unit.slug === 'rom-iguatemi')
+                const brLabel =
+                  br?.sync.offline
+                    ? 'Brasil —'
+                    : br?.today.goalSet
+                      ? `Brasil ${formatCurrency(br.today.dailyGoal)}`
+                      : 'Brasil (sem meta)'
+                const igLabel =
+                  ig?.sync.offline
+                    ? 'Iguatemi —'
+                    : ig?.today.goalSet
+                      ? `Iguatemi ${formatCurrency(ig.today.dailyGoal)}`
+                      : 'Iguatemi (sem meta)'
+                if (br?.sync.offline && ig?.sync.offline) {
+                  return 'Metas offline — abra quando o banco voltar'
+                }
+                if (!data.consolidated.goalsConfigured) {
+                  return `${brLabel} · ${igLabel} — defina meta e capacidade`
+                }
+                return `${brLabel} · ${igLabel}`
+              })()}
             </p>
           </div>
         </div>

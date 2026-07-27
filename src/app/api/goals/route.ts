@@ -34,6 +34,18 @@ export async function PUT(req: Request) {
 
   try {
     const sql = getSql(config.databaseUrl)
+    try {
+      await sql`select 1 as ok`
+    } catch (probeErr) {
+      return NextResponse.json(
+        {
+          error: `DB da unidade inacessível: ${
+            probeErr instanceof Error ? probeErr.message : String(probeErr)
+          }`,
+        },
+        { status: 503 },
+      )
+    }
     const goals = await writeGoalsToDb(sql, dailyGoal, capacity)
     return NextResponse.json({
       data: {

@@ -7,6 +7,11 @@ import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
 const SEV = { critical: 0, warning: 1, info: 2 }
 
+/** Unidade com movimento no dia — evita tratar domingo fechado / pré-abertura como crise de vagas/meta. */
+function isSalonActiveToday(u: UnitSnapshot): boolean {
+  return u.today.revenue > 0 || u.today.appointments > 0 || u.today.attended > 0
+}
+
 function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
   const brasilLive = units.find((u) => u.unit.slug === 'rom-brasil' && !u.sync.offline)
   const iguatemiLive = units.find((u) => u.unit.slug === 'rom-iguatemi' && !u.sync.offline)
@@ -32,12 +37,7 @@ function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
 }
 
 /** Uma lista só: o que o Waltter deve fazer agora. */
-function buildNextActions(
-  units: UnitSnapshot[],
-  todayGoal: number,
-  todayRevenue: number,
-  goalsConfigured: boolean,
-): AlertItem[] {
+function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): AlertItem[] {
   const actions: AlertItem[] = []
 
   if (!goalsConfigured) {
@@ -78,6 +78,7 @@ function buildNextActions(
     }
 
     const sparse =
+      u.sync.status === 'ok' &&
       u.today.revenue === 0 &&
       u.mtd.revenue === 0 &&
       u.today.attended === 0 &&
@@ -89,8 +90,8 @@ function buildNextActions(
         unit: u.unit.slug,
         title: `Dados financeiros fracos — ${u.unit.short}`,
         detail:
-          'Há conexão live, mas faturamento/atendidos estão zerados. Sync Avec precisa popular revenue/attended.',
-        action: 'Priorizar AVEC_API_TOKEN + sync full diário',
+          'Sync ok, mas faturamento/atendidos estão zerados no mês. Verificar sync full Avec.',
+        action: 'Priorizar sync full diário na unidade',
       })
     }
 
@@ -116,7 +117,12 @@ function buildNextActions(
       })
     }
 
-    if (u.today.capacitySet && u.opsToday.openSlotsNext2h >= 2) {
+    // Só alerta vagas se a unidade está em operação hoje (evita domingo fechado = “227 vagas”).
+    if (
+      isSalonActiveToday(u) &&
+      u.today.capacitySet &&
+      u.opsToday.openSlotsNext2h >= 2
+    ) {
       actions.push({
         id: `slots-${u.unit.slug}`,
         severity: 'info',
@@ -127,16 +133,24 @@ function buildNextActions(
       })
     }
 
-    if (u.opsWeek.reactivationCount >= 10) {
+    // 5.000+ = teto Avec — útil como info, não como “reativar 5000”.
+    // Contagens reais só abaixo do teto.
+    if (u.opsWeek.reactivationCount >= 5000) {
+      actions.push({
+        id: `react-cap-${u.unit.slug}`,
+        severity: 'info',
+        unit: u.unit.slug,
+        title: `Sem retorno (lista cheia) — ${u.unit.short}`,
+        detail: '5.000+ sem retorno (90d) · paginação Avec truncada',
+        action: 'Tratar lista no ROM Contatos / campanha',
+      })
+    } else if (u.opsWeek.reactivationCount >= 50) {
       actions.push({
         id: `react-${u.unit.slug}`,
         severity: 'info',
         unit: u.unit.slug,
         title: `Sem retorno — ${u.unit.short}`,
-        detail:
-          u.opsWeek.reactivationCount >= 5000
-            ? '5.000+ sem retorno (90d · lista Avec truncada)'
-            : `${u.opsWeek.reactivationCount} sem retorno (90d)`,
+        detail: `${u.opsWeek.reactivationCount} sem retorno (90d)`,
         action: 'Lista WhatsApp / campanha de retorno',
       })
     }
@@ -197,15 +211,24 @@ function buildNextActions(
     }
   }
 
-  if (goalsConfigured) {
-    const gap = Math.max(0, todayGoal - todayRevenue)
+  // Meta do dia: só unidades em operação (não soma meta de salão fechado).
+  const active = units.filter(isSalonActiveToday)
+  if (active.length > 0 && active.every((u) => u.today.goalSet)) {
+    const activeGoal = active.reduce((a, u) => a + u.today.dailyGoal, 0)
+    const activeRevenue = active.reduce((a, u) => a + u.today.revenue, 0)
+    const gap = Math.max(0, activeGoal - activeRevenue)
     if (gap > 500) {
+      const who =
+        active.length === 1 ? active[0]!.unit.slug : ('both' as const)
       actions.push({
         id: 'goal-gap',
         severity: 'info',
-        unit: 'both',
-        title: 'Meta do dia em aberto',
-        detail: `Faltam R$ ${Math.round(gap).toLocaleString('pt-BR')}`,
+        unit: who,
+        title:
+          active.length === 1
+            ? `Meta do dia em aberto — ${active[0]!.unit.short}`
+            : 'Meta do dia em aberto',
+        detail: `Faltam R$ ${Math.round(gap).toLocaleString('pt-BR')} (só unidades em operação)`,
         action: 'Vagas + upsell nos restantes',
       })
     }
@@ -234,32 +257,40 @@ function sortNextActions(actions: AlertItem[]): AlertItem[] {
 }
 
 function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
+  const active = units.filter(isSalonActiveToday)
+  /** Meta/vagas do dia: unidades em operação; se nenhuma abriu ainda, usa todas com capacidade. */
+  const dayOps = active.length > 0 ? active : units.filter((u) => u.today.capacitySet)
+
   const todayRevenue = units.reduce((a, u) => a + u.today.revenue, 0)
-  const todayGoal = units.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
+  const todayGoal = dayOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
   const goalsConfigured = units.every((u) => u.today.goalSet)
   const mtdRevenue = units.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdGoal = units.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
   const attended = units.reduce((a, u) => a + u.today.attended, 0)
   const appointments = units.reduce((a, u) => a + u.today.appointments, 0)
   const noShows = units.reduce((a, u) => a + u.today.noShows, 0)
-  const capacity = units.reduce((a, u) => a + (u.today.capacitySet ? u.today.capacity : 0), 0)
-  const occupancyConfigured = units.every((u) => u.today.capacitySet)
+  const capacity = dayOps.reduce((a, u) => a + (u.today.capacitySet ? u.today.capacity : 0), 0)
+  const occupancyConfigured = dayOps.length > 0 && dayOps.every((u) => u.today.capacitySet)
   const newClients = units.reduce((a, u) => a + u.today.newClients, 0)
   const returningClients = units.reduce((a, u) => a + u.today.returningClients, 0)
   const leads = units.reduce((a, u) => a + u.today.leads, 0)
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
   const mixBase = newClients + returningClients
-  const cmv = units.reduce((a, u) => a + u.opsFinance.cmv, 0)
+  const cmvKnownUnits = units.filter((u) => u.opsFinance.cmvKnown)
+  const cmv = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.cmv, 0)
+  const cmvMtd = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.mtdRevenue, 0)
   const stockValue = units.reduce((a, u) => a + (u.opsStock.available ? u.opsStock.totalValue : 0), 0)
   const stockAlerts = units.reduce(
     (a, u) => a + (u.opsStock.available ? u.opsStock.activeAlerts : 0),
     0,
   )
+  const dayRevenue = dayOps.reduce((a, u) => a + u.today.revenue, 0)
 
   return {
     todayRevenue,
     todayGoal,
-    todayGoalProgress: goalsConfigured ? rate(todayRevenue, todayGoal) : 0,
+    todayGoalProgress:
+      goalsConfigured && todayGoal > 0 ? rate(dayRevenue, todayGoal) : 0,
     goalsConfigured,
     mtdRevenue,
     mtdGoal,
@@ -273,13 +304,13 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     newClients,
     returningClients,
     conversionRate: rate(converted, leads),
-    openSlotsToday: units.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
-    openSlotsNext2h: units.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
+    openSlotsToday: dayOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
+    openSlotsNext2h: dayOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
     cancelledToday: units.reduce((a, u) => a + u.today.cancelled, 0),
     noShowsToday: noShows,
     newShare: mixBase > 0 ? newClients / mixBase : 0,
     cmv,
-    cmvShare: mtdRevenue > 0 ? cmv / mtdRevenue : null,
+    cmvShare: cmvKnownUnits.length > 0 && cmvMtd > 0 ? cmv / cmvMtd : null,
     stockValue,
     stockAlerts,
   }
@@ -345,7 +376,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
   const configs = getUnitConfigs()
   const configured = configs.filter((c) => c.databaseUrl)
   if (configured.length === 0) {
-    throw new Error('Nenhuma NEON_*_DATABASE_URL configurada')
+    throw new Error('Nenhuma DATABASE_URL de unidade configurada (ou Brasil ainda em Neon)')
   }
 
   const settled = await Promise.allSettled(configured.map((c) => fetchLiveUnit(c)))
@@ -378,14 +409,19 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
     if (liveBySlug.has(cfg.meta.slug)) continue
     const detail = cfg.databaseUrl
       ? 'Sem resposta'
-      : 'NEON_*_DATABASE_URL ausente'
+      : cfg.meta.slug === 'rom-brasil'
+        ? 'URL Brasil ausente ou ainda aponta para Neon (use pooler Supabase)'
+        : 'NEON_IGUATEMI_DATABASE_URL ausente'
     fetchErrors.push({
       id: `missing-${cfg.meta.slug}`,
       severity: 'critical',
       unit: cfg.meta.slug,
       title: `Unidade ausente — ${cfg.meta.name}`,
       detail,
-      action: 'Completar connection string na Vercel',
+      action:
+        cfg.meta.slug === 'rom-brasil'
+          ? 'NEON_BRASIL_DATABASE_URL = pooler Supabase na Vercel'
+          : 'Completar NEON_IGUATEMI_DATABASE_URL na Vercel',
     })
     liveBySlug.set(cfg.meta.slug, offlineUnitSnapshot(cfg.meta, detail))
   }
@@ -405,12 +441,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
 
   const nextActions = [
     ...fetchErrors,
-    ...buildNextActions(
-      liveUnits,
-      consolidated.todayGoal,
-      consolidated.todayRevenue,
-      consolidated.goalsConfigured,
-    ),
+    ...buildNextActions(liveUnits, consolidated.goalsConfigured),
   ]
   if (liveUnits.length < 2) {
     nextActions.unshift({
@@ -419,7 +450,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
       unit: 'both',
       title: 'Consolidado parcial',
       detail: `Só ${liveUnits[0]?.unit.short ?? 'uma unidade'} ao vivo — a outra está no painel como offline`,
-      action: 'Completar NEON_*_DATABASE_URL',
+      action: 'Completar DATABASE_URL (Brasil=Supabase, Iguatemi=Neon)',
     })
   }
 
@@ -453,18 +484,18 @@ export async function buildOverview(): Promise<CerebroOverview> {
     if (isProd) {
       return {
         ...degradedOverview(
-          'NEON_*_DATABASE_URL ausente em produção',
-          'Configurar connection strings na Vercel',
-          'no-neon',
+          'DATABASE_URL das unidades ausente em produção (Brasil=Supabase, Iguatemi=Neon)',
+          'Configurar NEON_BRASIL_DATABASE_URL (Supabase) e NEON_IGUATEMI_DATABASE_URL na Vercel',
+          'no-unit-db',
         ),
         nextActions: [
           {
-            id: 'no-neon',
+            id: 'no-unit-db',
             severity: 'critical',
             unit: 'both',
             title: 'DBs das unidades não configurados',
-            detail: 'NEON_*_DATABASE_URL ausente em produção',
-            action: 'Configurar connection strings na Vercel',
+            detail: 'Connection strings ausentes ou Brasil ainda em Neon',
+            action: 'Configurar URLs na Vercel (Brasil=pooler Supabase)',
           },
         ],
       }
