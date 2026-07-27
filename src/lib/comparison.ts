@@ -1,5 +1,5 @@
 import { clamp01 } from './format'
-import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail } from './salon-day'
+import { hasTrustedAgenda, isSalonActiveToday, isUnitReadable } from './salon-day'
 import type { ComparisonRow, UnitComparison, UnitSnapshot } from './types'
 
 /** Compartilhado entre live (overview.ts) e mock (mock-overview.ts). */
@@ -46,7 +46,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
 
   /** Offline ou sync error (token) → null (não R$ 0 / MTD fantasma no scorecard). */
   const live = (u: UnitSnapshot, v: number | null | undefined): number | null => {
-    if (u.sync.offline || isSyncHardFail(u)) return null
+    if (!isUnitReadable(u)) return null
     if (v == null || !Number.isFinite(v)) return null
     return v
   }
@@ -79,7 +79,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       : Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
 
   const paymentGap = (u: UnitSnapshot): number | null => {
-    if (u.sync.offline || isSyncHardFail(u) || !u.opsFinance.paymentsKnown) return null
+    if (!isUnitReadable(u) || !u.opsFinance.paymentsKnown) return null
     if (u.opsFinance.paymentReconcile === 'unknown') return null
     if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
       return null
@@ -88,7 +88,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   }
 
   const reconcileLabel = (u: UnitSnapshot): string | null => {
-    if (u.sync.offline || isSyncHardFail(u) || !u.opsFinance.paymentsKnown) return null
+    if (!isUnitReadable(u) || !u.opsFinance.paymentsKnown) return null
     switch (u.opsFinance.paymentReconcile) {
       case 'aligned':
         return 'Ok'
@@ -257,8 +257,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       group: 'financeiro',
       brasil: null,
       iguatemi: null,
-      brasilText: brasil.sync.offline ? null : brasil.opsFinance.topPaymentMethod,
-      iguatemiText: iguatemi.sync.offline ? null : iguatemi.opsFinance.topPaymentMethod,
+      brasilText: isUnitReadable(brasil) ? brasil.opsFinance.topPaymentMethod : null,
+      iguatemiText: isUnitReadable(iguatemi) ? iguatemi.opsFinance.topPaymentMethod : null,
       format: 'text',
       higherIsBetter: true,
       deltaPct: null,
@@ -268,9 +268,9 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Valor em estoque',
       group: 'estoque',
       brasil:
-        !brasil.sync.offline && brasil.opsStock.available ? brasil.opsStock.totalValue : null,
+        isUnitReadable(brasil) && brasil.opsStock.available ? brasil.opsStock.totalValue : null,
       iguatemi:
-        !iguatemi.sync.offline && iguatemi.opsStock.available
+        isUnitReadable(iguatemi) && iguatemi.opsStock.available
           ? iguatemi.opsStock.totalValue
           : null,
       format: 'currency',
@@ -281,9 +281,9 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Alertas estoque',
       group: 'estoque',
       brasil:
-        !brasil.sync.offline && brasil.opsStock.available ? brasil.opsStock.activeAlerts : null,
+        isUnitReadable(brasil) && brasil.opsStock.available ? brasil.opsStock.activeAlerts : null,
       iguatemi:
-        !iguatemi.sync.offline && iguatemi.opsStock.available
+        isUnitReadable(iguatemi) && iguatemi.opsStock.available
           ? iguatemi.opsStock.activeAlerts
           : null,
       format: 'number',
@@ -294,9 +294,9 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'SKUs zerados',
       group: 'estoque',
       brasil:
-        !brasil.sync.offline && brasil.opsStock.available ? brasil.opsStock.zeroProducts : null,
+        isUnitReadable(brasil) && brasil.opsStock.available ? brasil.opsStock.zeroProducts : null,
       iguatemi:
-        !iguatemi.sync.offline && iguatemi.opsStock.available
+        isUnitReadable(iguatemi) && iguatemi.opsStock.available
           ? iguatemi.opsStock.zeroProducts
           : null,
       format: 'number',
@@ -305,7 +305,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   ]
 
   const deltaRevenuePct =
-    brasil.sync.offline || iguatemi.sync.offline
+    !isUnitReadable(brasil) || !isUnitReadable(iguatemi)
       ? null
       : deltaRelative(brasil.mtd.revenue, iguatemi.mtd.revenue)
 

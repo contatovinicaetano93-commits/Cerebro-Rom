@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import { hasTrustedAgenda, isSalonActiveToday } from '@/lib/salon-day'
+import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail } from '@/lib/salon-day'
 import type { CerebroOverview, ComparisonRow, UnitSnapshot } from '@/lib/types'
 import type { ReportRunDetail } from '@/lib/reports/store'
 
@@ -324,8 +324,9 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
   ]
   const rows = o.units.map((u) => {
     const offline = Boolean(u.sync.offline)
+    const hardFail = !offline && isSyncHardFail(u)
     const active = !offline && isSalonActiveToday(u)
-    if (offline) {
+    if (offline || hardFail) {
       return [
         u.unit.short,
         u.today.day,
@@ -351,7 +352,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
         '—',
         '—',
         '—',
-        u.sync.label || 'offline',
+        u.sync.label || (offline ? 'offline' : 'sync error'),
       ]
     }
     return [

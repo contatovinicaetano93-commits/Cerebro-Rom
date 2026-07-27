@@ -257,8 +257,9 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     // client_services no ROM pode estar incompleto vs Avec (metrics).
     // Nunca deixar appointments < attended (quebra comparecimento/vagas).
     if (scheduled >= attended && scheduled > 0) {
-      // Live coerente: usa live, mas se metrics é bem maior e também coerente, prefer metrics.
-      if (metricAppt >= attended && metricAppt > scheduled * 2) {
+      // Live coerente: usa CS. Se metrics Avec tem mais agenda (mesmo lag leve), prefer metrics
+      // — no-shows/cancel vêm de metrics; CS incompleto distorce comparecimento/vagas/2h.
+      if (metricAppt >= attended && metricAppt > scheduled) {
         todayMetrics.appointments = metricAppt
         trustCsForNext2h = false
       } else {

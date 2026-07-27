@@ -1,7 +1,7 @@
 import { getCerebroSql, isCerebroDbConfigured, type Sql } from '@/lib/db'
 import type { CerebroOverview, UnitSlug, UnitSnapshot } from '@/lib/types'
 import { rate } from '@/lib/comparison'
-import { hasTrustedAgenda, isSalonActiveToday } from '@/lib/salon-day'
+import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail } from '@/lib/salon-day'
 
 export interface ReportRunMeta {
   id: string
@@ -91,7 +91,10 @@ export async function ensureReportTables(sql?: Sql): Promise<void> {
 
 function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
   const offline = Boolean(u.sync.offline)
-  const active = !offline && isSalonActiveToday(u)
+  const hardFail = !offline && isSyncHardFail(u)
+  /** Offline ou token morto: não persistir dinheiro/rolling como se fossem reais. */
+  const blankMoney = offline || hardFail
+  const active = !blankMoney && isSalonActiveToday(u)
   const trusted = active && hasTrustedAgenda(u)
 
   const occupancy =
@@ -114,7 +117,7 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
     unit_slug: u.unit.slug as UnitSlug,
     unit_short: u.unit.short,
     day: u.today.day,
-    revenue_today: offline ? 0 : u.today.revenue,
+    revenue_today: blankMoney ? 0 : u.today.revenue,
     appointments: !active ? 0 : u.today.appointments,
     attended: !active ? 0 : u.today.attended,
     no_shows: !active ? 0 : u.today.noShows,
@@ -130,19 +133,19 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
     open_slots_today: trusted && u.today.capacitySet ? u.opsToday.openSlotsToday : 0,
     open_slots_next_2h:
       trusted && u.opsToday.slotsNext2hKnown ? u.opsToday.openSlotsNext2h : 0,
-    mtd_revenue: offline ? 0 : u.opsFinance.mtdRevenue,
-    mtd_attended: offline ? 0 : u.opsFinance.mtdAttended,
-    mtd_ticket_avg: offline ? 0 : u.opsFinance.mtdTicketAvg,
-    cmv: offline || !u.opsFinance.cmvKnown ? 0 : u.opsFinance.cmv,
-    cmv_share: offline || !u.opsFinance.cmvKnown ? null : u.opsFinance.cmvShare,
-    payments_total: offline || !u.opsFinance.paymentsKnown ? 0 : u.opsFinance.paymentsTotal,
-    payment_reconcile: offline ? null : u.opsFinance.paymentReconcile,
-    top_payment_method: offline ? null : u.opsFinance.topPaymentMethod,
-    packages_revenue: offline ? 0 : u.opsCommerce.packagesRevenue,
-    return_rate: offline ? null : u.opsWeek.returnRate,
-    stock_value: offline || !u.opsStock.available ? 0 : u.opsStock.totalValue,
-    stock_alerts: offline || !u.opsStock.available ? 0 : u.opsStock.activeAlerts,
-    stock_zero: offline || !u.opsStock.available ? 0 : u.opsStock.zeroProducts,
+    mtd_revenue: blankMoney ? 0 : u.opsFinance.mtdRevenue,
+    mtd_attended: blankMoney ? 0 : u.opsFinance.mtdAttended,
+    mtd_ticket_avg: blankMoney ? 0 : u.opsFinance.mtdTicketAvg,
+    cmv: blankMoney || !u.opsFinance.cmvKnown ? 0 : u.opsFinance.cmv,
+    cmv_share: blankMoney || !u.opsFinance.cmvKnown ? null : u.opsFinance.cmvShare,
+    payments_total: blankMoney || !u.opsFinance.paymentsKnown ? 0 : u.opsFinance.paymentsTotal,
+    payment_reconcile: blankMoney ? null : u.opsFinance.paymentReconcile,
+    top_payment_method: blankMoney ? null : u.opsFinance.topPaymentMethod,
+    packages_revenue: blankMoney ? 0 : u.opsCommerce.packagesRevenue,
+    return_rate: blankMoney ? null : u.opsWeek.returnRate,
+    stock_value: blankMoney || !u.opsStock.available ? 0 : u.opsStock.totalValue,
+    stock_alerts: blankMoney || !u.opsStock.available ? 0 : u.opsStock.activeAlerts,
+    stock_zero: blankMoney || !u.opsStock.available ? 0 : u.opsStock.zeroProducts,
     sync_status: u.sync.status,
     sync_label: u.sync.label,
   }

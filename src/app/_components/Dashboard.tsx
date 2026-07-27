@@ -27,7 +27,7 @@ import {
   formatPct,
   formatSignedPct,
 } from '@/lib/format'
-import { hasTrustedAgenda, isDayOperable, isSalonActiveToday } from '@/lib/salon-day'
+import { hasTrustedAgenda, isDayOperable, isSalonActiveToday, isSyncHardFail } from '@/lib/salon-day'
 import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
@@ -497,6 +497,7 @@ export function Dashboard({
                 const u = unitForHoje(data.units, slug)
                 const label = u?.unit.short ?? HOJE_UNIT_LABEL[slug]
                 const offline = !u || Boolean(u.sync.offline)
+                const hardFail = Boolean(u && !offline && isSyncHardFail(u))
                 const syncBad =
                   !offline &&
                   (u.sync.status === 'error' ||
@@ -510,7 +511,8 @@ export function Dashboard({
                 const operable = !offline && isDayOperable(u)
                 const trustedAgenda = !offline && hasTrustedAgenda(u)
                 const quiet = !offline && !syncBad && !active
-                const revenue = offline ? dash : formatCurrency(u.today.revenue)
+                // Token morto: chip Sync + números — (não inventar R$0 / receita fantasma).
+                const revenue = offline || hardFail ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
                   offline || !u.today.capacitySet
                     ? dash
@@ -664,8 +666,10 @@ export function Dashboard({
               {data.units.map((u) => {
                 const w = u.opsWeek
                 const offline = Boolean(u.sync.offline)
+                const hardFail = !offline && isSyncHardFail(u)
+                const unreadable = offline || hardFail
                 const empty =
-                  !offline &&
+                  !unreadable &&
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
                   (w.returnRate == null || w.returnRate === 0) &&
@@ -688,11 +692,17 @@ export function Dashboard({
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Offline
                         </span>
+                      ) : hardFail ? (
+                        <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
+                          Sync
+                        </span>
                       ) : null}
                     </div>
-                    {offline ? (
+                    {unreadable ? (
                       <p className="mt-3 text-sm text-muted">
-                        Unidade offline — sem ranking/retorno desta base.
+                        {offline
+                          ? 'Unidade offline — sem ranking/retorno desta base.'
+                          : 'Sync quebrado — sem ranking/retorno desta base.'}
                       </p>
                     ) : empty ? (
                       <p className="mt-3 text-sm text-muted">Sem dados — sync full + token Avec.</p>
@@ -737,8 +747,10 @@ export function Dashboard({
               {data.units.map((u) => {
                 const co = u.opsCommerce
                 const offline = Boolean(u.sync.offline)
+                const hardFail = !offline && isSyncHardFail(u)
+                const unreadable = offline || hardFail
                 const empty =
-                  !offline &&
+                  !unreadable &&
                   co.bookingChannels.length === 0 &&
                   co.packages.length === 0 &&
                   co.ratingsCount === 0
@@ -755,11 +767,17 @@ export function Dashboard({
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Offline
                         </span>
+                      ) : hardFail ? (
+                        <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
+                          Sync
+                        </span>
                       ) : null}
                     </div>
-                    {offline ? (
+                    {unreadable ? (
                       <p className="mt-3 text-sm text-muted">
-                        Unidade offline — sem canais/pacotes desta base.
+                        {offline
+                          ? 'Unidade offline — sem canais/pacotes desta base.'
+                          : 'Sync quebrado — sem canais/pacotes desta base.'}
                       </p>
                     ) : empty ? (
                       <p className="mt-3 text-sm text-muted">

@@ -24,6 +24,14 @@ export function isSyncHardFail(u: UnitSnapshot): boolean {
   return !u.sync.offline && u.sync.status === 'error'
 }
 
+/**
+ * Unidade legível para totais de rede / painel / export.
+ * Offline ou token morto → não soma, não compara, não imprime como dinheiro real.
+ */
+export function isUnitReadable(u: UnitSnapshot): boolean {
+  return !u.sync.offline && !isSyncHardFail(u)
+}
+
 /** Dados do dia usáveis para alertas operacionais (encaixe, cancel, vagas). */
 export function isDayOperable(u: UnitSnapshot): boolean {
   return !u.sync.offline && !isSyncHardFail(u) && isSalonActiveToday(u)
