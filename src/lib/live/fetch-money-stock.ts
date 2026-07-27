@@ -140,8 +140,8 @@ export async function fetchOpsFinance(
           and (sm.occurred_at at time zone 'America/Sao_Paulo')::date <= ${today}::date
       `) as { cmv: number; n: number }[]
       cmv = Math.round(n(rows[0]?.cmv) * 100) / 100
-      // Sem saídas no período → unknown (não pintar CMV 0% como “saudável”).
-      cmvOk = n(rows[0]?.n) > 0
+      // Sem saídas OU saídas sem custo → unknown (não pintar CMV R$0 / 0% como saudável).
+      cmvOk = n(rows[0]?.n) > 0 && cmv > 0
     } catch {
       cmv = 0
     }
@@ -170,7 +170,6 @@ export async function fetchOpsFinance(
           byMethod.set(method, (byMethod.get(method) ?? 0) + n(rec.amount))
         }
       }
-      mixOk = rows.length > 0
       for (const [method, amount] of byMethod) {
         paymentsTotal += amount
         if (topPaymentMethod == null || amount > (byMethod.get(topPaymentMethod) ?? 0)) {
@@ -178,6 +177,8 @@ export async function fetchOpsFinance(
         }
       }
       paymentsTotal = Math.round(paymentsTotal * 100) / 100
+      // Linhas P2 sem payment_mix → unknown (não inventar Gap 0081 ≈ −MTD).
+      mixOk = byMethod.size > 0
     } catch {
       // ok
     }
@@ -237,6 +238,13 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
     }
 
     const localTotal = Math.round(n(totals[0]?.total_value) * 100) / 100
+    const productCount = n(totals[0]?.product_count)
+    const zeroProducts = n(totals[0]?.zero_products)
+    // Tabela vazia (só schema) ≠ posição sincronizada — não pintar estoque R$0 conhecido.
+    if (productCount <= 0 && activeAlerts <= 0 && localTotal <= 0) {
+      return { ...EMPTY_OPS_STOCK }
+    }
+
     const official = await fetchOfficialStockTotal(sql)
     const drift =
       official != null ? Math.round((localTotal - official) * 100) / 100 : null
@@ -244,9 +252,9 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
     return {
       available: true,
       totalValue: localTotal,
-      productCount: n(totals[0]?.product_count),
+      productCount,
       activeAlerts,
-      zeroProducts: n(totals[0]?.zero_products),
+      zeroProducts,
       drift,
     }
   } catch {

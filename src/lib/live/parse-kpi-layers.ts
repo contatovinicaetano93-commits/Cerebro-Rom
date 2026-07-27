@@ -266,7 +266,8 @@ export async function fetchOpsWeek(sql: Sql, today: string): Promise<OpsWeek> {
     acquisition: parseAcquisition(p1?.acquisition),
     reactivationCount: p1 == null || p1.reactivation_count == null ? null : n(p1.reactivation_count),
     returnRate: p3?.return_rate == null ? null : n(p3.return_rate),
-    newClientsPeriod: p3 == null ? null : n(p3.new_clients_period),
+    newClientsPeriod:
+      p3 == null || p3.new_clients_period == null ? null : n(p3.new_clients_period),
   }
 }
 
@@ -285,13 +286,15 @@ export async function fetchOpsCommerce(sql: Sql, today: string): Promise<OpsComm
     .filter((x): x is OpsCommerce['packages'][number] => x != null)
   const packages = packagesAll.slice(0, 5)
   const packagesRevenue = packagesAll.reduce((a, p) => a + p.revenue, 0)
+  // P2 pode ser só payment_mix / canais — não inventar “0 pacotes” sem coluna/lista.
+  const packagesKnown = p2.packages_sold != null || packagesAll.length > 0
 
   return {
     bookingChannels,
     packages,
-    packagesSold: n(p2.packages_sold),
-    packagesRevenue,
-    packagesKnown: true,
+    packagesSold: packagesKnown ? n(p2.packages_sold) : 0,
+    packagesRevenue: packagesKnown ? packagesRevenue : 0,
+    packagesKnown,
     ratingsAvg: n(p2.ratings_avg),
     ratingsCount: n(p2.ratings_count),
     birthdayCount: n(p2.birthday_count),
