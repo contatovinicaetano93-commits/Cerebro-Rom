@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
- * Fail if unit DATABASE_URL envs point at Neon (dead/quota).
- * Brasil + Iguatemi must use Supabase pooler (*.supabase.com).
- * Env names NEON_* are legacy; values must be Supabase.
+ * Fail if unit DATABASE_URL envs are not Supabase pooler.
+ * Env names NEON_* are legacy; values must be aws-*.pooler.supabase.com.
  *
  * Usage:
  *   NEON_BRASIL_DATABASE_URL=... NEON_IGUATEMI_DATABASE_URL=... node scripts/check-brasil-db-host.mjs
@@ -29,14 +28,14 @@ function check(label, envName) {
     console.error(
       '  Use Supabase pooler (aws-*.pooler.supabase.com:5432 session or :6543 tx), ssl require, prepare:false.',
     )
-    console.error(`  (Env var name ${envName} is legacy; value must be Supabase.)`)
     return 1
   }
 
-  if (!/supabase\.com$/i.test(host) && !/\.supabase\.com$/i.test(host)) {
-    console.warn(
-      `check-db-host WARN: ${label} host ${host} is not *.supabase.com — confirm intentional.`,
+  if (!/\.pooler\.supabase\.com$/i.test(host)) {
+    console.error(
+      `check-db-host FAILED: ${envName} host=${host} — require *.pooler.supabase.com (not db.*.supabase.co).`,
     )
+    return 1
   }
 
   console.log(`check-db-host OK: ${label} host=${host}`)

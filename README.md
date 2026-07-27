@@ -74,7 +74,7 @@ Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergê
 
 ## Stack
 
-Next.js (App Router) + TypeScript + Tailwind + Recharts + `@neondatabase/serverless`.
+Next.js (App Router) + TypeScript + Tailwind + Recharts + `postgres` (postgres.js).
 
 ## Pastas
 
@@ -86,6 +86,6 @@ Next.js (App Router) + TypeScript + Tailwind + Recharts + `@neondatabase/serverl
 
 ## Nota sobre dados atuais
 
-Enquanto o **AVEC_API_TOKEN** não chegar, o painel live mostra o que já existe no Neon
-(agenda/contatos) e alertas de “aguardando token”.  
+Unidades = Supabase pooler. Snapshots do Cérebro podem usar Neon próprio (`CEREBRO_DATABASE_URL`).
+Sem token Avec na unidade, o painel mostra sync incompleto / base sem métricas — não inventa KPI.
 Guia: [`docs/quando-token-avec.md`](docs/quando-token-avec.md).

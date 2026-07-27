@@ -39,8 +39,9 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 # Brasil: npm run check:brasil-db-host
 AVEC_MOCK=1 npm run dev
 # Admin → Rodar sync full
-# Cérebro local: NEON_*_DATABASE_URL apontando pro mesmo Neon
+# Cérebro local: NEON_*_DATABASE_URL = mesmos poolers Supabase das unidades
 ```
+
 
 ## Segunda — webhooks (antes do token)
 
@@ -52,7 +53,7 @@ Conferir readiness (admin logado):
 
 - ROM Brasil: `GET /api/health` → `readiness.cron_ready`, `webhook_ready`, `avec.kpi_layers`
 - ROM Iguatemi: idem — hoje `last_full` provavelmente null
-- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. Com sessão: unidades Neon conectadas
+- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. Com sessão: BR+IG Supabase `connected`
 
 | Unidade | URL webhook | Header |
 |---------|-------------|--------|

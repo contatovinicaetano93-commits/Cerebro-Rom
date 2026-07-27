@@ -7,6 +7,7 @@ import { evictSql } from '@/lib/db'
 import {
   hasTrustedAgenda,
   isDayOperable,
+  isMetricsHollow,
   isSalonActiveToday,
   isSyncHardFail,
   isUnitReadable,
@@ -144,21 +145,15 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    const sparse =
-      u.sync.status === 'ok' &&
-      u.today.revenue === 0 &&
-      u.mtd.revenue === 0 &&
-      u.today.attended === 0 &&
-      u.mtd.attended === 0
-    if (sparse) {
+    if (isMetricsHollow(u)) {
       actions.push({
         id: `sparse-${u.unit.slug}`,
-        severity: 'info',
+        severity: 'warning',
         unit: u.unit.slug,
-        title: `Dados financeiros fracos — ${u.unit.short}`,
+        title: `Base sem métricas — ${u.unit.short}`,
         detail:
-          'Sync ok, mas faturamento/atendidos estão zerados no mês. Verificar sync full Avec.',
-        action: 'Priorizar sync full diário na unidade',
+          'DB conectado, mas sem histórico de faturamento/atendidos (MTD + 30d). Típico pós-cutover ou sync sem popular salon_daily_metrics.',
+        action: 'Rodar sync full Avec na unidade e validar schema/migrations',
       })
     }
 
@@ -536,17 +531,28 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       liveBySlug.set(cfg.meta.slug, result.value)
     } else {
       const detail = String(result.reason?.message ?? result.reason)
+      const schemaGap = /schema incompleto|does not exist|undefined_table|salon_daily_metrics/i.test(
+        detail,
+      )
       fetchErrors.push({
         id: `fetch-${cfg.meta.slug}`,
         severity: 'critical',
         unit: cfg.meta.slug,
-        title: `DB offline — ${cfg.meta.name}`,
+        title: schemaGap
+          ? `Schema incompleto — ${cfg.meta.name}`
+          : `DB offline — ${cfg.meta.name}`,
         detail,
-        action: 'Validar connection string',
+        action: schemaGap
+          ? 'Rodar migrations / schema.sql na unidade (Supabase)'
+          : 'Validar connection string (pooler Supabase)',
       })
       liveBySlug.set(
         cfg.meta.slug,
-        offlineUnitSnapshot(cfg.meta, `Offline — ${detail.slice(0, 80)}`, day),
+        offlineUnitSnapshot(
+          cfg.meta,
+          `${schemaGap ? 'Schema' : 'Offline'} — ${detail.slice(0, 80)}`,
+          day,
+        ),
       )
     }
   })
@@ -603,8 +609,15 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
 
   const syncHardFail = units.some(isSyncHardFail)
   const syncPartial = units.some((u) => !u.sync.offline && u.sync.status === 'partial')
+  const unreadable = units.some((u) => !isUnitReadable(u))
+  const hollowMetrics = units.some((u) => isMetricsHollow(u))
   const partial =
-    liveUnits.length < 2 || fetchErrors.length > 0 || syncHardFail || syncPartial
+    liveUnits.length < 2 ||
+    fetchErrors.length > 0 ||
+    syncHardFail ||
+    syncPartial ||
+    unreadable ||
+    hollowMetrics
 
   const histNote = isHistorical ? ' · MTD até a data' : ''
   return {
@@ -616,7 +629,11 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
         ? `Live parcial · sync com erro · ${day}${histNote}`
         : syncPartial
           ? `Live parcial · sync incompleto · ${day}${histNote}`
-          : `Live parcial · ${day}${histNote}`
+          : hollowMetrics
+            ? `Live parcial · base sem métricas · ${day}${histNote}`
+            : unreadable
+              ? `Live parcial · unidade ilegível · ${day}${histNote}`
+              : `Live parcial · ${day}${histNote}`
       : `Live · ${day}${histNote}`,
     consolidated,
     units,

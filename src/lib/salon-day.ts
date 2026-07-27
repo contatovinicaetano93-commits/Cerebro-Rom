@@ -55,3 +55,16 @@ export function trustsRollingKpis(u: UnitSnapshot): boolean {
   if (u.sync.offline) return false
   return u.sync.status === 'ok' || u.sync.status === 'partial' || u.sync.status === 'stale'
 }
+
+/**
+ * Base conectada mas sem histórico de métricas (ex.: Supabase novo pós-cutover).
+ * Não confundir com salão quieto/fechado no dia.
+ */
+export function isMetricsHollow(u: UnitSnapshot): boolean {
+  if (u.sync.offline || isSyncHardFail(u)) return false
+  if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return true
+  const last30Empty = (u.last30 ?? []).every(
+    (d) => d.revenue === 0 && d.attended === 0 && d.appointments === 0,
+  )
+  return u.mtd.revenue === 0 && u.mtd.attended === 0 && last30Empty
+}

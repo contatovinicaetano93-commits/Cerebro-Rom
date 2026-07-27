@@ -194,6 +194,17 @@ export async function fetchLiveUnit(
   const goals = resolveGoals(dbGoals, config.envGoals)
   const { dailyGoal, capacity, goalSet, capacitySet } = goals
 
+  {
+    const core = (await sql`
+      select to_regclass('public.salon_daily_metrics') is not null as ok
+    `) as { ok: boolean }[]
+    if (!core[0]?.ok) {
+      throw new Error(
+        `Schema incompleto — falta salon_daily_metrics em ${config.meta.name}. Rodar migrations na unidade.`,
+      )
+    }
+  }
+
   const metricRows = (await sql`
     select
       day::text as day,

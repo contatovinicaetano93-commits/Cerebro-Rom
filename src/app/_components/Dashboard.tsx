@@ -27,7 +27,14 @@ import {
   formatPct,
   formatSignedPct,
 } from '@/lib/format'
-import { hasTrustedAgenda, isDayOperable, isSalonActiveToday, isSyncHardFail, isUnitReadable } from '@/lib/salon-day'
+import {
+  hasTrustedAgenda,
+  isDayOperable,
+  isMetricsHollow,
+  isSalonActiveToday,
+  isSyncHardFail,
+  isUnitReadable,
+} from '@/lib/salon-day'
 import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
@@ -539,7 +546,8 @@ export function Dashboard({
                 const active = Boolean(u && readable && isSalonActiveToday(u))
                 const operable = Boolean(u && readable && isDayOperable(u))
                 const trustedAgenda = Boolean(u && readable && hasTrustedAgenda(u))
-                const quiet = readable && !syncBad && !active
+                const hollow = Boolean(u && isMetricsHollow(u))
+                const quiet = readable && !syncBad && !hollow && !active
                 // Never-sync / token morto: todos os KPIs do chip → — (não misturar ops com fat —).
                 const revenue = !u || !readable ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
@@ -580,11 +588,13 @@ export function Dashboard({
                         <p className="mt-0.5 text-[0.65rem] text-muted">
                           {offline
                             ? 'Sem dados ao vivo'
-                            : syncBad
-                              ? (u?.sync.label ?? 'Sync')
-                              : quiet
-                                ? 'Sem movimento hoje · salão quieto/fechado'
-                                : (u?.sync.label ?? '')}
+                            : hollow
+                              ? 'Sem histórico de métricas · sync/schema'
+                              : syncBad
+                                ? (u?.sync.label ?? 'Sync')
+                                : quiet
+                                  ? 'Sem movimento hoje · salão quieto/fechado'
+                                  : (u?.sync.label ?? '')}
                         </p>
                       </div>
                       {offline ? (
@@ -594,6 +604,10 @@ export function Dashboard({
                       ) : u?.sync.status === 'error' ? (
                         <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
                           Sync
+                        </span>
+                      ) : hollow ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Vazio
                         </span>
                       ) : u?.sync.status === 'partial' ? (
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
@@ -1047,7 +1061,7 @@ export function Dashboard({
           <p>
             Atualizado {formatDateTime(data.generatedAt)} ·{' '}
             {data.mode === 'live'
-              ? 'Brasil (Supabase) + Iguatemi (Neon) · KPIs Avec'
+              ? 'Brasil + Iguatemi (Supabase) · KPIs Avec'
               : data.mode === 'degraded'
                 ? 'Sem fallback fictício'
                 : 'Mock'}

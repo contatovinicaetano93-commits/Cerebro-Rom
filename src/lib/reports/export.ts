@@ -59,8 +59,10 @@ function modeLabel(mode: CerebroOverview['mode'], partial?: boolean, overview?: 
     const syncBad = overview?.units.some(
       (u) => !u.sync.offline && (u.sync.status === 'partial' || u.sync.status === 'error'),
     )
+    const unreadable = overview?.units.some((u) => !isUnitReadable(u))
     if (offline) return 'Live parcial (unidade offline)'
     if (syncBad) return 'Live parcial (sync incompleto)'
+    if (unreadable) return 'Live parcial (unidade ilegível)'
     return 'Live parcial'
   }
   if (mode === 'degraded') return 'Degradado — live indisponível (sem inventar número)'
