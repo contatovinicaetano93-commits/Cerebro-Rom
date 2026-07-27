@@ -189,7 +189,7 @@ export async function captureReportSnapshot(
       ${networkReadable ? overview.consolidated.todayRevenue : 0},
       ${networkReadable ? overview.consolidated.mtdRevenue : 0},
       ${networkReadable},
-      ${JSON.stringify(overview)}
+      ${overview}
     )
   `
 
@@ -303,7 +303,7 @@ export async function getReportRun(id: string): Promise<ReportRunDetail | null> 
     today_revenue: number
     mtd_revenue: number
     network_readable: boolean
-    payload: CerebroOverview
+    payload: unknown
   }[]
 
   const r = rows[0]
@@ -318,6 +318,33 @@ export async function getReportRun(id: string): Promise<ReportRunDetail | null> 
     todayRevenue: Number(r.today_revenue) || 0,
     mtdRevenue: Number(r.mtd_revenue) || 0,
     networkReadable: Boolean(r.network_readable),
-    payload: r.payload,
+    payload: normalizeReportPayload(r.payload),
   }
+}
+
+/** jsonb às vezes volta como string (insert com JSON.stringify). */
+function normalizeReportPayload(raw: unknown): CerebroOverview {
+  let value: unknown = raw
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value)
+    } catch {
+      throw new Error('Payload do relatório inválido (JSON)')
+    }
+  }
+  // Double-encode residual: string JSON ainda encapsulada.
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value)
+    } catch {
+      throw new Error('Payload do relatório inválido (JSON aninhado)')
+    }
+  }
+  if (!value || typeof value !== 'object' || !Array.isArray((value as CerebroOverview).units)) {
+    throw new Error('Payload do relatório sem unidades')
+  }
+  const o = value as CerebroOverview
+  if (!Array.isArray(o.nextActions)) o.nextActions = []
+  if (!Array.isArray(o.trend30)) o.trend30 = []
+  return o
 }
