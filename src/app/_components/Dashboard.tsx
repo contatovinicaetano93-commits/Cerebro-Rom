@@ -199,11 +199,13 @@ export function Dashboard({
   const c = data.consolidated
   const goalTone = !c.goalsConfigured
     ? 'warn'
-    : c.todayGoalProgress >= 1
-      ? 'good'
-      : c.todayGoalProgress >= 0.7
-        ? 'default'
-        : 'warn'
+    : !c.todayOpsActive
+      ? 'default'
+      : c.todayGoalProgress >= 1
+        ? 'good'
+        : c.todayGoalProgress >= 0.7
+          ? 'default'
+          : 'warn'
 
   const [openMap, setOpenMap] = useState(DEFAULT_OPEN)
   const allOpen = useMemo(
@@ -349,15 +351,17 @@ export function Dashboard({
               label="Faturamento hoje"
               value={formatCurrency(c.todayRevenue)}
               hint={
-                c.goalsConfigured
-                  ? `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
-                  : 'Defina as metas para acompanhar progresso'
+                !c.goalsConfigured
+                  ? 'Defina as metas para acompanhar progresso'
+                  : !c.todayOpsActive
+                    ? 'Sem unidades em operação hoje'
+                    : `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.faturamento}
               tone={goalTone}
             />
-            {c.goalsConfigured ? (
+            {c.goalsConfigured && c.todayOpsActive ? (
               <div className="mt-3">
                 <ProgressBar
                   value={c.todayGoalProgress}
@@ -372,12 +376,16 @@ export function Dashboard({
               value={
                 c.occupancyConfigured
                   ? `${formatPct(c.occupancyRate)} · ${formatPct(c.attendanceRate)}`
-                  : `— · ${formatPct(c.attendanceRate)}`
+                  : '— · —'
               }
-              hint={`No-show ${formatPct(c.noShowRate)} · risco ${formatCurrency(c.revenueAtRisk)}`}
+              hint={
+                c.occupancyConfigured
+                  ? `No-show ${formatPct(c.noShowRate)} · risco ${formatCurrency(c.revenueAtRisk)}`
+                  : 'Agenda do dia ainda não confiável / sem operação'
+              }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.ocupacao}
-              tone={c.noShowRate > 0.08 ? 'warn' : 'default'}
+              tone={c.occupancyConfigured && c.noShowRate > 0.08 ? 'warn' : 'default'}
             />
           </Panel>
           <Panel>
@@ -386,8 +394,8 @@ export function Dashboard({
               value={formatCurrency(c.mtdRevenue)}
               hint={
                 c.goalsConfigured
-                  ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.ticketAvg)}`
-                  : `Ticket ${formatCurrency(c.ticketAvg)} · CMV ${formatCurrency(c.cmv)}`
+                  ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.mtdTicketAvg)}`
+                  : `Ticket ${formatCurrency(c.mtdTicketAvg)} · CMV ${formatCurrency(c.cmv)}`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.mtd}
@@ -423,7 +431,7 @@ export function Dashboard({
               <KpiStat
                 label="Alertas estoque"
                 value={formatNumber(c.stockAlerts)}
-                tone={c.stockAlerts >= 3 ? 'warn' : 'default'}
+                tone={c.stockAlerts >= 200 ? 'default' : c.stockAlerts >= 3 ? 'warn' : 'default'}
                 source={sourceHint('Avec')}
                 legend={LEGEND.estoqueAlertas}
               />
@@ -498,18 +506,25 @@ export function Dashboard({
                   u.today.revenue === 0 &&
                   u.today.appointments === 0 &&
                   u.today.attended === 0
+                const agendaUnknown =
+                  !offline &&
+                  u.today.appointments === 0 &&
+                  u.today.attended === 0 &&
+                  u.sync.status !== 'ok'
                 const revenue = offline ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
                   offline || !u.today.capacitySet
                     ? dash
-                    : noDayMovement
-                      ? 'Sem agenda'
-                      : String(u.opsToday.openSlotsToday)
+                    : agendaUnknown
+                      ? dash
+                      : noDayMovement
+                        ? 'Sem agenda'
+                        : String(u.opsToday.openSlotsToday)
                 const vagas2h =
                   offline || !u.today.capacitySet
                     ? dash
-                    : noDayMovement
-                      ? '—'
+                    : agendaUnknown || noDayMovement
+                      ? dash
                       : String(u.opsToday.openSlotsNext2h)
                 const cancelNoshow = offline
                   ? dash

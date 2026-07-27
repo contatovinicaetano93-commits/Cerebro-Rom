@@ -175,14 +175,19 @@ export interface CerebroOverview {
     todayGoalProgress: number
     /** false até Waltter preencher metas no painel (ou env). */
     goalsConfigured: boolean
+    /** Há unidade com movimento hoje (meta/ocupação do dia fazem sentido). */
+    todayOpsActive: boolean
     mtdRevenue: number
     mtdGoal: number
     mtdGoalProgress: number
+    /** Ticket médio do mês (receita MTD ÷ atendidos MTD). */
+    mtdTicketAvg: number
     attendanceRate: number
     noShowRate: number
     occupancyRate: number
     /** false se nenhuma unidade tem capacidade definida. */
     occupancyConfigured: boolean
+    /** Ticket médio do dia (rede em operação). */
     ticketAvg: number
     revenueAtRisk: number
     newClients: number

@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import { isSalonActiveToday } from '@/lib/salon-day'
+import { hasTrustedAgenda, isSalonActiveToday } from '@/lib/salon-day'
 import type { CerebroOverview, ComparisonRow, UnitSnapshot } from '@/lib/types'
 import type { ReportRunDetail } from '@/lib/reports/store'
 
@@ -272,7 +272,37 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Sync',
   ]
   const rows = o.units.map((u) => {
-    const active = !u.sync.offline && isSalonActiveToday(u)
+    const offline = Boolean(u.sync.offline)
+    const active = !offline && isSalonActiveToday(u)
+    if (offline) {
+      return [
+        u.unit.short,
+        u.today.day,
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        '—',
+        u.sync.label || 'offline',
+      ]
+    }
     return [
       u.unit.short,
       u.today.day,
@@ -285,8 +315,12 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.today.capacitySet ? num(u.today.capacity) : '—',
       u.today.goalSet ? money(u.today.dailyGoal) : '—',
       active ? money(lostRevenue(u)) : '—',
-      active && u.today.capacitySet ? num(u.opsToday.openSlotsToday) : '—',
-      active && u.today.capacitySet ? num(u.opsToday.openSlotsNext2h) : '—',
+      active && u.today.capacitySet && hasTrustedAgenda(u)
+        ? num(u.opsToday.openSlotsToday)
+        : '—',
+      active && u.today.capacitySet && hasTrustedAgenda(u)
+        ? num(u.opsToday.openSlotsNext2h)
+        : '—',
       money(u.opsFinance.mtdRevenue),
       money(u.opsFinance.mtdTicketAvg),
       u.opsFinance.cmvKnown ? money(u.opsFinance.cmv) : '—',
@@ -316,8 +350,8 @@ function comparisonTable(o: CerebroOverview): (string | number | null)[][] | nul
     r.format === 'text'
       ? 'Comparativo textual (sem Δ%)'
       : r.higherIsBetter
-        ? 'Δ% positivo = Iguatemi acima (melhor)'
-        : 'Δ% negativo = Iguatemi abaixo (melhor neste KPI)',
+        ? 'Δ% positivo = Brasil à frente (melhor)'
+        : 'Δ% negativo = Brasil à frente (melhor neste KPI)',
   ])
   return [header, ...rows]
 }

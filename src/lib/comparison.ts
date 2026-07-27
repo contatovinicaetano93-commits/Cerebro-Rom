@@ -1,5 +1,5 @@
 import { clamp01 } from './format'
-import { isSalonActiveToday } from './salon-day'
+import { hasTrustedAgenda, isSalonActiveToday } from './salon-day'
 import type { ComparisonRow, UnitComparison, UnitSnapshot } from './types'
 
 /** Compartilhado entre live (overview.ts) e mock (mock-overview.ts). */
@@ -59,7 +59,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   }
 
   const occ = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !isSalonActiveToday(u) || !u.today.capacitySet
+    u.sync.offline || !isSalonActiveToday(u) || !hasTrustedAgenda(u) || !u.today.capacitySet
       ? null
       : rate(u.today.appointments, u.today.capacity)
 

@@ -304,24 +304,19 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
       const lastSyncAt = new Date(last.created_at).toISOString()
       const ageMs = Date.now() - new Date(last.created_at).getTime()
       const ageH = ageMs / 3_600_000
-      const missingTokenHint =
-        !last.error || /AVEC_API_TOKEN|não configurado|nao configurado/i.test(last.error)
 
-      if (last.status === 'error' && ageH <= 24) {
+      if (last.status === 'error') {
+        // Nunca rebaixar error→stale: token morto deve continuar hard-fail no painel.
+        const ageLabel =
+          ageH < 1
+            ? `${Math.max(1, Math.round(ageH * 60))} min`
+            : `${ageH.toFixed(1)}h`
         sync = {
-          status: ageH > 6 ? 'stale' : 'error',
+          status: 'error',
           lastSyncAt,
           label: last.error
-            ? `Sync erro: ${last.error.slice(0, 80)}`
-            : 'Último sync com erro',
-        }
-      } else if (last.status === 'error' && ageH > 24) {
-        sync = {
-          status: 'stale',
-          lastSyncAt,
-          label: missingTokenHint
-            ? 'Aguardando AVEC_API_TOKEN · último sync antigo com erro'
-            : `Último sync com erro há ~${ageH.toFixed(0)}h (aguardando novo sync)`,
+            ? `Sync erro (~${ageLabel}): ${last.error.slice(0, 80)}`
+            : `Último sync com erro (~${ageLabel})`,
         }
       } else if (last.status === 'partial') {
         sync = {
