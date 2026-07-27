@@ -194,7 +194,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    if (rolling && u.opsWeek.returnRate > 0 && u.opsWeek.returnRate < 0.45) {
+    if (rolling && u.opsWeek.returnRate != null && u.opsWeek.returnRate > 0 && u.opsWeek.returnRate < 0.45) {
       actions.push({
         id: `return-${u.unit.slug}`,
         severity: 'warning',
@@ -336,6 +336,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     0,
   )
   const dayRevenue = dayOps.reduce((a, u) => a + u.today.revenue, 0)
+  const agendaRevenue = agendaOps.reduce((a, u) => a + u.today.revenue, 0)
 
   return {
     todayRevenue,
@@ -354,7 +355,8 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     noShowRate: rate(noShows, appointments),
     occupancyRate: occupancyConfigured ? rate(appointments, capacity) : 0,
     occupancyConfigured,
-    ticketAvg: attended > 0 ? Math.round(dayRevenue / attended) : 0,
+    // Ticket do dia: só unidades com agenda confiável (não misturar receita órfã).
+    ticketAvg: attended > 0 ? Math.round(agendaRevenue / attended) : 0,
     revenueAtRisk: agendaOps.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
     newClients,
     returningClients,

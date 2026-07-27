@@ -1,8 +1,13 @@
 import type { UnitSnapshot } from '@/lib/types'
 
-/** Unidade com movimento no dia — evita tratar fechado/pré-abertura como crise. */
+/**
+ * Unidade em operação real no dia.
+ * 1 agendamento fantasma (cancel-only / sync parcial) NÃO abre meta/vagas da rede.
+ */
 export function isSalonActiveToday(u: UnitSnapshot): boolean {
-  return u.today.revenue > 0 || u.today.appointments > 0 || u.today.attended > 0
+  if (u.today.revenue > 0 || u.today.attended > 0) return true
+  // Agenda sozinha: precisa de volume mínimo E sync ok (senão é ruído).
+  return u.sync.status === 'ok' && u.today.appointments >= 3
 }
 
 /** Sync quebrado (token) — não tratar zeros do dia como KPI operacional. */
@@ -15,12 +20,17 @@ export function isDayOperable(u: UnitSnapshot): boolean {
   return !u.sync.offline && !isSyncHardFail(u) && isSalonActiveToday(u)
 }
 
-/** Agenda confiável o bastante para ocupar/vagas (evita capacity cheia com sync parcial zerando agenda). */
+/**
+ * Agenda confiável para ocupação/vagas.
+ * Evita capacity cheia com sync parcial ou 1 linha fantasma.
+ */
 export function hasTrustedAgenda(u: UnitSnapshot): boolean {
-  if (u.sync.offline) return false
-  if (u.today.appointments > 0 || u.today.attended > 0) return true
-  // Sem agenda no dia: só confia se sync ok (fechado real / pré-abertura).
-  return u.sync.status === 'ok'
+  if (u.sync.offline || !isSalonActiveToday(u)) return false
+  if (u.today.attended > 0) return true
+  if (u.today.appointments >= 3) return true
+  // Receita sem agenda listada: só com sync ok (não inventar vagas).
+  if (u.today.revenue > 0) return u.sync.status === 'ok' && u.today.appointments > 0
+  return u.sync.status === 'ok' && u.today.appointments > 0
 }
 
 /** KPIs semanais/financeiros ainda legíveis com sync parcial ou stale. */

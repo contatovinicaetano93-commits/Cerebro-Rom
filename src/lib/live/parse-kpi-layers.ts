@@ -110,7 +110,7 @@ export const EMPTY_OPS_WEEK: OpsWeek = {
   services: [],
   acquisition: [],
   reactivationCount: 0,
-  returnRate: 0,
+  returnRate: null,
   newClientsPeriod: 0,
 }
 
@@ -264,7 +264,7 @@ export async function fetchOpsWeek(sql: Sql, today: string): Promise<OpsWeek> {
     services: parseServices(p1?.services),
     acquisition: parseAcquisition(p1?.acquisition),
     reactivationCount: n(p1?.reactivation_count),
-    returnRate: n(p3?.return_rate),
+    returnRate: p3?.return_rate == null ? null : n(p3.return_rate),
     newClientsPeriod: n(p3?.new_clients_period),
   }
 }

@@ -42,7 +42,8 @@ export interface OpsWeek {
   services: { name: string; quantity: number; revenue: number }[]
   acquisition: { channel: string; clients: number }[]
   reactivationCount: number
-  returnRate: number
+  /** null quando P3 não trouxe taxa (não inventar 0%). */
+  returnRate: number | null
   newClientsPeriod: number
 }
 

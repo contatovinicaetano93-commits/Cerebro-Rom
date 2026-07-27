@@ -128,7 +128,7 @@ export function offlineUnitSnapshot(meta: UnitMeta, detail: string): UnitSnapsho
       services: [],
       acquisition: [],
       reactivationCount: 0,
-      returnRate: 0,
+      returnRate: null,
       newClientsPeriod: 0,
     },
     opsCommerce: {
@@ -293,24 +293,35 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     label: 'Sem registro de sync Avec',
   }
   try {
+    // Preferir sync de salão (fast/full). stock_* não deve mascarar token morto.
     const runs = (await sql`
-      select status, created_at, error
+      select status, created_at, error, kind
       from avec_sync_runs
+      where kind in ('fast', 'full')
       order by created_at desc
       limit 1
-    `) as { status: string; created_at: string; error: string | null }[]
-    const last = runs[0]
+    `) as { status: string; created_at: string; error: string | null; kind: string }[]
+    let last = runs[0]
+    if (!last) {
+      const any = (await sql`
+        select status, created_at, error, kind
+        from avec_sync_runs
+        order by created_at desc
+        limit 1
+      `) as { status: string; created_at: string; error: string | null; kind: string }[]
+      last = any[0]
+    }
     if (last) {
       const lastSyncAt = new Date(last.created_at).toISOString()
       const ageMs = Date.now() - new Date(last.created_at).getTime()
       const ageH = ageMs / 3_600_000
+      const ageLabel =
+        ageH < 1
+          ? `${Math.max(1, Math.round(ageH * 60))} min`
+          : `${ageH.toFixed(1)}h`
 
       if (last.status === 'error') {
         // Nunca rebaixar error→stale: token morto deve continuar hard-fail no painel.
-        const ageLabel =
-          ageH < 1
-            ? `${Math.max(1, Math.round(ageH * 60))} min`
-            : `${ageH.toFixed(1)}h`
         sync = {
           status: 'error',
           lastSyncAt,
@@ -323,15 +334,15 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
           status: ageH > 6 ? 'stale' : 'partial',
           lastSyncAt,
           label: last.error
-            ? `Sync parcial: ${last.error.slice(0, 80)}`
-            : `Sync parcial (~${ageH < 1 ? `${Math.max(1, Math.round(ageH * 60))} min` : `${ageH.toFixed(1)}h`}) · dados usáveis`,
+            ? `Sync parcial (${last.kind}): ${last.error.slice(0, 80)}`
+            : `Sync parcial (${last.kind}, ~${ageLabel}) · dados usáveis`,
         }
       } else if (ageH > 6) {
         // Sync full Avec pode levar 30–90+ min; janela saudável mais larga após sucesso.
         sync = {
           status: 'stale',
           lastSyncAt,
-          label: `Sync atrasado (~${ageH.toFixed(1)}h)`,
+          label: `Sync atrasado (~${ageLabel})`,
         }
       } else {
         const mins = Math.max(1, Math.round(ageMs / 60_000))
