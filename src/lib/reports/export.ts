@@ -52,11 +52,16 @@ function joinCsv(rows: (string | number | null | undefined)[][]): string {
   return rows.map((r) => r.map(csvEscape).join(';')).join('\n')
 }
 
-function modeLabel(mode: CerebroOverview['mode'], partial?: boolean): string {
+function modeLabel(mode: CerebroOverview['mode'], partial?: boolean, overview?: CerebroOverview): string {
   if (mode === 'live') {
-    return partial
-      ? 'Live parcial (só unidades online)'
-      : 'Live (Brasil Supabase + Iguatemi Neon)'
+    if (!partial) return 'Live (Brasil Supabase + Iguatemi Neon)'
+    const offline = overview?.units.some((u) => u.sync.offline)
+    const syncBad = overview?.units.some(
+      (u) => !u.sync.offline && (u.sync.status === 'partial' || u.sync.status === 'error'),
+    )
+    if (offline) return 'Live parcial (unidade offline)'
+    if (syncBad) return 'Live parcial (sync incompleto)'
+    return 'Live parcial'
   }
   if (mode === 'degraded') return 'Degradado — live indisponível (sem inventar número)'
   return 'Mock / demonstração'
@@ -155,7 +160,13 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
   const o = run.payload
   const notes: string[] = []
   if (o.mode === 'degraded') notes.push('Live indisponível — trate zeros com cautela.')
-  if (o.partial) notes.push('Totais parciais: alguma unidade offline.')
+  if (o.partial) {
+    if (o.units.some((u) => u.sync.offline)) {
+      notes.push('Totais parciais: alguma unidade offline.')
+    } else {
+      notes.push('Totais parciais: sync incompleto/com erro em alguma unidade.')
+    }
+  }
   if (o.mode === 'live' && o.consolidated.todayRevenue === 0 && o.consolidated.mtdRevenue > 0) {
     notes.push('Faturamento hoje = R$ 0 com MTD > 0: dia sem venda ainda OU sync do dia atrasado.')
   }
@@ -171,7 +182,7 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
     [],
     ['Capturado em', new Date(run.createdAt).toLocaleString('pt-BR')],
     ['Período', run.periodLabel],
-    ['Modo', modeLabel(o.mode, o.partial)],
+    ['Modo', modeLabel(o.mode, o.partial, o)],
     ['Unidades no snapshot', o.units.length],
     ['Separador CSV', 'ponto-e-vírgula (;) — Excel/Numbers BR'],
     ['Números', 'padrão brasileiro: milhar com ponto, decimal com vírgula'],
@@ -344,7 +355,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       active && u.today.attended > 0 ? money(u.today.ticketAvg) : '—',
       u.today.capacitySet ? num(u.today.capacity) : '—',
       u.today.goalSet ? money(u.today.dailyGoal) : '—',
-      active ? money(lostRevenue(u)) : '—',
+      active && hasTrustedAgenda(u) ? money(lostRevenue(u)) : '—',
       active && u.today.capacitySet && hasTrustedAgenda(u)
         ? num(u.opsToday.openSlotsToday)
         : '—',
