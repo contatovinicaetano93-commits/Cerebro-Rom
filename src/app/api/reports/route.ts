@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { buildOverview } from '@/lib/live/overview'
 import { captureReportSnapshot, listReportRuns } from '@/lib/reports/store'
 import { isCerebroDbConfigured } from '@/lib/db'
+import { parseAsOfDay } from '@/lib/unit-config'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -24,8 +25,8 @@ export async function GET() {
   }
 }
 
-/** Captura sob demanda o overview atual. */
-export async function POST() {
+/** Captura sob demanda. Body opcional: `{ "asOf": "YYYY-MM-DD" }` (dia + MTD até a data). */
+export async function POST(req: Request) {
   try {
     if (!isCerebroDbConfigured()) {
       return NextResponse.json(
@@ -33,7 +34,27 @@ export async function POST() {
         { status: 503 },
       )
     }
-    const overview = await buildOverview()
+
+    let asOf: string | undefined
+    const contentType = req.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const body = (await req.json().catch(() => null)) as { asOf?: unknown } | null
+      if (body?.asOf != null && body.asOf !== '') {
+        const parsed = parseAsOfDay(body.asOf)
+        if (!parsed) {
+          return NextResponse.json(
+            {
+              error:
+                'asOf inválido — use YYYY-MM-DD (hoje ou até 120 dias atrás, America/Sao_Paulo)',
+            },
+            { status: 400 },
+          )
+        }
+        asOf = parsed
+      }
+    }
+
+    const overview = await buildOverview(asOf)
     if (overview.mode === 'mock') {
       return NextResponse.json(
         { error: 'Modo mock — captura de relatório só com dados live' },

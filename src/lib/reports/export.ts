@@ -178,6 +178,11 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
   ) {
     notes.push('Faturamento hoje = R$ 0 com MTD > 0: dia sem venda ainda OU sync do dia atrasado.')
   }
+  if (/MTD até a data/i.test(o.periodLabel)) {
+    notes.push(
+      'Captura histórica: KPIs do dia + MTD até a data escolhida. Estoque, sync e vagas 2h refletem o momento da captura.',
+    )
+  }
   for (const u of o.units) {
     if (u.sync.status !== 'ok') {
       notes.push(`${u.unit.short}: sync ${u.sync.label || u.sync.status}.`)
@@ -202,9 +207,10 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
     [],
     ['Como usar'],
     ['1.', 'Aba/seção Rede = consolidado da rede.'],
-    ['2.', 'Unidades = detalhe por salão.'],
+    ['2.', 'Unidades = detalhe por salão (dia + MTD).'],
     ['3.', 'Comparativo = Brasil × Iguatemi × Δ%.'],
-    ['4.', 'Legenda = significado de cada indicador.'],
+    ['4.', 'Alertas / Tendência / Semana / Comercial = camadas do painel.'],
+    ['5.', 'Legenda = significado de cada indicador.'],
   ]
 }
 
@@ -237,10 +243,48 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
       'Receita acumulada no mês.',
     ],
     [
+      'Meta MTD',
+      c.networkReadable && c.goalsConfigured ? money(c.mtdGoal) : '—',
+      'R$',
+      'Meta diária × dias do mês até a data.',
+    ],
+    [
+      '% meta MTD',
+      c.networkReadable && c.goalsConfigured && c.mtdGoal > 0
+        ? pct(c.mtdGoalProgress)
+        : '—',
+      '%',
+      'MTD ÷ meta MTD.',
+    ],
+    [
+      'Ticket MTD',
+      c.networkReadable && c.mtdTicketAvg != null ? money(c.mtdTicketAvg) : '—',
+      'R$',
+      'Receita MTD ÷ atendidos MTD.',
+    ],
+    [
       'Ticket médio (hoje)',
       c.todayOpsActive && c.ticketAvg > 0 ? money(c.ticketAvg) : '—',
       'R$',
       'Receita ÷ atendidos (unidades com agenda).',
+    ],
+    [
+      'Novos · Recorrentes (hoje)',
+      c.todayOpsActive ? `${num(c.newClients)} · ${num(c.returningClients)}` : '—',
+      'qtd',
+      'Clientes novos vs recorrentes no dia.',
+    ],
+    [
+      'Mix novos',
+      c.todayOpsActive ? pct(c.newShare) : '—',
+      '%',
+      'Novos ÷ (novos + recorrentes).',
+    ],
+    [
+      'Conversão leads',
+      c.todayOpsActive && c.conversionRate > 0 ? pct(c.conversionRate) : '—',
+      '%',
+      'Leads convertidos ÷ leads do dia (quando houver).',
     ],
     [
       'Ocupação',
@@ -326,6 +370,8 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Atendidos',
     'No-shows',
     'Cancelamentos',
+    'Novos',
+    'Recorrentes',
     'Ticket (R$)',
     'Capacidade',
     'Meta diária (R$)',
@@ -340,6 +386,8 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Forma #1',
     'Pacotes (R$)',
     'Retorno',
+    'Novos período',
+    'Sem retorno (90d)',
     'Estoque (R$)',
     'Alertas estoque',
     'Zerados',
@@ -376,6 +424,10 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
         '—',
         '—',
         '—',
+        '—',
+        '—',
+        '—',
+        '—',
         u.sync.label || (offline ? 'offline' : 'sync indisponível'),
       ]
     }
@@ -387,6 +439,8 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       active ? num(u.today.attended) : '—',
       active ? num(u.today.noShows) : '—',
       active ? num(u.today.cancelled) : '—',
+      active ? num(u.today.newClients) : '—',
+      active ? num(u.today.returningClients) : '—',
       active && u.today.attended > 0 ? money(u.today.ticketAvg) : '—',
       u.today.capacitySet ? num(u.today.capacity) : '—',
       u.today.goalSet ? money(u.today.dailyGoal) : '—',
@@ -409,6 +463,8 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.opsFinance.topPaymentMethod || '—',
       u.opsCommerce.packagesKnown ? money(u.opsCommerce.packagesRevenue) : '—',
       pct(u.opsWeek.returnRate),
+      u.opsWeek.newClientsPeriod != null ? num(u.opsWeek.newClientsPeriod) : '—',
+      u.opsWeek.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
       u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
       u.opsStock.available ? num(u.opsStock.activeAlerts) : '—',
       u.opsStock.available ? num(u.opsStock.zeroProducts) : '—',
@@ -416,6 +472,138 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     ]
   })
   return [header, ...rows]
+}
+
+function actionsTable(o: CerebroOverview): (string | number | null)[][] {
+  const header = ['Severidade', 'Unidade', 'Título', 'Detalhe', 'Ação']
+  const rows = o.nextActions.map((a) => [
+    a.severity,
+    a.unit === 'both' ? 'Rede' : a.unit === 'rom-brasil' ? 'Brasil' : 'Iguatemi',
+    a.title,
+    a.detail,
+    a.action,
+  ])
+  return [header, ...(rows.length ? rows : [['—', '—', 'Sem ações no snapshot', '', '']])]
+}
+
+function trendTable(o: CerebroOverview): (string | number | null)[][] {
+  const header = ['Dia', 'Brasil (R$)', 'Iguatemi (R$)']
+  const rows = o.trend30.map((t) => [
+    t.day,
+    t.brasil == null ? '—' : money(t.brasil),
+    t.iguatemi == null ? '—' : money(t.iguatemi),
+  ])
+  return [header, ...rows]
+}
+
+function weekTable(o: CerebroOverview): (string | number | null)[][] {
+  const header = [
+    'Unidade',
+    'Tipo',
+    'Nome',
+    'Receita (R$)',
+    'Atendidos / Qtd',
+    'Ticket (R$)',
+    'Ocupação',
+  ]
+  const rows: (string | number | null)[][] = []
+  for (const u of o.units) {
+    if (u.sync.offline || isSyncHardFail(u) || !isUnitReadable(u)) continue
+    for (const p of u.opsWeek.professionals.slice(0, 10)) {
+      rows.push([
+        u.unit.short,
+        'Profissional',
+        p.name,
+        money(p.revenue),
+        num(p.attended),
+        money(p.ticketAvg),
+        pct(p.occupancy),
+      ])
+    }
+    for (const s of u.opsWeek.services.slice(0, 10)) {
+      rows.push([
+        u.unit.short,
+        'Serviço',
+        s.name,
+        money(s.revenue),
+        num(s.quantity),
+        '—',
+        '—',
+      ])
+    }
+    for (const a of u.opsWeek.acquisition.slice(0, 10)) {
+      rows.push([u.unit.short, 'Aquisição', a.channel, '—', num(a.clients), '—', '—'])
+    }
+  }
+  return [header, ...(rows.length ? rows : [['—', '—', 'Sem dados de semana no snapshot', '', '', '', '']])]
+}
+
+function commerceTable(o: CerebroOverview): (string | number | null)[][] {
+  const header = [
+    'Unidade',
+    'Canal #1',
+    'Pacotes (R$)',
+    'Pacotes vendidos',
+    'Nota média',
+    'Avaliações',
+    'Aniversários',
+    'Pacote (detalhe)',
+    'Qtd',
+    'Receita pacote (R$)',
+  ]
+  const rows: (string | number | null)[][] = []
+  for (const u of o.units) {
+    if (u.sync.offline || isSyncHardFail(u) || !isUnitReadable(u)) continue
+    const co = u.opsCommerce
+    const packs = co.packagesKnown ? co.packages.slice(0, 8) : []
+    if (packs.length === 0) {
+      rows.push([
+        u.unit.short,
+        co.topBookingChannel || '—',
+        co.packagesKnown ? money(co.packagesRevenue) : '—',
+        co.packagesKnown ? num(co.packagesSold) : '—',
+        co.ratingsCount > 0 ? num(co.ratingsAvg, 1) : '—',
+        co.ratingsCount > 0 ? num(co.ratingsCount) : '—',
+        num(co.birthdayCount),
+        '—',
+        '—',
+        '—',
+      ])
+      for (const ch of co.bookingChannels.slice(0, 5)) {
+        rows.push([
+          u.unit.short,
+          `Canal: ${ch.channel}`,
+          '—',
+          num(ch.count),
+          '—',
+          '—',
+          '—',
+          '—',
+          '—',
+          '—',
+        ])
+      }
+      continue
+    }
+    packs.forEach((p, idx) => {
+      rows.push([
+        u.unit.short,
+        idx === 0 ? co.topBookingChannel || '—' : '',
+        idx === 0 ? money(co.packagesRevenue) : '',
+        idx === 0 ? num(co.packagesSold) : '',
+        idx === 0 ? (co.ratingsCount > 0 ? num(co.ratingsAvg, 1) : '—') : '',
+        idx === 0 ? (co.ratingsCount > 0 ? num(co.ratingsCount) : '—') : '',
+        idx === 0 ? num(co.birthdayCount) : '',
+        p.name,
+        num(p.quantity),
+        money(p.revenue),
+      ])
+    })
+  }
+  return [
+    header,
+    ...(rows.length ? rows : [['—', '—', 'Sem dados comerciais no snapshot', '', '', '', '', '', '', '']]),
+  ]
 }
 
 function comparisonTable(o: CerebroOverview): (string | number | null)[][] | null {
@@ -436,7 +624,7 @@ function comparisonTable(o: CerebroOverview): (string | number | null)[][] | nul
   return [header, ...rows]
 }
 
-/** CSV BR (;) — capa + legenda + rede + unidades + comparativo. UTF-8 com BOM. */
+/** CSV BR (;) — capa + legenda + rede + unidades + comparativo + alertas + trend + semana + comercial. */
 export function buildReportCsv(run: ReportRunDetail): string {
   const o = run.payload
   const blocks: string[] = []
@@ -454,6 +642,15 @@ export function buildReportCsv(run: ReportRunDetail): string {
     blocks.push('')
     blocks.push(joinCsv([['—— Comparativo Brasil × Iguatemi ——'], ...cmp]))
   }
+
+  blocks.push('')
+  blocks.push(joinCsv([['—— Próximas ações / alertas ——'], ...actionsTable(o)]))
+  blocks.push('')
+  blocks.push(joinCsv([['—— Tendência receita 30 dias ——'], ...trendTable(o)]))
+  blocks.push('')
+  blocks.push(joinCsv([['—— Semana (pros / serviços / aquisição) ——'], ...weekTable(o)]))
+  blocks.push('')
+  blocks.push(joinCsv([['—— Comercial ——'], ...commerceTable(o)]))
 
   // BOM ajuda Excel/Numbers a reconhecer UTF-8 e acentos.
   return `\uFEFF${blocks.join('\n')}\n`
@@ -551,6 +748,29 @@ export async function buildReportXlsx(run: ReportRunDetail): Promise<Buffer> {
     autosize(sheet, 12, 42)
     sheet.views = [{ state: 'frozen', ySplit: 1 }]
   }
+
+  const alertas = wb.addWorksheet('Alertas')
+  alertas.addRows(actionsTable(o))
+  styleHeaderRow(alertas.getRow(1))
+  autosize(alertas, 12, 48)
+
+  const tendencia = wb.addWorksheet('Tendencia')
+  tendencia.addRows(trendTable(o))
+  styleHeaderRow(tendencia.getRow(1))
+  autosize(tendencia, 10, 24)
+  tendencia.views = [{ state: 'frozen', ySplit: 1 }]
+
+  const semana = wb.addWorksheet('Semana')
+  semana.addRows(weekTable(o))
+  styleHeaderRow(semana.getRow(1))
+  autosize(semana, 10, 36)
+  semana.views = [{ state: 'frozen', ySplit: 1 }]
+
+  const comercial = wb.addWorksheet('Comercial')
+  comercial.addRows(commerceTable(o))
+  styleHeaderRow(comercial.getRow(1))
+  autosize(comercial, 10, 36)
+  comercial.views = [{ state: 'frozen', ySplit: 1 }]
 
   const buf = await wb.xlsx.writeBuffer()
   return Buffer.from(buf)

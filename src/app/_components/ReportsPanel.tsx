@@ -17,6 +17,28 @@ type ReportRunMeta = {
   networkReadable?: boolean
 }
 
+function todayLocalIso(): string {
+  const d = new Date()
+  // Prefer America/Sao_Paulo for the picker default (same as live).
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+function minAsOfIso(): string {
+  const today = todayLocalIso()
+  const [y, m, d] = today.split('-').map(Number)
+  const dt = new Date(Date.UTC(y!, m! - 1, d!))
+  dt.setUTCDate(dt.getUTCDate() - 120)
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
 export function ReportsPanel() {
   const [open, setOpen] = useState(false)
   const [configured, setConfigured] = useState(true)
@@ -25,6 +47,7 @@ export function ReportsPanel() {
   const [capturing, setCapturing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
+  const [asOf, setAsOf] = useState(todayLocalIso)
 
   const loadRuns = useCallback(async () => {
     setLoading(true)
@@ -54,13 +77,19 @@ export function ReportsPanel() {
     setError(null)
     setOkMsg(null)
     try {
-      const res = await fetch('/api/reports', { method: 'POST' })
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ asOf }),
+      })
       const json = (await res.json().catch(() => ({}))) as {
         error?: string
         data?: ReportRunMeta
       }
       if (!res.ok) throw new Error(json.error || `Erro ${res.status}`)
-      setOkMsg('Snapshot capturado')
+      const dayNote =
+        asOf === todayLocalIso() ? 'hoje' : `dia ${asOf} (MTD até a data)`
+      setOkMsg(`Snapshot capturado · ${dayNote}`)
       await loadRuns()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -81,7 +110,7 @@ export function ReportsPanel() {
           <div>
             <p className="text-sm font-medium text-foreground">Relatórios</p>
             <p className="text-xs text-muted">
-              Completo · comparativo Brasil × Iguatemi (MTD) · CSV / XLSX
+              Data escolhida · completo · comparativo · CSV / XLSX
             </p>
           </div>
         </div>
@@ -96,15 +125,26 @@ export function ReportsPanel() {
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-1 text-xs text-muted">
+                  Data do relatório
+                  <input
+                    type="date"
+                    value={asOf}
+                    min={minAsOfIso()}
+                    max={todayLocalIso()}
+                    onChange={(e) => setAsOf(e.target.value)}
+                    className="rounded-xl border border-border bg-panel-2 px-3 py-2 text-sm text-foreground"
+                  />
+                </label>
                 <button
                   type="button"
-                  disabled={capturing}
+                  disabled={capturing || !asOf}
                   onClick={() => void captureNow()}
                   className="inline-flex items-center gap-2 rounded-xl bg-brass/90 px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
                 >
                   <Camera size={14} />
-                  {capturing ? 'Capturando…' : 'Capturar agora'}
+                  {capturing ? 'Capturando…' : 'Capturar na data'}
                 </button>
                 <button
                   type="button"
@@ -126,9 +166,9 @@ export function ReportsPanel() {
               </div>
 
               <p className="mt-3 text-xs text-muted">
-                Capture o overview atual. No download completo: aba/seção{' '}
-                <span className="text-foreground">Comparativo</span> (Brasil × Iguatemi,
-                com receita MTD do mês). Ou baixe só o comparativo.
+                Escolha o dia (KPIs do dia + MTD até essa data). Export completo inclui Rede,
+                Unidades, Comparativo, Alertas, Tendência 30d, Semana e Comercial. Em datas
+                passadas, estoque/sync refletem o momento da captura (não rewind).
               </p>
 
               <ul className="mt-4 space-y-2">
@@ -180,14 +220,14 @@ export function ReportsPanel() {
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground hover:border-brass/40"
                       >
                         <Download size={12} />
-                        CSV
+                        Completo CSV
                       </a>
                       <a
                         href={`/api/reports/${run.id}?format=xlsx`}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground hover:border-brass/40"
                       >
                         <Download size={12} />
-                        XLSX
+                        Completo XLSX
                       </a>
                     </div>
                   </li>
