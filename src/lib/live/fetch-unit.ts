@@ -246,8 +246,21 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
         and (scheduled_at at time zone 'America/Sao_Paulo')::date = ${today}::date
     `) as { n: number }[]
     const scheduled = n(appt[0]?.n)
-    // Live agenda é a fonte do dia — sobe e desce (não só ratchet up).
-    todayMetrics.appointments = scheduled
+    const metricAppt = todayMetrics.appointments
+    const attended = todayMetrics.attended
+    // client_services no ROM pode estar incompleto vs Avec (metrics).
+    // Nunca deixar appointments < attended (quebra comparecimento/vagas).
+    if (scheduled >= attended && scheduled > 0) {
+      // Live coerente: usa live, mas se metrics é bem maior e também coerente, prefer metrics.
+      todayMetrics.appointments =
+        metricAppt >= attended && metricAppt > scheduled * 2
+          ? metricAppt
+          : scheduled
+    } else if (metricAppt >= attended && metricAppt > 0) {
+      todayMetrics.appointments = metricAppt
+    } else {
+      todayMetrics.appointments = Math.max(scheduled, metricAppt, attended)
+    }
 
     const next2h = (await sql`
       select count(*)::int as n

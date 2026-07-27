@@ -13,6 +13,7 @@ function syncUsableForAgenda(u: UnitSnapshot): boolean {
  * 1 agendamento fantasma (cancel-only / sync parcial) NÃO abre meta/vagas da rede.
  */
 export function isSalonActiveToday(u: UnitSnapshot): boolean {
+  if (u.sync.offline || isSyncHardFail(u)) return false
   if (u.today.revenue > 0 || u.today.attended > 0) return true
   // Agenda sozinha: volume mínimo + sync usável (ok/stale — não partial).
   return syncUsableForAgenda(u) && u.today.appointments >= 3

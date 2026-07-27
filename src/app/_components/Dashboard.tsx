@@ -311,7 +311,11 @@ export function Dashboard({
               <p className="mt-2 text-xs text-warning">
                 {data.mode === 'degraded'
                   ? 'Live indisponível — sem números inventados.'
-                  : 'Totais refletem só unidades ao vivo.'}
+                  : data.units.some((u) => u.sync.offline)
+                    ? 'Totais refletem só unidades ao vivo.'
+                    : data.units.some((u) => u.sync.status === 'error')
+                      ? 'Sync com erro em alguma unidade — KPIs do dia podem estar incompletos.'
+                      : 'Sync incompleto em alguma unidade — agenda/vagas só com sync ok.'}
               </p>
             )}
           </div>

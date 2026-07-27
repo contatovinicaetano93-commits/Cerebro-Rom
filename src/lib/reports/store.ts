@@ -1,6 +1,7 @@
 import { getCerebroSql, isCerebroDbConfigured, type Sql } from '@/lib/db'
 import type { CerebroOverview, UnitSlug, UnitSnapshot } from '@/lib/types'
 import { rate } from '@/lib/comparison'
+import { hasTrustedAgenda, isSalonActiveToday } from '@/lib/salon-day'
 
 export interface ReportRunMeta {
   id: string
@@ -68,7 +69,7 @@ export async function ensureReportTables(sql?: Sql): Promise<void> {
       payment_reconcile text,
       top_payment_method text,
       packages_revenue numeric not null default 0,
-      return_rate numeric not null default 0,
+      return_rate numeric,
       stock_value numeric not null default 0,
       stock_alerts int not null default 0,
       stock_zero int not null default 0,
@@ -76,6 +77,8 @@ export async function ensureReportTables(sql?: Sql): Promise<void> {
       sync_label text not null default ''
     )
   `
+  // Migração leve: retorno pode ser null (P3 ausente).
+  await db`alter table report_unit_metrics alter column return_rate drop not null`.catch(() => {})
   await db`
     create index if not exists report_unit_metrics_run_idx
       on report_unit_metrics (run_id)
@@ -87,15 +90,22 @@ export async function ensureReportTables(sql?: Sql): Promise<void> {
 }
 
 function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
+  const offline = Boolean(u.sync.offline)
+  const active = !offline && isSalonActiveToday(u)
+  const trusted = active && hasTrustedAgenda(u)
+
   const occupancy =
-    u.today.capacitySet && u.today.capacity > 0
+    trusted && u.today.capacitySet && u.today.capacity > 0
       ? rate(u.today.appointments, u.today.capacity)
       : null
   const attendance =
-    u.today.appointments > 0 ? rate(u.today.attended, u.today.appointments) : null
+    trusted && u.today.appointments > 0 ? rate(u.today.attended, u.today.appointments) : null
   const noShowRate =
-    u.today.appointments > 0 ? rate(u.today.noShows, u.today.appointments) : null
-  const lostRevenue = Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
+    trusted && u.today.appointments > 0 ? rate(u.today.noShows, u.today.appointments) : null
+  // Colunas NOT NULL no snapshot: 0 quando offline/não confiável; taxas nullable = null.
+  const lostRevenue = trusted
+    ? Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
+    : 0
 
   return {
     id: crypto.randomUUID(),
@@ -104,34 +114,34 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
     unit_slug: u.unit.slug as UnitSlug,
     unit_short: u.unit.short,
     day: u.today.day,
-    revenue_today: u.today.revenue,
-    appointments: u.today.appointments,
-    attended: u.today.attended,
-    no_shows: u.today.noShows,
-    cancelled: u.today.cancelled,
-    ticket_avg: u.today.ticketAvg,
-    capacity: u.today.capacity,
-    daily_goal: u.today.dailyGoal,
+    revenue_today: offline ? 0 : u.today.revenue,
+    appointments: !active ? 0 : u.today.appointments,
+    attended: !active ? 0 : u.today.attended,
+    no_shows: !active ? 0 : u.today.noShows,
+    cancelled: !active ? 0 : u.today.cancelled,
+    ticket_avg: !active || u.today.attended <= 0 ? 0 : u.today.ticketAvg,
+    capacity: u.today.capacitySet ? u.today.capacity : 0,
+    daily_goal: u.today.goalSet ? u.today.dailyGoal : 0,
     goal_set: u.today.goalSet,
     occupancy_rate: occupancy,
     attendance_rate: attendance,
     no_show_rate: noShowRate,
     lost_revenue: lostRevenue,
-    open_slots_today: u.opsToday.openSlotsToday,
-    open_slots_next_2h: u.opsToday.openSlotsNext2h,
-    mtd_revenue: u.opsFinance.mtdRevenue,
-    mtd_attended: u.opsFinance.mtdAttended,
-    mtd_ticket_avg: u.opsFinance.mtdTicketAvg,
-    cmv: u.opsFinance.cmv,
-    cmv_share: u.opsFinance.cmvShare,
-    payments_total: u.opsFinance.paymentsTotal,
-    payment_reconcile: u.opsFinance.paymentReconcile,
-    top_payment_method: u.opsFinance.topPaymentMethod,
-    packages_revenue: u.opsCommerce.packagesRevenue,
-    return_rate: u.opsWeek.returnRate,
-    stock_value: u.opsStock.totalValue,
-    stock_alerts: u.opsStock.activeAlerts,
-    stock_zero: u.opsStock.zeroProducts,
+    open_slots_today: trusted && u.today.capacitySet ? u.opsToday.openSlotsToday : 0,
+    open_slots_next_2h: trusted && u.today.capacitySet ? u.opsToday.openSlotsNext2h : 0,
+    mtd_revenue: offline ? 0 : u.opsFinance.mtdRevenue,
+    mtd_attended: offline ? 0 : u.opsFinance.mtdAttended,
+    mtd_ticket_avg: offline ? 0 : u.opsFinance.mtdTicketAvg,
+    cmv: offline || !u.opsFinance.cmvKnown ? 0 : u.opsFinance.cmv,
+    cmv_share: offline || !u.opsFinance.cmvKnown ? null : u.opsFinance.cmvShare,
+    payments_total: offline || !u.opsFinance.paymentsKnown ? 0 : u.opsFinance.paymentsTotal,
+    payment_reconcile: offline ? null : u.opsFinance.paymentReconcile,
+    top_payment_method: offline ? null : u.opsFinance.topPaymentMethod,
+    packages_revenue: offline ? 0 : u.opsCommerce.packagesRevenue,
+    return_rate: offline ? null : u.opsWeek.returnRate,
+    stock_value: offline || !u.opsStock.available ? 0 : u.opsStock.totalValue,
+    stock_alerts: offline || !u.opsStock.available ? 0 : u.opsStock.activeAlerts,
+    stock_zero: offline || !u.opsStock.available ? 0 : u.opsStock.zeroProducts,
     sync_status: u.sync.status,
     sync_label: u.sync.label,
   }
