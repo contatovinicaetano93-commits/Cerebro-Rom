@@ -462,9 +462,9 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       reconcileLabel(u.opsFinance.paymentReconcile),
       u.opsFinance.topPaymentMethod || '—',
       u.opsCommerce.packagesKnown ? money(u.opsCommerce.packagesRevenue) : '—',
-      pct(u.opsWeek.returnRate),
-      u.opsWeek.newClientsPeriod != null ? num(u.opsWeek.newClientsPeriod) : '—',
-      u.opsWeek.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
+      pct(u.opsWeek?.returnRate),
+      u.opsWeek?.newClientsPeriod != null ? num(u.opsWeek.newClientsPeriod) : '—',
+      u.opsWeek?.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
       u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
       u.opsStock.available ? num(u.opsStock.activeAlerts) : '—',
       u.opsStock.available ? num(u.opsStock.zeroProducts) : '—',
@@ -476,7 +476,8 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
 
 function actionsTable(o: CerebroOverview): (string | number | null)[][] {
   const header = ['Severidade', 'Unidade', 'Título', 'Detalhe', 'Ação']
-  const rows = o.nextActions.map((a) => [
+  const actions = Array.isArray(o.nextActions) ? o.nextActions : []
+  const rows = actions.map((a) => [
     a.severity,
     a.unit === 'both' ? 'Rede' : a.unit === 'rom-brasil' ? 'Brasil' : 'Iguatemi',
     a.title,
@@ -488,7 +489,8 @@ function actionsTable(o: CerebroOverview): (string | number | null)[][] {
 
 function trendTable(o: CerebroOverview): (string | number | null)[][] {
   const header = ['Dia', 'Brasil (R$)', 'Iguatemi (R$)']
-  const rows = o.trend30.map((t) => [
+  const trend = Array.isArray(o.trend30) ? o.trend30 : []
+  const rows = trend.map((t) => [
     t.day,
     t.brasil == null ? '—' : money(t.brasil),
     t.iguatemi == null ? '—' : money(t.iguatemi),
@@ -507,9 +509,12 @@ function weekTable(o: CerebroOverview): (string | number | null)[][] {
     'Ocupação',
   ]
   const rows: (string | number | null)[][] = []
-  for (const u of o.units) {
+  for (const u of o.units ?? []) {
     if (u.sync.offline || isSyncHardFail(u) || !isUnitReadable(u)) continue
-    for (const p of u.opsWeek.professionals.slice(0, 10)) {
+    const pros = u.opsWeek?.professionals ?? []
+    const services = u.opsWeek?.services ?? []
+    const acquisition = u.opsWeek?.acquisition ?? []
+    for (const p of pros.slice(0, 10)) {
       rows.push([
         u.unit.short,
         'Profissional',
@@ -520,7 +525,7 @@ function weekTable(o: CerebroOverview): (string | number | null)[][] {
         pct(p.occupancy),
       ])
     }
-    for (const s of u.opsWeek.services.slice(0, 10)) {
+    for (const s of services.slice(0, 10)) {
       rows.push([
         u.unit.short,
         'Serviço',
@@ -531,7 +536,7 @@ function weekTable(o: CerebroOverview): (string | number | null)[][] {
         '—',
       ])
     }
-    for (const a of u.opsWeek.acquisition.slice(0, 10)) {
+    for (const a of acquisition.slice(0, 10)) {
       rows.push([u.unit.short, 'Aquisição', a.channel, '—', num(a.clients), '—', '—'])
     }
   }
@@ -552,10 +557,13 @@ function commerceTable(o: CerebroOverview): (string | number | null)[][] {
     'Receita pacote (R$)',
   ]
   const rows: (string | number | null)[][] = []
-  for (const u of o.units) {
+  for (const u of o.units ?? []) {
     if (u.sync.offline || isSyncHardFail(u) || !isUnitReadable(u)) continue
     const co = u.opsCommerce
-    const packs = co.packagesKnown ? co.packages.slice(0, 8) : []
+    if (!co) continue
+    const packList = Array.isArray(co.packages) ? co.packages : []
+    const channels = Array.isArray(co.bookingChannels) ? co.bookingChannels : []
+    const packs = co.packagesKnown ? packList.slice(0, 8) : []
     if (packs.length === 0) {
       rows.push([
         u.unit.short,
@@ -569,7 +577,7 @@ function commerceTable(o: CerebroOverview): (string | number | null)[][] {
         '—',
         '—',
       ])
-      for (const ch of co.bookingChannels.slice(0, 5)) {
+      for (const ch of channels.slice(0, 5)) {
         rows.push([
           u.unit.short,
           `Canal: ${ch.channel}`,
