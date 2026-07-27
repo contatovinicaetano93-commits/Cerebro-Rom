@@ -112,9 +112,9 @@ export function goalsFromEnv(envGoal: number, envCapacity: number): UnitGoals {
   }
 }
 
-/** Prefer DB row; else env bootstrap; else unset (no fake R$ 5.000). */
+/** Prefer any DB row (incluindo 0/0 explícito) over env bootstrap. */
 export function resolveGoals(db: UnitGoals | null, env: UnitGoals): UnitGoals {
-  if (db && (db.goalSet || db.capacitySet)) return db
+  if (db) return db
   if (env.goalSet || env.capacitySet) return env
   return EMPTY_GOALS
 }

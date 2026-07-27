@@ -495,20 +495,15 @@ export function Dashboard({
                   ? 'offline'
                   : sourceHint('Avec', 'ROM', syncSourceLabel(u.sync.status))
                 const dash = '—'
-                const quiet =
-                  !offline &&
-                  !syncBad &&
-                  u.today.revenue === 0 &&
-                  u.today.appointments === 0 &&
-                  u.today.attended === 0
                 const noDayMovement =
                   !offline &&
                   u.today.revenue === 0 &&
-                  u.today.appointments === 0 &&
-                  u.today.attended === 0
+                  u.today.attended === 0 &&
+                  u.today.appointments < 3
+                const quiet = !offline && !syncBad && noDayMovement
                 const agendaUnknown =
                   !offline &&
-                  u.today.appointments === 0 &&
+                  u.today.appointments < 3 &&
                   u.today.attended === 0 &&
                   u.sync.status !== 'ok'
                 const revenue = offline ? dash : formatCurrency(u.today.revenue)
@@ -531,7 +526,7 @@ export function Dashboard({
                   : noDayMovement
                     ? dash
                     : `${u.today.cancelled} · ${u.today.noShows}`
-                const novosRec = offline
+                const novosRec = offline || noDayMovement
                   ? dash
                   : `${u.today.newClients} · ${u.today.returningClients}`
                 const borderAccent =
@@ -677,7 +672,7 @@ export function Dashboard({
                   !offline &&
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
-                  w.returnRate === 0 &&
+                  (w.returnRate == null || w.returnRate === 0) &&
                   w.reactivationCount === 0
                 // Avec 0107 pagina até ~5000 linhas — 5000 é teto, não o total real.
                 const semRetornoLabel =
@@ -883,9 +878,11 @@ export function Dashboard({
                           >
                             {row.format === 'text'
                               ? '—'
-                              : row.format === 'pct'
-                                ? `${formatSignedPct(row.deltaPct)} p.p.`
-                                : formatSignedPct(row.deltaPct)}
+                              : row.deltaPct == null
+                                ? '—'
+                                : row.format === 'pct'
+                                  ? `${formatSignedPct(row.deltaPct)} p.p.`
+                                  : formatSignedPct(row.deltaPct)}
                           </span>
                         </li>
                       ))}

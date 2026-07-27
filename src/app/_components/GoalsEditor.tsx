@@ -57,8 +57,27 @@ export function GoalsEditor({
         setError('Nenhuma unidade online para gravar metas agora.')
         return
       }
-      await Promise.all(targets.map((t) => saveUnit(t.slug, t.draft)))
-      setOkMsg(`Metas salvas em ${targets.length} unidade(s).`)
+      const settled = await Promise.allSettled(targets.map((t) => saveUnit(t.slug, t.draft)))
+      const failed: string[] = []
+      let okCount = 0
+      settled.forEach((r, i) => {
+        const slug = targets[i]!.slug
+        if (r.status === 'fulfilled') okCount += 1
+        else {
+          const msg = r.reason instanceof Error ? r.reason.message : String(r.reason)
+          failed.push(`${slug}: ${msg}`)
+        }
+      })
+      if (okCount === 0) {
+        setError(`Falhou: ${failed.join(' · ')}`)
+        return
+      }
+      if (failed.length) {
+        setOkMsg(`Parcial (${okCount}/${targets.length})`)
+        setError(failed.join(' · '))
+      } else {
+        setOkMsg(`Metas salvas em ${okCount} unidade(s).`)
+      }
       onSaved()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
