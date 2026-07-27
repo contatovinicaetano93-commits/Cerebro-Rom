@@ -199,12 +199,17 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
   let leadsToday = 0
   let convertedToday = 0
   try {
+    // Paridade ROM: ignora dump Avec (importado / backfill / lake).
     const leadRows = (await sql`
       select
         count(*)::int as leads,
         count(*) filter (where status = 'convertido')::int as converted
       from contacts
       where (created_at at time zone 'America/Sao_Paulo')::date = ${today}::date
+        and status <> 'importado'
+        and coalesce(source, '') not like 'avec_sync_clients%'
+        and coalesce(source, '') not like 'avec_backfill%'
+        and coalesce(source, '') not like 'avec_lake%'
     `) as { leads: number; converted: number }[]
     leadsToday = n(leadRows[0]?.leads)
     convertedToday = n(leadRows[0]?.converted)
@@ -320,11 +325,11 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
         }
       } else if (last.status === 'partial') {
         sync = {
-          status: ageH > 6 ? 'stale' : 'error',
+          status: ageH > 6 ? 'stale' : 'partial',
           lastSyncAt,
           label: last.error
             ? `Sync parcial: ${last.error.slice(0, 80)}`
-            : `Sync parcial (~${ageH.toFixed(1)}h)`,
+            : `Sync parcial (~${ageH < 1 ? `${Math.max(1, Math.round(ageH * 60))} min` : `${ageH.toFixed(1)}h`}) · dados usáveis`,
         }
       } else if (ageH > 6) {
         // Sync full Avec pode levar 30–90+ min; janela saudável mais larga após sucesso.

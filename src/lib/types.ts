@@ -117,7 +117,8 @@ export interface UnitSnapshot {
   }
   last30: DayMetrics[]
   sync: {
-    status: 'ok' | 'stale' | 'error'
+    /** partial = sync Avec incompleto mas dados ainda usáveis. */
+    status: 'ok' | 'partial' | 'stale' | 'error'
     lastSyncAt: string
     label: string
     /** true quando a unidade não respondeu (placeholder no painel). */

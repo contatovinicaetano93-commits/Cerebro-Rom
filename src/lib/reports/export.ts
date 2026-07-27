@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { isSalonActiveToday } from '@/lib/salon-day'
 import type { CerebroOverview, ComparisonRow, UnitSnapshot } from '@/lib/types'
 import type { ReportRunDetail } from '@/lib/reports/store'
 
@@ -212,12 +213,27 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     ['MTD (mês)', money(c.mtdRevenue), 'R$', 'Receita acumulada no mês.'],
     ['Ticket médio (hoje)', money(c.ticketAvg), 'R$', 'Receita ÷ atendidos.'],
-    ['Ocupação', pct(c.occupancyRate), '%', 'Agenda ÷ capacidade.'],
+    [
+      'Ocupação',
+      c.occupancyConfigured ? pct(c.occupancyRate) : '—',
+      '%',
+      'Agenda ÷ capacidade (só unidades em operação).',
+    ],
     ['Comparecimento', pct(c.attendanceRate), '%', 'Atendidos ÷ agendados.'],
     ['No-show', pct(c.noShowRate), '%', 'Faltas ÷ agendados.'],
     ['Receita em risco', money(c.revenueAtRisk), 'R$', 'No-shows × ticket.'],
-    ['Vagas hoje', num(c.openSlotsToday), 'qtd', 'Capacidade − agenda do dia.'],
-    ['Vagas 2h', num(c.openSlotsNext2h), 'qtd', 'Encaixes estimados nas próximas 2h.'],
+    [
+      'Vagas hoje',
+      c.occupancyConfigured ? num(c.openSlotsToday) : '—',
+      'qtd',
+      'Capacidade − agenda (unidades em operação).',
+    ],
+    [
+      'Vagas 2h',
+      c.occupancyConfigured ? num(c.openSlotsNext2h) : '—',
+      'qtd',
+      'Encaixes estimados nas próximas 2h.',
+    ],
     ['Cancelamentos (hoje)', num(c.cancelledToday), 'qtd', 'Cancelamentos Avec do dia.'],
     ['No-shows (qtd)', num(c.noShowsToday), 'qtd', 'Faltas do dia.'],
     ['CMV (mês)', money(c.cmv), 'R$', 'Saídas estoque 0044.'],
@@ -255,33 +271,36 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Zerados',
     'Sync',
   ]
-  const rows = o.units.map((u) => [
-    u.unit.short,
-    u.today.day,
-    money(u.today.revenue),
-    num(u.today.appointments),
-    num(u.today.attended),
-    num(u.today.noShows),
-    num(u.today.cancelled),
-    money(u.today.ticketAvg),
-    u.today.capacitySet ? num(u.today.capacity) : '—',
-    u.today.goalSet ? money(u.today.dailyGoal) : '—',
-    money(lostRevenue(u)),
-    num(u.opsToday.openSlotsToday),
-    num(u.opsToday.openSlotsNext2h),
-    money(u.opsFinance.mtdRevenue),
-    money(u.opsFinance.mtdTicketAvg),
-    money(u.opsFinance.cmv),
-    money(u.opsFinance.paymentsTotal),
-    reconcileLabel(u.opsFinance.paymentReconcile),
-    u.opsFinance.topPaymentMethod || '—',
-    money(u.opsCommerce.packagesRevenue),
-    pct(u.opsWeek.returnRate),
-    money(u.opsStock.totalValue),
-    num(u.opsStock.activeAlerts),
-    num(u.opsStock.zeroProducts),
-    u.sync.label || u.sync.status,
-  ])
+  const rows = o.units.map((u) => {
+    const active = !u.sync.offline && isSalonActiveToday(u)
+    return [
+      u.unit.short,
+      u.today.day,
+      money(u.today.revenue),
+      num(u.today.appointments),
+      num(u.today.attended),
+      active ? num(u.today.noShows) : '—',
+      active ? num(u.today.cancelled) : '—',
+      active && u.today.attended > 0 ? money(u.today.ticketAvg) : '—',
+      u.today.capacitySet ? num(u.today.capacity) : '—',
+      u.today.goalSet ? money(u.today.dailyGoal) : '—',
+      active ? money(lostRevenue(u)) : '—',
+      active && u.today.capacitySet ? num(u.opsToday.openSlotsToday) : '—',
+      active && u.today.capacitySet ? num(u.opsToday.openSlotsNext2h) : '—',
+      money(u.opsFinance.mtdRevenue),
+      money(u.opsFinance.mtdTicketAvg),
+      u.opsFinance.cmvKnown ? money(u.opsFinance.cmv) : '—',
+      u.opsFinance.paymentsKnown ? money(u.opsFinance.paymentsTotal) : '—',
+      reconcileLabel(u.opsFinance.paymentReconcile),
+      u.opsFinance.topPaymentMethod || '—',
+      money(u.opsCommerce.packagesRevenue),
+      pct(u.opsWeek.returnRate),
+      u.opsStock.available ? money(u.opsStock.totalValue) : '—',
+      u.opsStock.available ? num(u.opsStock.activeAlerts) : '—',
+      u.opsStock.available ? num(u.opsStock.zeroProducts) : '—',
+      u.sync.label || u.sync.status,
+    ]
+  })
   return [header, ...rows]
 }
 
