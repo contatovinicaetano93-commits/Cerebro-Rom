@@ -226,13 +226,13 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     [
       'Comparecimento',
-      c.occupancyConfigured ? pct(c.attendanceRate) : '—',
+      c.attendanceConfigured ? pct(c.attendanceRate) : '—',
       '%',
       'Atendidos ÷ agendados.',
     ],
     [
       'No-show',
-      c.occupancyConfigured ? pct(c.noShowRate) : '—',
+      c.attendanceConfigured ? pct(c.noShowRate) : '—',
       '%',
       'Faltas ÷ agendados.',
     ],

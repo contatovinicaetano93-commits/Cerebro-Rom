@@ -27,6 +27,7 @@ import {
   formatPct,
   formatSignedPct,
 } from '@/lib/format'
+import { hasTrustedAgenda, isDayOperable, isSalonActiveToday } from '@/lib/salon-day'
 import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
@@ -374,18 +375,22 @@ export function Dashboard({
             <KpiStat
               label="Ocupação · Comparec."
               value={
-                c.occupancyConfigured
+                c.occupancyConfigured && c.attendanceConfigured
                   ? `${formatPct(c.occupancyRate)} · ${formatPct(c.attendanceRate)}`
-                  : '— · —'
+                  : c.occupancyConfigured
+                    ? `${formatPct(c.occupancyRate)} · —`
+                    : c.attendanceConfigured
+                      ? `— · ${formatPct(c.attendanceRate)}`
+                      : '— · —'
               }
               hint={
-                c.occupancyConfigured
+                c.attendanceConfigured
                   ? `No-show ${formatPct(c.noShowRate)} · risco ${formatCurrency(c.revenueAtRisk)}`
                   : 'Agenda do dia ainda não confiável / sem operação'
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.ocupacao}
-              tone={c.occupancyConfigured && c.noShowRate > 0.08 ? 'warn' : 'default'}
+              tone={c.attendanceConfigured && c.noShowRate > 0.08 ? 'warn' : 'default'}
             />
           </Panel>
           <Panel>
@@ -495,40 +500,27 @@ export function Dashboard({
                   ? 'offline'
                   : sourceHint('Avec', 'ROM', syncSourceLabel(u.sync.status))
                 const dash = '—'
-                const noDayMovement =
-                  !offline &&
-                  u.today.revenue === 0 &&
-                  u.today.attended === 0 &&
-                  u.today.appointments < 3
-                const quiet = !offline && !syncBad && noDayMovement
-                const agendaUnknown =
-                  !offline &&
-                  u.today.appointments < 3 &&
-                  u.today.attended === 0 &&
-                  u.sync.status !== 'ok'
+                const active = !offline && isSalonActiveToday(u)
+                const operable = !offline && isDayOperable(u)
+                const trustedAgenda = !offline && hasTrustedAgenda(u)
+                const quiet = !offline && !syncBad && !active
                 const revenue = offline ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
                   offline || !u.today.capacitySet
                     ? dash
-                    : agendaUnknown
-                      ? dash
-                      : noDayMovement
-                        ? 'Sem agenda'
-                        : String(u.opsToday.openSlotsToday)
+                    : !trustedAgenda
+                      ? active
+                        ? dash
+                        : 'Sem agenda'
+                      : String(u.opsToday.openSlotsToday)
                 const vagas2h =
-                  offline || !u.today.capacitySet
+                  offline || !u.today.capacitySet || !trustedAgenda
                     ? dash
-                    : agendaUnknown || noDayMovement
-                      ? dash
-                      : String(u.opsToday.openSlotsNext2h)
-                const cancelNoshow = offline
-                  ? dash
-                  : noDayMovement
-                    ? dash
-                    : `${u.today.cancelled} · ${u.today.noShows}`
-                const novosRec = offline || noDayMovement
-                  ? dash
-                  : `${u.today.newClients} · ${u.today.returningClients}`
+                    : String(u.opsToday.openSlotsNext2h)
+                const cancelNoshow =
+                  offline || !operable ? dash : `${u.today.cancelled} · ${u.today.noShows}`
+                const novosRec =
+                  offline || !active ? dash : `${u.today.newClients} · ${u.today.returningClients}`
                 const borderAccent =
                   slug === 'rom-brasil' ? 'border-brass/35' : 'border-teal/35'
 
@@ -597,9 +589,9 @@ export function Dashboard({
                         </p>
                         <p
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
-                            !offline && !noDayMovement && u.opsToday.openSlotsToday >= 4
+                            !offline && trustedAgenda && u.opsToday.openSlotsToday >= 4
                               ? 'text-warning'
-                              : noDayMovement
+                              : !trustedAgenda
                                 ? 'text-muted'
                                 : 'text-foreground'
                           }`}
@@ -627,9 +619,7 @@ export function Dashboard({
                         </p>
                         <p
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
-                            !offline &&
-                            !noDayMovement &&
-                            u.today.cancelled + u.today.noShows > 0
+                            operable && u.today.cancelled + u.today.noShows > 0
                               ? 'text-warning'
                               : 'text-foreground'
                           }`}

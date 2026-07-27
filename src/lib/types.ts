@@ -186,8 +186,10 @@ export interface CerebroOverview {
     attendanceRate: number
     noShowRate: number
     occupancyRate: number
-    /** false se nenhuma unidade tem capacidade definida. */
+    /** false se nenhuma unidade com agenda tem capacidade definida. */
     occupancyConfigured: boolean
+    /** true quando há agenda confiável o bastante para comparecimento/no-show. */
+    attendanceConfigured: boolean
     /** Ticket médio do dia (rede em operação). */
     ticketAvg: number
     revenueAtRisk: number
