@@ -128,7 +128,8 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
     no_show_rate: noShowRate,
     lost_revenue: lostRevenue,
     open_slots_today: trusted && u.today.capacitySet ? u.opsToday.openSlotsToday : 0,
-    open_slots_next_2h: trusted && u.today.capacitySet ? u.opsToday.openSlotsNext2h : 0,
+    open_slots_next_2h:
+      trusted && u.opsToday.slotsNext2hKnown ? u.opsToday.openSlotsNext2h : 0,
     mtd_revenue: offline ? 0 : u.opsFinance.mtdRevenue,
     mtd_attended: offline ? 0 : u.opsFinance.mtdAttended,
     mtd_ticket_avg: offline ? 0 : u.opsFinance.mtdTicketAvg,

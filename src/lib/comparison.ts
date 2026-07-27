@@ -1,5 +1,5 @@
 import { clamp01 } from './format'
-import { hasTrustedAgenda, isSalonActiveToday } from './salon-day'
+import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail } from './salon-day'
 import type { ComparisonRow, UnitComparison, UnitSnapshot } from './types'
 
 /** Compartilhado entre live (overview.ts) e mock (mock-overview.ts). */
@@ -44,9 +44,9 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
   if (!brasil || !iguatemi) return undefined
 
-  /** Offline → null (não R$ 0 falso no scorecard). */
+  /** Offline ou sync error (token) → null (não R$ 0 / MTD fantasma no scorecard). */
   const live = (u: UnitSnapshot, v: number | null | undefined): number | null => {
-    if (u.sync.offline) return null
+    if (u.sync.offline || isSyncHardFail(u)) return null
     if (v == null || !Number.isFinite(v)) return null
     return v
   }
@@ -79,7 +79,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       : Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
 
   const paymentGap = (u: UnitSnapshot): number | null => {
-    if (u.sync.offline || !u.opsFinance.paymentsKnown) return null
+    if (u.sync.offline || isSyncHardFail(u) || !u.opsFinance.paymentsKnown) return null
     if (u.opsFinance.paymentReconcile === 'unknown') return null
     if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
       return null
@@ -88,7 +88,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   }
 
   const reconcileLabel = (u: UnitSnapshot): string | null => {
-    if (u.sync.offline || !u.opsFinance.paymentsKnown) return null
+    if (u.sync.offline || isSyncHardFail(u) || !u.opsFinance.paymentsKnown) return null
     switch (u.opsFinance.paymentReconcile) {
       case 'aligned':
         return 'Ok'

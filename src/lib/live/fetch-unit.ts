@@ -47,24 +47,28 @@ function emptyDay(
   }
 }
 
-function buildOpsToday(today: DayMetrics, appointmentsNext2h: number): OpsToday {
+function buildOpsToday(
+  today: DayMetrics,
+  appointmentsNext2h: number,
+  slotsNext2hKnown: boolean,
+): OpsToday {
   const openSlotsToday = today.capacitySet
     ? Math.max(0, today.capacity - today.appointments)
     : 0
-  const capacityNext2h = today.capacitySet
+  const known = today.capacitySet && slotsNext2hKnown
+  const capacityNext2h = known
     ? Math.max(1, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
     : 0
-  const openSlotsNext2h = today.capacitySet
-    ? Math.max(0, capacityNext2h - appointmentsNext2h)
-    : 0
+  const openSlotsNext2h = known ? Math.max(0, capacityNext2h - appointmentsNext2h) : 0
   const mixBase = today.newClients + today.returningClients
   const newShare = mixBase > 0 ? today.newClients / mixBase : 0
 
   return {
     openSlotsToday,
-    appointmentsNext2h,
+    appointmentsNext2h: known ? appointmentsNext2h : 0,
     capacityNext2h,
     openSlotsNext2h,
+    slotsNext2hKnown: known,
     newShare,
   }
 }
@@ -122,7 +126,7 @@ export function offlineUnitSnapshot(meta: UnitMeta, detail: string): UnitSnapsho
   return {
     unit: meta,
     today: day,
-    opsToday: buildOpsToday(day, 0),
+    opsToday: buildOpsToday(day, 0, false),
     opsWeek: {
       professionals: [],
       services: [],
@@ -237,6 +241,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
 
   const todayMetrics = last30[last30.length - 1]!
   let appointmentsNext2h = 0
+  /** Só confiar em CS 2h se a agenda do dia também veio do live CS (não de metrics). */
+  let trustCsForNext2h = false
   try {
     const appt = (await sql`
       select count(*)::int as n
@@ -252,27 +258,34 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     // Nunca deixar appointments < attended (quebra comparecimento/vagas).
     if (scheduled >= attended && scheduled > 0) {
       // Live coerente: usa live, mas se metrics é bem maior e também coerente, prefer metrics.
-      todayMetrics.appointments =
-        metricAppt >= attended && metricAppt > scheduled * 2
-          ? metricAppt
-          : scheduled
+      if (metricAppt >= attended && metricAppt > scheduled * 2) {
+        todayMetrics.appointments = metricAppt
+        trustCsForNext2h = false
+      } else {
+        todayMetrics.appointments = scheduled
+        trustCsForNext2h = true
+      }
     } else if (metricAppt >= attended && metricAppt > 0) {
       todayMetrics.appointments = metricAppt
+      trustCsForNext2h = false
     } else {
       todayMetrics.appointments = Math.max(scheduled, metricAppt, attended)
+      trustCsForNext2h = scheduled > 0 && scheduled === todayMetrics.appointments
     }
 
-    const next2h = (await sql`
-      select count(*)::int as n
-      from client_services
-      where active = true
-        and scheduled_at is not null
-        and scheduled_at >= now()
-        and scheduled_at < now() + interval '2 hours'
-    `) as { n: number }[]
-    appointmentsNext2h = n(next2h[0]?.n)
+    if (trustCsForNext2h) {
+      const next2h = (await sql`
+        select count(*)::int as n
+        from client_services
+        where active = true
+          and scheduled_at is not null
+          and scheduled_at >= now()
+          and scheduled_at < now() + interval '2 hours'
+      `) as { n: number }[]
+      appointmentsNext2h = n(next2h[0]?.n)
+    }
   } catch {
-    // ok
+    trustCsForNext2h = false
   }
 
   const mtdRows = last30.filter((d) => d.day >= monthStart)
@@ -290,7 +303,7 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     goalSet,
   }
 
-  const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h)
+  const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, trustCsForNext2h)
 
   const [opsWeek, opsCommerce, opsFinance, opsStock] = await Promise.all([
     fetchOpsWeek(sql, today),

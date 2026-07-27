@@ -249,7 +249,7 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     [
       'Receita em risco',
-      c.todayOpsActive ? money(c.revenueAtRisk) : '—',
+      c.attendanceConfigured ? money(c.revenueAtRisk) : '—',
       'R$',
       'No-shows × ticket.',
     ],
@@ -261,9 +261,9 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     [
       'Vagas 2h',
-      c.occupancyConfigured ? num(c.openSlotsNext2h) : '—',
+      c.slotsNext2hConfigured ? num(c.openSlotsNext2h) : '—',
       'qtd',
-      'Encaixes estimados nas próximas 2h.',
+      'Encaixes estimados nas próximas 2h (agenda live).',
     ],
     [
       'Cancelamentos (hoje)',
@@ -277,8 +277,18 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
       'qtd',
       'Faltas do dia.',
     ],
-    ['CMV (mês)', money(c.cmv), 'R$', 'Saídas estoque 0044.'],
-    ['CMV / receita', pct(c.cmvShare), '%', 'CMV ÷ MTD.'],
+    [
+      'CMV (mês)',
+      c.cmvKnown ? money(c.cmv) : '—',
+      'R$',
+      'Saídas estoque 0044.',
+    ],
+    [
+      'CMV / receita',
+      c.cmvShare != null ? pct(c.cmvShare) : '—',
+      '%',
+      'CMV ÷ MTD.',
+    ],
     ['Estoque (valor)', money(c.stockValue), 'R$', 'Posição Avec.'],
     ['Alertas estoque', num(c.stockAlerts), 'qtd', 'Abaixo do mínimo.'],
   ]
@@ -359,7 +369,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       active && u.today.capacitySet && hasTrustedAgenda(u)
         ? num(u.opsToday.openSlotsToday)
         : '—',
-      active && u.today.capacitySet && hasTrustedAgenda(u)
+      active && u.opsToday.slotsNext2hKnown && hasTrustedAgenda(u)
         ? num(u.opsToday.openSlotsNext2h)
         : '—',
       money(u.opsFinance.mtdRevenue),
