@@ -24,8 +24,16 @@ export function formatNumber(value: number | null | undefined): string {
   return new Intl.NumberFormat('pt-BR').format(value)
 }
 
+/** Aceita `YYYY-MM-DD` ou `MM-DD` (trend30 do overview). */
 export function formatShortDate(isoDay: string): string {
-  const d = new Date(`${isoDay}T12:00:00`)
+  const raw = isoDay.trim()
+  if (!raw) return '—'
+  const normalized =
+    /^\d{2}-\d{2}$/.test(raw)
+      ? `2000-${raw}` // ano dummy — só dia/mês no rótulo
+      : raw.slice(0, 10)
+  const d = new Date(`${normalized}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return raw
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
 
