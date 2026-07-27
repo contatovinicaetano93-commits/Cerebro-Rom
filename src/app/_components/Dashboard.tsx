@@ -27,7 +27,7 @@ import {
   formatPct,
   formatSignedPct,
 } from '@/lib/format'
-import { hasTrustedAgenda, isDayOperable, isSalonActiveToday, isSyncHardFail } from '@/lib/salon-day'
+import { hasTrustedAgenda, isDayOperable, isSalonActiveToday, isSyncHardFail, isUnitReadable } from '@/lib/salon-day'
 import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
@@ -446,7 +446,7 @@ export function Dashboard({
             <Panel>
               <KpiStat
                 label="Estoque (valor)"
-                value={c.stockKnown ? formatCurrency(c.stockValue) : '—'}
+                value={c.stockValueKnown ? formatCurrency(c.stockValue) : '—'}
                 source={sourceHint('Avec', networkSyncSource)}
                 legend={LEGEND.estoqueValor}
               />
@@ -519,6 +519,7 @@ export function Dashboard({
                 const label = u?.unit.short ?? HOJE_UNIT_LABEL[slug]
                 const offline = !u || Boolean(u.sync.offline)
                 const hardFail = Boolean(u && !offline && isSyncHardFail(u))
+                const unreadableMoney = Boolean(u && !isUnitReadable(u))
                 const syncBad =
                   !offline &&
                   (u.sync.status === 'error' ||
@@ -532,8 +533,8 @@ export function Dashboard({
                 const operable = !offline && isDayOperable(u)
                 const trustedAgenda = !offline && hasTrustedAgenda(u)
                 const quiet = !offline && !syncBad && !active
-                // Token morto: chip Sync + números — (não inventar R$0 / receita fantasma).
-                const revenue = offline || hardFail ? dash : formatCurrency(u.today.revenue)
+                // Token morto / sem sync Avec: chip + números — (não inventar R$0).
+                const revenue = offline || hardFail || unreadableMoney ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
                   offline || !u.today.capacitySet
                     ? dash
@@ -688,7 +689,7 @@ export function Dashboard({
                 const w = u.opsWeek
                 const offline = Boolean(u.sync.offline)
                 const hardFail = !offline && isSyncHardFail(u)
-                const unreadable = offline || hardFail
+                const unreadable = offline || hardFail || !isUnitReadable(u)
                 const empty =
                   !unreadable &&
                   w.professionals.length === 0 &&
@@ -772,7 +773,7 @@ export function Dashboard({
                 const co = u.opsCommerce
                 const offline = Boolean(u.sync.offline)
                 const hardFail = !offline && isSyncHardFail(u)
-                const unreadable = offline || hardFail
+                const unreadable = offline || hardFail || !isUnitReadable(u)
                 const empty =
                   !unreadable &&
                   co.bookingChannels.length === 0 &&

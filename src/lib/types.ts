@@ -99,6 +99,8 @@ export interface OpsFinance {
 /** Estoque Avec-only — posição 0149 + alertas + drift vs 0045 quando existir. */
 export interface OpsStock {
   available: boolean
+  /** true quando há valorização real (custo local ou 0045 oficial). */
+  valueKnown: boolean
   totalValue: number
   productCount: number
   activeAlerts: number
@@ -224,6 +226,8 @@ export interface CerebroOverview {
     stockAlerts: number
     /** true quando há unidade legível com posição de estoque Disponível. */
     stockKnown: boolean
+    /** true quando há valorização real (não SKUs sem custo → R$0). */
+    stockValueKnown: boolean
     /**
      * true quando há ≥1 unidade legível (não offline / não token morto).
      * Sem isso, todayRevenue/mtdRevenue=0 seria inventar mês zerado.

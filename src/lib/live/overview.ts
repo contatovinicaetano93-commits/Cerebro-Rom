@@ -352,7 +352,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const cmv = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.cmv, 0)
   const cmvMtd = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.mtdRevenue, 0)
   const stockValue = readable.reduce(
-    (a, u) => a + (u.opsStock.available ? u.opsStock.totalValue : 0),
+    (a, u) => a + (u.opsStock.valueKnown ? u.opsStock.totalValue : 0),
     0,
   )
   const stockAlerts = readable.reduce(
@@ -360,6 +360,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     0,
   )
   const stockKnown = readable.some((u) => u.opsStock.available)
+  const stockValueKnown = readable.some((u) => u.opsStock.valueKnown)
   const dayRevenue = moneyOps.reduce((a, u) => a + u.today.revenue, 0)
   const agendaRevenue = agendaOps.reduce((a, u) => a + u.today.revenue, 0)
 
@@ -415,6 +416,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     stockValue,
     stockAlerts,
     stockKnown,
+    stockValueKnown,
     networkReadable: readable.length > 0,
   }
 }
@@ -453,6 +455,7 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     stockValue: 0,
     stockAlerts: 0,
     stockKnown: false,
+    stockValueKnown: false,
     networkReadable: false,
   }
 }

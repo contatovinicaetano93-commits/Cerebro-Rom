@@ -26,10 +26,12 @@ export function isSyncHardFail(u: UnitSnapshot): boolean {
 
 /**
  * Unidade legível para totais de rede / painel / export.
- * Offline ou token morto → não soma, não compara, não imprime como dinheiro real.
+ * Offline, token morto ou jamais sincronizado → não soma zeros como dinheiro real.
  */
 export function isUnitReadable(u: UnitSnapshot): boolean {
-  return !u.sync.offline && !isSyncHardFail(u)
+  if (u.sync.offline || isSyncHardFail(u)) return false
+  if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return false
+  return true
 }
 
 /** Dados do dia usáveis para alertas operacionais (encaixe, cancel, vagas). */

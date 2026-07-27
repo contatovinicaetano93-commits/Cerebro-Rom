@@ -278,9 +278,11 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Valor em estoque',
       group: 'estoque',
       brasil:
-        isUnitReadable(brasil) && brasil.opsStock.available ? brasil.opsStock.totalValue : null,
+        isUnitReadable(brasil) && brasil.opsStock.valueKnown
+          ? brasil.opsStock.totalValue
+          : null,
       iguatemi:
-        isUnitReadable(iguatemi) && iguatemi.opsStock.available
+        isUnitReadable(iguatemi) && iguatemi.opsStock.valueKnown
           ? iguatemi.opsStock.totalValue
           : null,
       format: 'currency',

@@ -286,8 +286,8 @@ export async function fetchOpsCommerce(sql: Sql, today: string): Promise<OpsComm
     .filter((x): x is OpsCommerce['packages'][number] => x != null)
   const packages = packagesAll.slice(0, 5)
   const packagesRevenue = packagesAll.reduce((a, p) => a + p.revenue, 0)
-  // P2 pode ser só payment_mix / canais — não inventar “0 pacotes” sem coluna/lista.
-  const packagesKnown = p2.packages_sold != null || packagesAll.length > 0
+  // P2 default packages_sold=0 — só known com venda real ou lista 0061.
+  const packagesKnown = packagesAll.length > 0 || n(p2.packages_sold) > 0
 
   return {
     bookingChannels,
