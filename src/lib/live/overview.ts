@@ -155,11 +155,11 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    // Vagas: exige agenda confiável (não inventar capacity cheia com sync parcial).
+    // Vagas 2h: exige CS live confiável (não inventar livres com metrics-only).
     if (
       dayOk &&
       hasTrustedAgenda(u) &&
-      u.today.capacitySet &&
+      u.opsToday.slotsNext2hKnown &&
       u.opsToday.openSlotsNext2h >= 2
     ) {
       actions.push({
@@ -322,6 +322,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const noShows = agendaOps.reduce((a, u) => a + u.today.noShows, 0)
   /** Ocupação: só unidades com capacidade definida (não all-or-nothing). */
   const capacityOps = agendaOps.filter((u) => u.today.capacitySet)
+  const slots2hOps = capacityOps.filter((u) => u.opsToday.slotsNext2hKnown)
   const capacity = capacityOps.reduce((a, u) => a + u.today.capacity, 0)
   const capacityAppointments = capacityOps.reduce((a, u) => a + u.today.appointments, 0)
   const occupancyConfigured = capacityOps.length > 0 && capacity > 0
@@ -367,11 +368,13 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     returningClients,
     conversionRate: rate(converted, leads),
     openSlotsToday: capacityOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
-    openSlotsNext2h: capacityOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
+    openSlotsNext2h: slots2hOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
+    slotsNext2hConfigured: slots2hOps.length > 0,
     cancelledToday: dayOps.reduce((a, u) => a + u.today.cancelled, 0),
     noShowsToday: dayOps.reduce((a, u) => a + u.today.noShows, 0),
     newShare: mixBase > 0 ? newClients / mixBase : 0,
     cmv,
+    cmvKnown: cmvKnownUnits.length > 0,
     cmvShare: cmvKnownUnits.length > 0 && cmvMtd > 0 ? cmv / cmvMtd : null,
     stockValue,
     stockAlerts,
@@ -401,10 +404,12 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     conversionRate: 0,
     openSlotsToday: 0,
     openSlotsNext2h: 0,
+    slotsNext2hConfigured: false,
     cancelledToday: 0,
     noShowsToday: 0,
     newShare: 0,
     cmv: 0,
+    cmvKnown: false,
     cmvShare: null,
     stockValue: 0,
     stockAlerts: 0,

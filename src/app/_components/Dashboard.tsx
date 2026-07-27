@@ -404,7 +404,9 @@ export function Dashboard({
               hint={
                 c.goalsConfigured
                   ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.mtdTicketAvg)}`
-                  : `Ticket ${formatCurrency(c.mtdTicketAvg)} · CMV ${formatCurrency(c.cmv)}`
+                  : `Ticket ${formatCurrency(c.mtdTicketAvg)}${
+                      c.cmvKnown ? ` · CMV ${formatCurrency(c.cmv)}` : ''
+                    }`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.mtd}
@@ -417,12 +419,12 @@ export function Dashboard({
           </Panel>
         </section>
 
-        {(c.cmv > 0 || c.stockValue > 0 || c.stockAlerts > 0) && (
+        {(c.cmvKnown || c.stockValue > 0 || c.stockAlerts > 0) && (
           <section className="mt-3 grid gap-3 sm:grid-cols-3">
             <Panel>
               <KpiStat
                 label="CMV rede (MTD)"
-                value={formatCurrency(c.cmv)}
+                value={c.cmvKnown ? formatCurrency(c.cmv) : '—'}
                 hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita` : undefined}
                 source={sourceHint('proxy', 'Avec', networkSyncSource)}
                 legend={LEGEND.cmv}
@@ -518,7 +520,7 @@ export function Dashboard({
                         : 'Sem agenda'
                       : String(u.opsToday.openSlotsToday)
                 const vagas2h =
-                  offline || !u.today.capacitySet || !trustedAgenda
+                  offline || !u.opsToday.slotsNext2hKnown || !trustedAgenda
                     ? dash
                     : String(u.opsToday.openSlotsNext2h)
                 const cancelNoshow =

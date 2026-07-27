@@ -33,6 +33,11 @@ export interface OpsToday {
   appointmentsNext2h: number
   capacityNext2h: number
   openSlotsNext2h: number
+  /**
+   * false quando a agenda do dia veio de metrics Avec (client_services incompleto).
+   * Nesse caso appointmentsNext2h/openSlotsNext2h não são confiáveis.
+   */
+  slotsNext2hKnown: boolean
   newShare: number
 }
 
@@ -198,11 +203,15 @@ export interface CerebroOverview {
     conversionRate: number
     openSlotsToday: number
     openSlotsNext2h: number
+    /** true quando há unidade com capacity + agenda 2h confiável (CS live). */
+    slotsNext2hConfigured: boolean
     cancelledToday: number
     noShowsToday: number
     newShare: number
     /** CMV rede (Avec) no MTD. */
     cmv: number
+    /** false quando nenhuma unidade tem saídas 0044 no período. */
+    cmvKnown: boolean
     cmvShare: number | null
     stockValue: number
     stockAlerts: number
