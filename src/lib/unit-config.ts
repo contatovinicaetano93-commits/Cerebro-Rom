@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { UnitMeta, UnitSlug } from '@/lib/types'
 import { goalsFromEnv, type UnitGoals } from '@/lib/goals'
 
@@ -31,15 +33,37 @@ export const UNIT_META: Record<UnitSlug, UnitMeta> = {
 }
 
 /**
- * Brasil migrou para Supabase. URL ainda em Neon = conexão “ok” com base morta/vazia.
- * Preferimos marcar como ausente (placeholder offline) a servir KPI falso.
+ * Overlay de deploy: `secrets/neon-iguatemi-database-url.txt` (gitignore)
+ * tem prioridade sobre NEON_IGUATEMI_DATABASE_URL — trade Neon→Supabase
+ * quando a API de env da Vercel não está disponível neste agente.
+ */
+function readIguatemiDeployOverlayUrl(): string | null {
+  const candidates = [
+    join(process.cwd(), 'secrets', 'neon-iguatemi-database-url.txt'),
+    join(process.cwd(), '.secrets', 'neon-iguatemi-database-url.txt'),
+  ]
+  for (const path of candidates) {
+    try {
+      if (!existsSync(path)) continue
+      const url = readFileSync(path, 'utf8').trim()
+      if (url.startsWith('postgres')) return url
+    } catch {
+      // ignore
+    }
+  }
+  return null
+}
+
+/**
+ * Brasil e Iguatemi migraram para Supabase. URL ainda em Neon = conexão “ok”
+ * com base morta/quota. Preferimos marcar ausente a servir KPI falso.
  */
 function resolveUnitDatabaseUrl(slug: UnitSlug, raw: string | null | undefined): string | null {
   const url = raw?.trim() || null
   if (!url) return null
-  if (slug === 'rom-brasil' && /\.neon\.tech\b/i.test(url)) {
+  if (/\.neon\.tech\b/i.test(url)) {
     console.error(
-      '[cerebro] NEON_BRASIL_DATABASE_URL aponta para Neon — use pooler Supabase (aws-*.pooler.supabase.com)',
+      `[cerebro] ${slug === 'rom-brasil' ? 'NEON_BRASIL_DATABASE_URL' : 'NEON_IGUATEMI_DATABASE_URL'} aponta para Neon — use pooler Supabase (aws-*.pooler.supabase.com)`,
     )
     return null
   }
@@ -60,7 +84,7 @@ export function getUnitConfigs(): UnitRuntimeConfig[] {
       meta: UNIT_META['rom-iguatemi'],
       databaseUrl: resolveUnitDatabaseUrl(
         'rom-iguatemi',
-        process.env.NEON_IGUATEMI_DATABASE_URL,
+        readIguatemiDeployOverlayUrl() ?? process.env.NEON_IGUATEMI_DATABASE_URL,
       ),
       envGoals: goalsFromEnv(numEnv('IGUATEMI_DAILY_GOAL'), numEnv('IGUATEMI_DAILY_CAPACITY')),
     },
