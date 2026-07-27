@@ -169,6 +169,7 @@ function buildUnit(
     opsStock: {
       ...EMPTY_OPS_STOCK,
       available: true,
+      valueKnown: true,
       totalValue: slug === 'rom-brasil' ? 28500 : 19200,
       productCount: slug === 'rom-brasil' ? 86 : 64,
       activeAlerts: slug === 'rom-brasil' ? 4 : 2,
@@ -278,6 +279,7 @@ export function buildMockOverview(): CerebroOverview {
       stockValue: units.reduce((a, u) => a + u.opsStock.totalValue, 0),
       stockAlerts: units.reduce((a, u) => a + u.opsStock.activeAlerts, 0),
       stockKnown: true,
+      stockValueKnown: true,
       networkReadable: true,
     },
     units,

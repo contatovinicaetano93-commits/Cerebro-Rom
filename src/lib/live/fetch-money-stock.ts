@@ -100,6 +100,7 @@ export const EMPTY_OPS_FINANCE: OpsFinance = {
 
 export const EMPTY_OPS_STOCK: OpsStock = {
   available: false,
+  valueKnown: false,
   totalValue: 0,
   productCount: 0,
   activeAlerts: 0,
@@ -248,14 +249,17 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
     const official = await fetchOfficialStockTotal(sql)
     const drift =
       official != null ? Math.round((localTotal - official) * 100) / 100 : null
+    // SKUs sem custo → não inventar estoque R$0 conhecido (alertas ainda podem aparecer).
+    const valueKnown = localTotal > 0 || official != null
 
     return {
       available: true,
-      totalValue: localTotal,
+      valueKnown,
+      totalValue: valueKnown ? localTotal : 0,
       productCount,
       activeAlerts,
       zeroProducts,
-      drift,
+      drift: valueKnown ? drift : null,
     }
   } catch {
     return { ...EMPTY_OPS_STOCK }

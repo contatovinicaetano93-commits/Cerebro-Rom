@@ -304,7 +304,7 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     [
       'Estoque (valor)',
-      c.stockKnown ? money(c.stockValue) : '—',
+      c.stockValueKnown ? money(c.stockValue) : '—',
       'R$',
       'Posição Avec.',
     ],
@@ -408,7 +408,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.opsFinance.topPaymentMethod || '—',
       u.opsCommerce.packagesKnown ? money(u.opsCommerce.packagesRevenue) : '—',
       pct(u.opsWeek.returnRate),
-      u.opsStock.available ? money(u.opsStock.totalValue) : '—',
+      u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
       u.opsStock.available ? num(u.opsStock.activeAlerts) : '—',
       u.opsStock.available ? num(u.opsStock.zeroProducts) : '—',
       u.sync.label || u.sync.status,
