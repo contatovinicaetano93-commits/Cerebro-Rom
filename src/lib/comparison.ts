@@ -69,12 +69,12 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       : rate(u.today.revenue, u.today.dailyGoal)
 
   const noShow = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !isSalonActiveToday(u) || u.today.appointments <= 0
+    u.sync.offline || !isSalonActiveToday(u) || !hasTrustedAgenda(u) || u.today.appointments <= 0
       ? null
       : rate(u.today.noShows, u.today.appointments)
 
   const lostRevenue = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !isSalonActiveToday(u)
+    u.sync.offline || !isSalonActiveToday(u) || !hasTrustedAgenda(u)
       ? null
       : Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
 

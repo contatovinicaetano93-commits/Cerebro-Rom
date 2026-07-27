@@ -246,9 +246,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
         and (scheduled_at at time zone 'America/Sao_Paulo')::date = ${today}::date
     `) as { n: number }[]
     const scheduled = n(appt[0]?.n)
-    if (scheduled > todayMetrics.appointments) {
-      todayMetrics.appointments = scheduled
-    }
+    // Live agenda é a fonte do dia — sobe e desce (não só ratchet up).
+    todayMetrics.appointments = scheduled
 
     const next2h = (await sql`
       select count(*)::int as n

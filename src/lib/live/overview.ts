@@ -369,7 +369,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     openSlotsToday: capacityOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
     openSlotsNext2h: capacityOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
     cancelledToday: dayOps.reduce((a, u) => a + u.today.cancelled, 0),
-    noShowsToday: noShows,
+    noShowsToday: dayOps.reduce((a, u) => a + u.today.noShows, 0),
     newShare: mixBase > 0 ? newClients / mixBase : 0,
     cmv,
     cmvShare: cmvKnownUnits.length > 0 && cmvMtd > 0 ? cmv / cmvMtd : null,
