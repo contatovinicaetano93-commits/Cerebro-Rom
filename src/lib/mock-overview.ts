@@ -251,6 +251,7 @@ export function buildMockOverview(): CerebroOverview {
       todayGoalProgress: rate(todayRevenue, todayGoal),
       goalsConfigured: true,
       todayOpsActive: true,
+      todayMoneyActive: true,
       mtdRevenue,
       mtdGoal,
       mtdGoalProgress: rate(mtdRevenue, mtdGoal),

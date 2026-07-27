@@ -64,7 +64,10 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       : rate(u.today.appointments, u.today.capacity)
 
   const goalPct = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !isSalonActiveToday(u) || !u.today.goalSet
+    u.sync.offline ||
+    !isSalonActiveToday(u) ||
+    !u.today.goalSet ||
+    (u.today.revenue <= 0 && u.today.attended <= 0)
       ? null
       : rate(u.today.revenue, u.today.dailyGoal)
 
@@ -73,10 +76,13 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       ? null
       : rate(u.today.noShows, u.today.appointments)
 
-  const lostRevenue = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !isSalonActiveToday(u) || !hasTrustedAgenda(u)
-      ? null
-      : Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
+  const lostRevenue = (u: UnitSnapshot): number | null => {
+    if (u.sync.offline || !isSalonActiveToday(u) || !hasTrustedAgenda(u)) return null
+    const lost = u.today.noShows + u.today.cancelled
+    if (lost <= 0) return 0
+    if (u.today.ticketAvg <= 0) return null
+    return Math.round(lost * u.today.ticketAvg)
+  }
 
   const paymentGap = (u: UnitSnapshot): number | null => {
     if (!isUnitReadable(u) || !u.opsFinance.paymentsKnown) return null

@@ -202,7 +202,7 @@ export function Dashboard({
     ? 'warn'
     : !c.goalsConfigured
       ? 'warn'
-      : !c.todayOpsActive
+      : !c.todayMoneyActive
         ? 'default'
         : c.todayGoalProgress >= 1
           ? 'good'
@@ -362,16 +362,18 @@ export function Dashboard({
                 !c.networkReadable
                   ? 'Nenhuma unidade com sync legível'
                   : !c.goalsConfigured
-                    ? 'Defina as metas para acompanhar progresso'
+                    ? 'Defina meta e capacidade de cada unidade'
                     : !c.todayOpsActive
                       ? 'Sem unidades em operação hoje'
-                      : `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
+                      : !c.todayMoneyActive
+                        ? 'Agenda ativa · aguardando faturamento/atendidos'
+                        : `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.faturamento}
               tone={goalTone}
             />
-            {c.networkReadable && c.goalsConfigured && c.todayOpsActive ? (
+            {c.networkReadable && c.goalsConfigured && c.todayMoneyActive ? (
               <div className="mt-3">
                 <ProgressBar
                   value={c.todayGoalProgress}
@@ -394,7 +396,9 @@ export function Dashboard({
               }
               hint={
                 c.attendanceConfigured
-                  ? `No-show ${formatPct(c.noShowRate)} · risco ${formatCurrency(c.revenueAtRisk)}`
+                  ? `No-show ${formatPct(c.noShowRate)} · risco ${
+                      c.revenueAtRisk != null ? formatCurrency(c.revenueAtRisk) : '—'
+                    }`
                   : 'Agenda do dia ainda não confiável / sem operação'
               }
               source={sourceHint('Avec', networkSyncSource)}
@@ -690,12 +694,14 @@ export function Dashboard({
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
                   (w.returnRate == null || w.returnRate === 0) &&
-                  w.reactivationCount === 0
+                  (w.reactivationCount == null || w.reactivationCount === 0)
                 // Avec 0107 pagina até ~5000 linhas — 5000 é teto, não o total real.
                 const semRetornoLabel =
-                  w.reactivationCount >= 5000
-                    ? '5.000+'
-                    : formatNumber(w.reactivationCount)
+                  w.reactivationCount == null
+                    ? '—'
+                    : w.reactivationCount >= 5000
+                      ? '5.000+'
+                      : formatNumber(w.reactivationCount)
                 return (
                   <div
                     key={u.unit.slug}
