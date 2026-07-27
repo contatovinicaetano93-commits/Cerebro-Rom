@@ -540,7 +540,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       action:
         cfg.meta.slug === 'rom-brasil'
           ? 'NEON_BRASIL_DATABASE_URL = pooler Supabase na Vercel'
-          : 'Completar NEON_IGUATEMI_DATABASE_URL na Vercel',
+          : 'Completar NEON_IGUATEMI_DATABASE_URL (pooler Supabase) na Vercel',
     })
     liveBySlug.set(cfg.meta.slug, offlineUnitSnapshot(cfg.meta, detail, day))
   }
@@ -569,7 +569,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       unit: 'both',
       title: 'Consolidado parcial',
       detail: `Só ${liveUnits[0]?.unit.short ?? 'uma unidade'} ao vivo — a outra está no painel como offline`,
-      action: 'Completar DATABASE_URL (Brasil=Supabase, Iguatemi=Neon)',
+      action: 'Completar DATABASE_URL (Brasil=Supabase, Iguatemi=Supabase)',
     })
   }
 
@@ -611,8 +611,8 @@ export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
     if (isProd) {
       return {
         ...degradedOverview(
-          'DATABASE_URL das unidades ausente em produção (Brasil=Supabase, Iguatemi=Neon)',
-          'Configurar NEON_BRASIL_DATABASE_URL (Supabase) e NEON_IGUATEMI_DATABASE_URL na Vercel',
+          'DATABASE_URL das unidades ausente em produção (Brasil e Iguatemi = Supabase pooler)',
+          'Configurar NEON_BRASIL_DATABASE_URL e NEON_IGUATEMI_DATABASE_URL (pooler Supabase) na Vercel',
           'no-unit-db',
         ),
         nextActions: [
