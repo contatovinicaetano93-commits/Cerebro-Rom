@@ -480,14 +480,29 @@ export function Dashboard({
                   ? 'offline'
                   : sourceHint('Avec', 'ROM', syncSourceLabel(u.sync.status))
                 const dash = '—'
+                const quiet =
+                  !offline &&
+                  u.today.revenue === 0 &&
+                  u.today.appointments === 0 &&
+                  u.today.attended === 0
                 const revenue = offline ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
-                  !offline && u.today.capacitySet ? String(u.opsToday.openSlotsToday) : dash
+                  offline || !u.today.capacitySet
+                    ? dash
+                    : quiet
+                      ? 'Sem agenda'
+                      : String(u.opsToday.openSlotsToday)
                 const vagas2h =
-                  !offline && u.today.capacitySet ? String(u.opsToday.openSlotsNext2h) : dash
+                  offline || !u.today.capacitySet
+                    ? dash
+                    : quiet
+                      ? '—'
+                      : String(u.opsToday.openSlotsNext2h)
                 const cancelNoshow = offline
                   ? dash
-                  : `${u.today.cancelled} · ${u.today.noShows}`
+                  : quiet
+                    ? '0 · 0'
+                    : `${u.today.cancelled} · ${u.today.noShows}`
                 const novosRec = offline
                   ? dash
                   : `${u.today.newClients} · ${u.today.returningClients}`
@@ -507,12 +522,20 @@ export function Dashboard({
                           {label}
                         </p>
                         <p className="mt-0.5 text-[0.65rem] text-muted">
-                          {offline ? 'Sem dados ao vivo' : u.sync.label}
+                          {offline
+                            ? 'Sem dados ao vivo'
+                            : quiet
+                              ? 'Sem movimento hoje · salão quieto/fechado'
+                              : u.sync.label}
                         </p>
                       </div>
                       {offline ? (
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Offline
+                        </span>
+                      ) : quiet ? (
+                        <span className="rounded-md border border-border/60 bg-panel px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted">
+                          Quieto
                         </span>
                       ) : null}
                     </div>
@@ -541,9 +564,11 @@ export function Dashboard({
                         </p>
                         <p
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
-                            !offline && u.opsToday.openSlotsToday >= 4
+                            !offline && !quiet && u.opsToday.openSlotsToday >= 4
                               ? 'text-warning'
-                              : 'text-foreground'
+                              : quiet
+                                ? 'text-muted'
+                                : 'text-foreground'
                           }`}
                         >
                           {vagasHoje}
@@ -880,7 +905,11 @@ export function Dashboard({
                         borderRadius: 12,
                         color: '#f2efe8',
                       }}
-                      formatter={(value) => formatCurrency(Number(value ?? 0))}
+                      formatter={(value) =>
+                        value == null || !Number.isFinite(Number(value))
+                          ? '—'
+                          : formatCurrency(Number(value))
+                      }
                     />
                     <Legend
                       verticalAlign="top"
@@ -894,6 +923,7 @@ export function Dashboard({
                       stroke="#c9a45c"
                       fill="url(#gBrasil)"
                       strokeWidth={2}
+                      connectNulls={false}
                     />
                     <Area
                       type="monotone"
@@ -902,6 +932,7 @@ export function Dashboard({
                       stroke="#6fafa0"
                       fill="url(#gIgua)"
                       strokeWidth={2}
+                      connectNulls={false}
                     />
                   </AreaChart>
                 </ResponsiveContainer>

@@ -318,7 +318,16 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
             ? 'Aguardando AVEC_API_TOKEN · último sync antigo com erro'
             : `Último sync com erro há ~${ageH.toFixed(0)}h (aguardando novo sync)`,
         }
-      } else if (ageH > 3) {
+      } else if (last.status === 'partial') {
+        sync = {
+          status: ageH > 6 ? 'stale' : 'error',
+          lastSyncAt,
+          label: last.error
+            ? `Sync parcial: ${last.error.slice(0, 80)}`
+            : `Sync parcial (~${ageH.toFixed(1)}h)`,
+        }
+      } else if (ageH > 6) {
+        // Sync full Avec pode levar 30–90+ min; janela saudável mais larga após sucesso.
         sync = {
           status: 'stale',
           lastSyncAt,
@@ -329,7 +338,10 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
         sync = {
           status: 'ok',
           lastSyncAt,
-          label: `Avec sync há ${mins} min`,
+          label:
+            mins < 60
+              ? `Avec sync há ${mins} min`
+              : `Avec sync há ${(mins / 60).toFixed(1)}h`,
         }
       }
     }

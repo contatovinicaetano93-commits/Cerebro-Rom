@@ -3,11 +3,7 @@ import { getUnitConfigs } from '@/lib/unit-config'
 import { isAuthEnabled, isProduction } from '@/lib/auth'
 import { buildOverview } from '@/lib/live/overview'
 
-function envOk(name: string) {
-  return Boolean(process.env[name]?.trim())
-}
-
-async function probeNeon(url: string | null | undefined) {
+async function probeUnitDb(url: string | null | undefined) {
   if (!url?.trim()) return { configured: false, connected: false, error: null as string | null }
   try {
     const sql = getSql(url)
@@ -22,7 +18,7 @@ async function probeNeon(url: string | null | undefined) {
   }
 }
 
-/** Monitoramento externo — sem segredos e sem probe de Neon (evita recon/DB load anônimo). */
+/** Monitoramento externo — sem segredos e sem probe de DB (evita recon/DB load anônimo). */
 export async function getPublicHealthStatus() {
   const configs = getUnitConfigs()
   return {
@@ -40,7 +36,7 @@ export async function getHealthStatus() {
     configs.map(async (c) => ({
       slug: c.meta.slug,
       name: c.meta.name,
-      ...(await probeNeon(c.databaseUrl)),
+      ...(await probeUnitDb(c.databaseUrl)),
     })),
   )
 
@@ -52,15 +48,22 @@ export async function getHealthStatus() {
     overviewError = e instanceof Error ? e.message : String(e)
   }
 
+  const br = configs.find((c) => c.meta.slug === 'rom-brasil')
+  const ig = configs.find((c) => c.meta.slug === 'rom-iguatemi')
+
   return {
     ok: probes.some((p) => p.connected) && (!isProduction() || isAuthEnabled()),
     readiness: {
       auth: isAuthEnabled(),
-      neon_brasil: envOk('NEON_BRASIL_DATABASE_URL'),
-      neon_iguatemi: envOk('NEON_IGUATEMI_DATABASE_URL'),
+      // URLs já resolvidas (Brasil em *.neon.tech → null).
+      brasil_supabase: Boolean(br?.databaseUrl),
+      iguatemi_neon: Boolean(ig?.databaseUrl),
+      // Compat com monitores antigos.
+      neon_brasil: Boolean(br?.databaseUrl),
+      neon_iguatemi: Boolean(ig?.databaseUrl),
       // Cérebro não guarda AVEC_API_TOKEN — sync vive nas unidades.
       awaiting_avec_token: false,
-      note: 'KPIs Avec dependem de AVEC_API_TOKEN + sync nas unidades ROM (não no Cérebro)',
+      note: 'Brasil=Supabase pooler · Iguatemi=Neon · sync Avec nas unidades ROM',
     },
     units: probes,
     overview: overview

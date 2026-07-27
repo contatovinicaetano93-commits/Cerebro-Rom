@@ -34,6 +34,12 @@ export async function POST() {
       )
     }
     const overview = await buildOverview()
+    if (overview.mode === 'mock') {
+      return NextResponse.json(
+        { error: 'Modo mock — captura de relatório só com dados live' },
+        { status: 503 },
+      )
+    }
     if (overview.mode === 'degraded' && overview.units.length === 0) {
       return NextResponse.json(
         { error: 'Live indisponível — nada para capturar' },
