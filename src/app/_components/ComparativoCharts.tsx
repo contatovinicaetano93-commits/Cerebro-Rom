@@ -99,9 +99,21 @@ function KpiBar({ row }: { row: ComparisonRow }) {
   }
 
   const data = [
-    { unit: 'Brasil', value: brasil ?? 0, fill: BRASS, missing: brasil == null },
-    { unit: 'Iguatemi', value: iguatemi ?? 0, fill: TEAL, missing: iguatemi == null },
+    ...(brasil != null
+      ? [{ unit: 'Brasil', value: brasil, fill: BRASS }]
+      : []),
+    ...(iguatemi != null
+      ? [{ unit: 'Iguatemi', value: iguatemi, fill: TEAL }]
+      : []),
   ]
+  if (data.length === 0) {
+    return (
+      <div className="rounded-xl border border-border/60 bg-panel-2/50 px-3 py-3">
+        <p className="text-sm text-muted">{row.label}</p>
+        <p className="mt-2 text-xs text-muted">Sem dado numérico para gráfico</p>
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-xl border border-border/60 bg-panel-2/50 px-3 py-3">
@@ -167,11 +179,7 @@ function KpiBar({ row }: { row: ComparisonRow }) {
             />
             <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
               {data.map((d) => (
-                <Cell
-                  key={d.unit}
-                  fill={d.fill}
-                  fillOpacity={d.missing ? 0.2 : 0.9}
-                />
+                <Cell key={d.unit} fill={d.fill} fillOpacity={0.9} />
               ))}
             </Bar>
           </BarChart>

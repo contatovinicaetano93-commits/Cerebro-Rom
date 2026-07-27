@@ -187,6 +187,8 @@ export async function fetchLiveUnit(
   const isHistorical = today < calendarToday
   const monthStart = monthStartIso(today)
   const from30 = isoDaysBackFrom(today, 29)
+  // MTD precisa do mês inteiro; last30 precisa de 30d — buscar o intervalo mais largo.
+  const fromMetrics = monthStart < from30 ? monthStart : from30
 
   const dbGoals = await readGoalsFromDb(sql)
   const goals = resolveGoals(dbGoals, config.envGoals)
@@ -204,7 +206,7 @@ export async function fetchLiveUnit(
       returning_clients,
       ticket_avg
     from salon_daily_metrics
-    where day >= ${from30}::date
+    where day >= ${fromMetrics}::date
       and day <= ${today}::date
     order by day asc
   `) as MetricRow[]
@@ -304,7 +306,28 @@ export async function fetchLiveUnit(
     trustCsForNext2h = false
   }
 
-  const mtdRows = last30.filter((d) => d.day >= monthStart)
+  const mtdRows: DayMetrics[] = []
+  {
+    // Dias do mês até asOf — não cortar no dia 31 (janela last30 deixa dia 1 de fora).
+    const monthLen = dayOfMonth(today)
+    for (let i = monthLen - 1; i >= 0; i--) {
+      const day = isoDaysBackFrom(today, i)
+      if (day < monthStart) continue
+      const isAsOf = day === today
+      mtdRows.push(
+        rowToDay(
+          byDay.get(day),
+          day,
+          capacity,
+          dailyGoal,
+          goalSet,
+          capacitySet,
+          isAsOf ? leadsToday : 0,
+          isAsOf ? convertedToday : 0,
+        ),
+      )
+    }
+  }
   const mtdRevenue = mtdRows.reduce((a, d) => a + d.revenue, 0)
   const mtdAttended = mtdRows.reduce((a, d) => a + d.attended, 0)
   const mtd = {
