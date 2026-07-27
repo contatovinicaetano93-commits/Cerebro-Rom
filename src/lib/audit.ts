@@ -1,4 +1,4 @@
-import { getSql } from '@/lib/db'
+import { getCerebroSql } from '@/lib/db'
 
 export interface AuditLog {
   id: string
@@ -24,7 +24,7 @@ export class AuditLogger {
     status: 'success' | 'error' = 'success',
     errorMessage?: string,
   ): Promise<void> {
-    const sql = getSql()
+    const sql = getCerebroSql()
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
 
@@ -40,7 +40,7 @@ export class AuditLogger {
   }
 
   static async getByUser(user: string, limit: number = 100): Promise<AuditLog[]> {
-    const sql = getSql()
+    const sql = getCerebroSql()
 
     try {
       return (await sql`select * from audit_logs where user = ${user} order by created_at desc limit ${limit}`) as AuditLog[]
@@ -50,7 +50,7 @@ export class AuditLogger {
   }
 
   static async getByAction(action: string, limit: number = 100): Promise<AuditLog[]> {
-    const sql = getSql()
+    const sql = getCerebroSql()
 
     try {
       return (await sql`select * from audit_logs where action = ${action} order by created_at desc limit ${limit}`) as AuditLog[]
@@ -60,7 +60,7 @@ export class AuditLogger {
   }
 
   static async getSuspicious(hoursBack: number = 24): Promise<AuditLog[]> {
-    const sql = getSql()
+    const sql = getCerebroSql()
     const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString()
 
     try {

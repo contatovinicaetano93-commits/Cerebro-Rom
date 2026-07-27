@@ -296,10 +296,10 @@ export function Dashboard({
           <div>
             <p className="text-[0.65rem] uppercase tracking-[0.25em] text-brass">Comando</p>
             <h1 className="mt-2 font-display text-3xl tracking-tight sm:text-4xl">
-              {data.units.length >= 2
-                ? 'O que mover agora'
-                : data.units.length === 1
-                  ? `${data.units[0]!.unit.short} · visão parcial`
+              {data.partial
+                ? 'Visão parcial — o que mover agora'
+                : data.units.some((u) => !u.sync.offline)
+                  ? 'O que mover agora'
                   : 'Painel offline'}
             </h1>
             {(data.partial || data.mode === 'degraded') && (
@@ -607,7 +607,9 @@ export function Dashboard({
             <div className="grid gap-4 sm:grid-cols-2">
               {data.units.map((u) => {
                 const w = u.opsWeek
+                const offline = Boolean(u.sync.offline)
                 const empty =
+                  !offline &&
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
                   w.returnRate === 0 &&
@@ -622,10 +624,21 @@ export function Dashboard({
                     key={u.unit.slug}
                     className="rounded-xl border border-border/50 bg-panel-2/40 p-3"
                   >
-                    <p className={`text-xs uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
-                      {u.unit.short}
-                    </p>
-                    {empty ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-xs uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
+                        {u.unit.short}
+                      </p>
+                      {offline ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Offline
+                        </span>
+                      ) : null}
+                    </div>
+                    {offline ? (
+                      <p className="mt-3 text-sm text-muted">
+                        Unidade offline — sem ranking/retorno desta base.
+                      </p>
+                    ) : empty ? (
                       <p className="mt-3 text-sm text-muted">Sem dados — sync full + token Avec.</p>
                     ) : (
                       <div className="mt-3 space-y-3 text-sm">
@@ -667,7 +680,9 @@ export function Dashboard({
             <div className="grid gap-4 sm:grid-cols-2">
               {data.units.map((u) => {
                 const co = u.opsCommerce
+                const offline = Boolean(u.sync.offline)
                 const empty =
+                  !offline &&
                   co.bookingChannels.length === 0 &&
                   co.packages.length === 0 &&
                   co.ratingsCount === 0
@@ -676,10 +691,21 @@ export function Dashboard({
                     key={u.unit.slug}
                     className="rounded-xl border border-border/50 bg-panel-2/40 p-3"
                   >
-                    <p className={`text-xs uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
-                      {u.unit.short}
-                    </p>
-                    {empty ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-xs uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
+                        {u.unit.short}
+                      </p>
+                      {offline ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Offline
+                        </span>
+                      ) : null}
+                    </div>
+                    {offline ? (
+                      <p className="mt-3 text-sm text-muted">
+                        Unidade offline — sem canais/pacotes desta base.
+                      </p>
+                    ) : empty ? (
                       <p className="mt-3 text-sm text-muted">
                         Sem canais/pacotes no último sync full Avec (0056/0061).
                       </p>

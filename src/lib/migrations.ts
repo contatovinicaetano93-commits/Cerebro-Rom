@@ -1,4 +1,4 @@
-import { getSql } from '@/lib/db'
+import { getCerebroSql } from '@/lib/db'
 
 export interface Migration {
   name: string
@@ -8,7 +8,7 @@ export interface Migration {
 
 export class MigrationRunner {
   static async runPending(migrations: Migration[]): Promise<void> {
-    const sql = getSql()
+    const sql = getCerebroSql()
 
     // Create migrations table if not exists
     try {
@@ -58,7 +58,7 @@ export class MigrationRunner {
       throw new Error(`Migration ${migration.name} does not support rollback`)
     }
 
-    const sql = getSql()
+    const sql = getCerebroSql()
     await migration.down(sql)
     await sql`delete from _migrations where name = ${migration.name}`
     console.log(`✓ Rolled back: ${migration.name}`)

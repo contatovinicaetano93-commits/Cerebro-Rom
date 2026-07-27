@@ -43,21 +43,34 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
   if (!brasil || !iguatemi) return undefined
 
+  /** Offline → null (não R$ 0 falso no scorecard). */
+  const live = (u: UnitSnapshot, v: number | null | undefined): number | null => {
+    if (u.sync.offline) return null
+    if (v == null || !Number.isFinite(v)) return null
+    return v
+  }
+
   const occ = (u: UnitSnapshot): number | null =>
-    u.today.capacitySet ? rate(u.today.appointments, u.today.capacity) : null
+    u.sync.offline || !u.today.capacitySet
+      ? null
+      : rate(u.today.appointments, u.today.capacity)
 
   const goalPct = (u: UnitSnapshot): number | null =>
-    u.today.goalSet ? rate(u.today.revenue, u.today.dailyGoal) : null
+    u.sync.offline || !u.today.goalSet ? null : rate(u.today.revenue, u.today.dailyGoal)
 
   const noShow = (u: UnitSnapshot): number | null =>
-    u.today.appointments > 0 ? rate(u.today.noShows, u.today.appointments) : null
+    u.sync.offline || u.today.appointments <= 0
+      ? null
+      : rate(u.today.noShows, u.today.appointments)
 
-  /** Cancel + no-show × ticket do dia — dinheiro que vazou da agenda (Avec). */
-  const lostRevenue = (u: UnitSnapshot): number =>
-    Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
+  const lostRevenue = (u: UnitSnapshot): number | null =>
+    u.sync.offline
+      ? null
+      : Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
 
   const paymentGap = (u: UnitSnapshot): number | null => {
-    if (!u.opsFinance.available || u.opsFinance.paymentReconcile === 'unknown') return null
+    if (u.sync.offline || !u.opsFinance.paymentsKnown) return null
+    if (u.opsFinance.paymentReconcile === 'unknown') return null
     if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
       return null
     }
@@ -65,7 +78,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   }
 
   const reconcileLabel = (u: UnitSnapshot): string | null => {
-    if (!u.opsFinance.available) return null
+    if (u.sync.offline || !u.opsFinance.paymentsKnown) return null
     switch (u.opsFinance.paymentReconcile) {
       case 'aligned':
         return 'Ok'
@@ -89,8 +102,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'revenue_today',
       label: 'Receita hoje',
       group: 'ops',
-      brasil: brasil.today.revenue,
-      iguatemi: iguatemi.today.revenue,
+      brasil: live(brasil, brasil.today.revenue),
+      iguatemi: live(iguatemi, iguatemi.today.revenue),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -134,8 +147,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'ticket',
       label: 'Ticket médio',
       group: 'ops',
-      brasil: brasil.today.ticketAvg || null,
-      iguatemi: iguatemi.today.ticketAvg || null,
+      brasil: live(brasil, brasil.today.ticketAvg || null),
+      iguatemi: live(iguatemi, iguatemi.today.ticketAvg || null),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -143,8 +156,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'return',
       label: 'Taxa de retorno',
       group: 'comercial',
-      brasil: brasil.opsWeek.returnRate || null,
-      iguatemi: iguatemi.opsWeek.returnRate || null,
+      brasil: live(brasil, brasil.opsWeek.returnRate || null),
+      iguatemi: live(iguatemi, iguatemi.opsWeek.returnRate || null),
       format: 'pct',
       higherIsBetter: true,
     }),
@@ -152,8 +165,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'packages',
       label: 'Pacotes (receita)',
       group: 'comercial',
-      brasil: brasil.opsCommerce.packagesRevenue,
-      iguatemi: iguatemi.opsCommerce.packagesRevenue,
+      brasil: live(brasil, brasil.opsCommerce.packagesRevenue),
+      iguatemi: live(iguatemi, iguatemi.opsCommerce.packagesRevenue),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -161,8 +174,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_revenue',
       label: 'Receita MTD',
       group: 'financeiro',
-      brasil: brasil.opsFinance.mtdRevenue,
-      iguatemi: iguatemi.opsFinance.mtdRevenue,
+      brasil: live(brasil, brasil.opsFinance.mtdRevenue),
+      iguatemi: live(iguatemi, iguatemi.opsFinance.mtdRevenue),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -170,17 +183,17 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_ticket',
       label: 'Ticket MTD',
       group: 'financeiro',
-      brasil: brasil.opsFinance.mtdTicketAvg || null,
-      iguatemi: iguatemi.opsFinance.mtdTicketAvg || null,
+      brasil: live(brasil, brasil.opsFinance.mtdTicketAvg || null),
+      iguatemi: live(iguatemi, iguatemi.opsFinance.mtdTicketAvg || null),
       format: 'currency',
       higherIsBetter: true,
     }),
     row({
       key: 'cmv',
-      label: 'CMV (saídas)',
+      label: 'CMV proxy (saídas)',
       group: 'financeiro',
-      brasil: brasil.opsFinance.available ? brasil.opsFinance.cmv : null,
-      iguatemi: iguatemi.opsFinance.available ? iguatemi.opsFinance.cmv : null,
+      brasil: brasil.opsFinance.cmvKnown ? live(brasil, brasil.opsFinance.cmv) : null,
+      iguatemi: iguatemi.opsFinance.cmvKnown ? live(iguatemi, iguatemi.opsFinance.cmv) : null,
       format: 'currency',
       higherIsBetter: false,
     }),
@@ -188,8 +201,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'cmv_share',
       label: 'CMV / receita',
       group: 'financeiro',
-      brasil: brasil.opsFinance.cmvShare,
-      iguatemi: iguatemi.opsFinance.cmvShare,
+      brasil: live(brasil, brasil.opsFinance.cmvShare),
+      iguatemi: live(iguatemi, iguatemi.opsFinance.cmvShare),
       format: 'pct',
       higherIsBetter: false,
     }),
@@ -197,8 +210,12 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'payments_total',
       label: 'Pagamentos 0081',
       group: 'financeiro',
-      brasil: brasil.opsFinance.available ? brasil.opsFinance.paymentsTotal : null,
-      iguatemi: iguatemi.opsFinance.available ? iguatemi.opsFinance.paymentsTotal : null,
+      brasil: brasil.opsFinance.paymentsKnown
+        ? live(brasil, brasil.opsFinance.paymentsTotal)
+        : null,
+      iguatemi: iguatemi.opsFinance.paymentsKnown
+        ? live(iguatemi, iguatemi.opsFinance.paymentsTotal)
+        : null,
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -229,8 +246,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       group: 'financeiro',
       brasil: null,
       iguatemi: null,
-      brasilText: brasil.opsFinance.topPaymentMethod,
-      iguatemiText: iguatemi.opsFinance.topPaymentMethod,
+      brasilText: brasil.sync.offline ? null : brasil.opsFinance.topPaymentMethod,
+      iguatemiText: iguatemi.sync.offline ? null : iguatemi.opsFinance.topPaymentMethod,
       format: 'text',
       higherIsBetter: true,
       deltaPct: null,
@@ -239,8 +256,12 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'stock_value',
       label: 'Valor em estoque',
       group: 'estoque',
-      brasil: brasil.opsStock.available ? brasil.opsStock.totalValue : null,
-      iguatemi: iguatemi.opsStock.available ? iguatemi.opsStock.totalValue : null,
+      brasil:
+        !brasil.sync.offline && brasil.opsStock.available ? brasil.opsStock.totalValue : null,
+      iguatemi:
+        !iguatemi.sync.offline && iguatemi.opsStock.available
+          ? iguatemi.opsStock.totalValue
+          : null,
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -248,8 +269,12 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'stock_alerts',
       label: 'Alertas estoque',
       group: 'estoque',
-      brasil: brasil.opsStock.available ? brasil.opsStock.activeAlerts : null,
-      iguatemi: iguatemi.opsStock.available ? iguatemi.opsStock.activeAlerts : null,
+      brasil:
+        !brasil.sync.offline && brasil.opsStock.available ? brasil.opsStock.activeAlerts : null,
+      iguatemi:
+        !iguatemi.sync.offline && iguatemi.opsStock.available
+          ? iguatemi.opsStock.activeAlerts
+          : null,
       format: 'number',
       higherIsBetter: false,
     }),
@@ -257,14 +282,21 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'stock_zero',
       label: 'SKUs zerados',
       group: 'estoque',
-      brasil: brasil.opsStock.available ? brasil.opsStock.zeroProducts : null,
-      iguatemi: iguatemi.opsStock.available ? iguatemi.opsStock.zeroProducts : null,
+      brasil:
+        !brasil.sync.offline && brasil.opsStock.available ? brasil.opsStock.zeroProducts : null,
+      iguatemi:
+        !iguatemi.sync.offline && iguatemi.opsStock.available
+          ? iguatemi.opsStock.zeroProducts
+          : null,
       format: 'number',
       higherIsBetter: false,
     }),
   ]
 
-  const deltaRevenuePct = deltaRelative(brasil.mtd.revenue, iguatemi.mtd.revenue)
+  const deltaRevenuePct =
+    brasil.sync.offline || iguatemi.sync.offline
+      ? null
+      : deltaRelative(brasil.mtd.revenue, iguatemi.mtd.revenue)
 
   return { rows, deltaRevenuePct }
 }

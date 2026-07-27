@@ -7,8 +7,8 @@ import { GoalsUpdateSchema, validateRequest } from '@/lib/schemas'
 export const dynamic = 'force-dynamic'
 
 /**
- * Persiste meta diária + capacidade na Neon da unidade (tabela cerebro_goals).
- * Única escrita intencional do Cérebro nos Neons operacionais.
+ * Persiste meta diária + capacidade no DB da unidade (tabela cerebro_goals).
+ * Única escrita intencional do Cérebro nos bancos operacionais.
  */
 export async function PUT(req: Request) {
   let body: unknown
@@ -27,7 +27,7 @@ export async function PUT(req: Request) {
   const config = getUnitConfig(unit)
   if (!config?.databaseUrl) {
     return NextResponse.json(
-      { error: `Neon não configurada para ${unit}` },
+      { error: `DB não configurado para ${unit}` },
       { status: 503 },
     )
   }

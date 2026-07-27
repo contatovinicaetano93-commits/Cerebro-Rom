@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { CerebroOverview } from '@/lib/types'
 import { Dashboard } from './_components/Dashboard'
 
@@ -29,33 +29,36 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    try {
+      const next = await fetchOverview()
+      setData(next)
+      setError(null)
+    } catch (e) {
+      // Na atualização em background, mantém o último painel se a rede falhar.
+      if (!opts?.silent) setError(String(e))
+    } finally {
+      if (!opts?.silent) setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
 
-    const load = async (opts?: { silent?: boolean }) => {
-      try {
-        const next = await fetchOverview()
-        if (cancelled) return
-        setData(next)
-        setError(null)
-      } catch (e) {
-        if (cancelled) return
-        // Na atualização em background, mantém o último painel se a rede falhar.
-        if (!opts?.silent) setError(String(e))
-      } finally {
-        if (!cancelled && !opts?.silent) setLoading(false)
-      }
+    const run = async (opts?: { silent?: boolean }) => {
+      if (cancelled) return
+      await load(opts)
     }
 
-    void load()
+    void run()
 
     const id = window.setInterval(() => {
       if (document.visibilityState === 'hidden') return
-      void load({ silent: true })
+      void run({ silent: true })
     }, OVERVIEW_POLL_MS)
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void load({ silent: true })
+      if (document.visibilityState === 'visible') void run({ silent: true })
     }
     document.addEventListener('visibilitychange', onVisible)
 
@@ -64,7 +67,7 @@ export default function HomePage() {
       window.clearInterval(id)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [])
+  }, [load])
 
   if (loading) {
     return (
@@ -88,5 +91,5 @@ export default function HomePage() {
     )
   }
 
-  return <Dashboard data={data} />
+  return <Dashboard data={data} onRefresh={() => void load({ silent: true })} />
 }

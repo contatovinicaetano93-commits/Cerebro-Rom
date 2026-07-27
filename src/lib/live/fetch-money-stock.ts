@@ -82,8 +82,10 @@ export const EMPTY_OPS_FINANCE: OpsFinance = {
   mtdAttended: 0,
   mtdTicketAvg: 0,
   cmv: 0,
+  cmvKnown: false,
   cmvShare: null,
   paymentsTotal: 0,
+  paymentsKnown: false,
   paymentReconcile: 'unknown',
   topPaymentMethod: null,
   available: false,
@@ -171,17 +173,20 @@ export async function fetchOpsFinance(
     }
   }
 
-  const cmvShare = mtdRevenue > 0 ? cmv / mtdRevenue : null
+  const cmvShare = cmvOk && mtdRevenue > 0 ? cmv / mtdRevenue : null
 
   return {
     mtdRevenue,
     mtdAttended,
     mtdTicketAvg,
-    cmv,
+    cmv: cmvOk ? cmv : 0,
+    cmvKnown: cmvOk,
     cmvShare,
-    paymentsTotal,
-    paymentReconcile: reconcile(mtdRevenue, paymentsTotal),
-    topPaymentMethod,
+    paymentsTotal: mixOk ? paymentsTotal : 0,
+    paymentsKnown: mixOk,
+    paymentReconcile: mixOk ? reconcile(mtdRevenue, paymentsTotal) : 'unknown',
+    topPaymentMethod: mixOk ? topPaymentMethod : null,
+    // Disponível se há qualquer fonte Avec financeira — não inventa CMV/0081 via só MTD.
     available: cmvOk || mixOk || mtdRevenue > 0,
   }
 }
