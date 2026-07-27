@@ -7,7 +7,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 | Sistema | Sem Avec | Comportamento |
 |---------|----------|---------------|
 | ROM Brasil / Iguatemi | ✅ | Agenda/contatos via WhatsApp/Telegram; sync Avec aguarda token |
-| Cérebro | ✅ | Live parcial (Brasil=Supabase / Iguatemi=Neon); Camada A fraca; B/C vazios até full sync |
+| Cérebro | ✅ | Live (Brasil+Iguatemi=Supabase); Camada A fraca; B/C vazios até full sync |
 | Webhooks + cron | ✅ | Infra pronta; dispara sync quando token existir |
 
 ## Sábado — código e deploy
@@ -18,7 +18,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 - [ ] Login Waltter no Cérebro OK
 - [ ] Smoke test: `npm run smoke` e `npm run smoke:full` no cerebro-rom
 
-### Verificação DB (Brasil = Supabase pooler; Iguatemi = Neon)
+### Verificação DB (Brasil + Iguatemi = Supabase pooler)
 
 | | Brasil (rom-club) | Iguatemi |
 |--|-------------------|----------|
@@ -31,7 +31,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 ## Domingo — banco e simulação
 
 - [ ] Brasil (Supabase): `schema.sql` + deltas P1/P2/P3
-- [ ] Neon Iguatemi: mesmos deltas (banco **separado**)
+- [ ] Supabase Iguatemi: mesmos deltas (banco **separado**)
 - [ ] Local com mock (opcional): `AVEC_MOCK=1` → POST `/api/avec/sync?mode=full` → conferir Cérebro Semana/Comercial
 
 ```bash

@@ -1,42 +1,50 @@
 #!/usr/bin/env node
 /**
- * Fail if NEON_BRASIL_DATABASE_URL points at Neon (dead BR Neon).
- * Brasil must use Supabase pooler (*.supabase.com). Iguatemi may stay on neon.tech.
+ * Fail if unit DATABASE_URL envs point at Neon (dead/quota).
+ * Brasil + Iguatemi must use Supabase pooler (*.supabase.com).
+ * Env names NEON_* are legacy; values must be Supabase.
  *
  * Usage:
- *   NEON_BRASIL_DATABASE_URL=... node scripts/check-brasil-db-host.mjs
+ *   NEON_BRASIL_DATABASE_URL=... NEON_IGUATEMI_DATABASE_URL=... node scripts/check-brasil-db-host.mjs
  *   npm run check:brasil-db-host
  */
-const url = (process.env.NEON_BRASIL_DATABASE_URL || '').trim()
 
-if (!url) {
-  console.log('check-brasil-db-host SKIP: NEON_BRASIL_DATABASE_URL unset')
-  process.exit(0)
+function check(label, envName) {
+  const url = (process.env[envName] || '').trim()
+  if (!url) {
+    console.log(`check-db-host SKIP: ${envName} unset (${label})`)
+    return 0
+  }
+
+  const m = url.match(/@([^/:?]+)/)
+  const host = m?.[1] || ''
+
+  if (!host) {
+    console.error(`check-db-host FAILED: could not parse host from ${envName}`)
+    return 1
+  }
+
+  if (/neon\.tech$/i.test(host) || /\.neon\.tech$/i.test(host)) {
+    console.error(`check-db-host FAILED: ${envName} host is Neon (${host}).`)
+    console.error(
+      '  Use Supabase pooler (aws-*.pooler.supabase.com:5432 session or :6543 tx), ssl require, prepare:false.',
+    )
+    console.error(`  (Env var name ${envName} is legacy; value must be Supabase.)`)
+    return 1
+  }
+
+  if (!/supabase\.com$/i.test(host) && !/\.supabase\.com$/i.test(host)) {
+    console.warn(
+      `check-db-host WARN: ${label} host ${host} is not *.supabase.com — confirm intentional.`,
+    )
+  }
+
+  console.log(`check-db-host OK: ${label} host=${host}`)
+  return 0
 }
 
-const m = url.match(/@([^/:?]+)/)
-const host = m?.[1] || ''
+const code =
+  check('Brasil', 'NEON_BRASIL_DATABASE_URL') |
+  check('Iguatemi', 'NEON_IGUATEMI_DATABASE_URL')
 
-if (!host) {
-  console.error('check-brasil-db-host FAILED: could not parse host from NEON_BRASIL_DATABASE_URL')
-  process.exit(1)
-}
-
-if (/neon\.tech$/i.test(host) || /\.neon\.tech$/i.test(host)) {
-  console.error(
-    `check-brasil-db-host FAILED: NEON_BRASIL_DATABASE_URL host is Neon (${host}).`,
-  )
-  console.error(
-    '  Use Supabase pooler (aws-*.pooler.supabase.com:5432 session or :6543 tx), ssl require, prepare:false.',
-  )
-  console.error('  (Env var name NEON_BRASIL_* is legacy; value must be Supabase.)')
-  process.exit(1)
-}
-
-if (!/supabase\.com$/i.test(host) && !/\.supabase\.com$/i.test(host)) {
-  console.warn(
-    `check-brasil-db-host WARN: host ${host} is not *.supabase.com — confirm this is intentional for Brasil.`,
-  )
-}
-
-console.log(`check-brasil-db-host OK: Brasil host=${host}`)
+process.exit(code)

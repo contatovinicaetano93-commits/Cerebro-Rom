@@ -31,15 +31,17 @@ export const UNIT_META: Record<UnitSlug, UnitMeta> = {
 }
 
 /**
- * Brasil migrou para Supabase. URL ainda em Neon = conexão “ok” com base morta/vazia.
+ * Unidades migraram para Supabase. URL ainda em Neon = quota morta / base errada.
  * Preferimos marcar como ausente (placeholder offline) a servir KPI falso.
  */
 function resolveUnitDatabaseUrl(slug: UnitSlug, raw: string | null | undefined): string | null {
   const url = raw?.trim() || null
   if (!url) return null
-  if (slug === 'rom-brasil' && /\.neon\.tech\b/i.test(url)) {
+  if (/\.neon\.tech\b/i.test(url)) {
+    const envName =
+      slug === 'rom-brasil' ? 'NEON_BRASIL_DATABASE_URL' : 'NEON_IGUATEMI_DATABASE_URL'
     console.error(
-      '[cerebro] NEON_BRASIL_DATABASE_URL aponta para Neon — use pooler Supabase (aws-*.pooler.supabase.com)',
+      `[cerebro] ${envName} aponta para Neon — use pooler Supabase (aws-*.pooler.supabase.com)`,
     )
     return null
   }

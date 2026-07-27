@@ -55,15 +55,16 @@ export async function getHealthStatus() {
     ok: probes.some((p) => p.connected) && (!isProduction() || isAuthEnabled()),
     readiness: {
       auth: isAuthEnabled(),
-      // URLs já resolvidas (Brasil em *.neon.tech → null).
+      // URLs já resolvidas (*.neon.tech → null; ambas unidades = Supabase).
       brasil_supabase: Boolean(br?.databaseUrl),
-      iguatemi_neon: Boolean(ig?.databaseUrl),
+      iguatemi_supabase: Boolean(ig?.databaseUrl),
       // Compat com monitores antigos.
+      iguatemi_neon: Boolean(ig?.databaseUrl),
       neon_brasil: Boolean(br?.databaseUrl),
       neon_iguatemi: Boolean(ig?.databaseUrl),
       // Cérebro não guarda AVEC_API_TOKEN — sync vive nas unidades.
       awaiting_avec_token: false,
-      note: 'Brasil=Supabase pooler · Iguatemi=Neon · sync Avec nas unidades ROM',
+      note: 'Brasil+Iguatemi=Supabase pooler · sync Avec nas unidades ROM',
     },
     units: probes,
     overview: overview

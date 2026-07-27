@@ -54,7 +54,7 @@ function joinCsv(rows: (string | number | null | undefined)[][]): string {
 
 function modeLabel(mode: CerebroOverview['mode'], partial?: boolean, overview?: CerebroOverview): string {
   if (mode === 'live') {
-    if (!partial) return 'Live (Brasil Supabase + Iguatemi Neon)'
+    if (!partial) return 'Live (Brasil + Iguatemi Supabase)'
     const offline = overview?.units.some((u) => u.sync.offline)
     const syncBad = overview?.units.some(
       (u) => !u.sync.offline && (u.sync.status === 'partial' || u.sync.status === 'error'),
