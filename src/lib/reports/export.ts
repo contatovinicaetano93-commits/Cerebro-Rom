@@ -206,9 +206,9 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ['Indicador', 'Valor', 'Unidade / formato', 'Como ler'],
     [
       'Faturamento hoje',
-      money(c.todayRevenue),
+      c.networkReadable ? money(c.todayRevenue) : '—',
       'R$',
-      'Receita Avec do dia (unidades ao vivo).',
+      'Receita Avec do dia (unidades com sync legível).',
     ],
     [
       'Meta hoje',
@@ -222,7 +222,12 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
       '%',
       'Faturamento ÷ meta.',
     ],
-    ['MTD (mês)', money(c.mtdRevenue), 'R$', 'Receita acumulada no mês.'],
+    [
+      'MTD (mês)',
+      c.networkReadable ? money(c.mtdRevenue) : '—',
+      'R$',
+      'Receita acumulada no mês.',
+    ],
     [
       'Ticket médio (hoje)',
       c.todayOpsActive && c.ticketAvg > 0 ? money(c.ticketAvg) : '—',
@@ -289,8 +294,18 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
       '%',
       'CMV ÷ MTD.',
     ],
-    ['Estoque (valor)', money(c.stockValue), 'R$', 'Posição Avec.'],
-    ['Alertas estoque', num(c.stockAlerts), 'qtd', 'Abaixo do mínimo.'],
+    [
+      'Estoque (valor)',
+      c.stockKnown ? money(c.stockValue) : '—',
+      'R$',
+      'Posição Avec.',
+    ],
+    [
+      'Alertas estoque',
+      c.stockKnown ? num(c.stockAlerts) : '—',
+      'qtd',
+      'Abaixo do mínimo.',
+    ],
   ]
 }
 

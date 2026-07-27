@@ -275,6 +275,8 @@ export function buildMockOverview(): CerebroOverview {
       cmvShare: mtdRevenue > 0 ? cmv / mtdRevenue : null,
       stockValue: units.reduce((a, u) => a + u.opsStock.totalValue, 0),
       stockAlerts: units.reduce((a, u) => a + u.opsStock.activeAlerts, 0),
+      stockKnown: true,
+      networkReadable: true,
     },
     units,
     trend30: brasil.last30.map((row, idx) => ({

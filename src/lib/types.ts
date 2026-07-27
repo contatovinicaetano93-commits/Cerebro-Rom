@@ -215,6 +215,13 @@ export interface CerebroOverview {
     cmvShare: number | null
     stockValue: number
     stockAlerts: number
+    /** true quando há unidade legível com posição de estoque Disponível. */
+    stockKnown: boolean
+    /**
+     * true quando há ≥1 unidade legível (não offline / não token morto).
+     * Sem isso, todayRevenue/mtdRevenue=0 seria inventar mês zerado.
+     */
+    networkReadable: boolean
   }
   units: UnitSnapshot[]
   /** null = unidade offline naquele dia (não plotar como zero). */
