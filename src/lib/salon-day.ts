@@ -30,13 +30,12 @@ export function isDayOperable(u: UnitSnapshot): boolean {
 
 /**
  * Agenda confiável para ocupação/vagas.
- * Evita capacity cheia com sync parcial zerando/inventando agenda.
+ * Exige sync ok|stale — partial não inventa capacity/encaixe.
  */
 export function hasTrustedAgenda(u: UnitSnapshot): boolean {
-  if (u.sync.offline || !isSalonActiveToday(u)) return false
+  if (u.sync.offline || !isSalonActiveToday(u) || !syncUsableForAgenda(u)) return false
   if (u.today.attended > 0 || u.today.appointments >= 3) return true
-  // Só receita sem volume de agenda: não inventar vagas.
-  return u.today.appointments > 0 && syncUsableForAgenda(u)
+  return u.today.appointments > 0
 }
 
 /** KPIs semanais/financeiros ainda legíveis com sync parcial ou stale. */
