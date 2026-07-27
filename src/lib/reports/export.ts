@@ -459,6 +459,37 @@ export function buildReportCsv(run: ReportRunDetail): string {
   return `\uFEFF${blocks.join('\n')}\n`
 }
 
+/** CSV só do comparativo Brasil × Iguatemi (MTD + dia + ops). */
+export function buildComparativoCsv(run: ReportRunDetail): string {
+  const o = run.payload
+  const cmp = comparisonTable(o)
+  if (!cmp) {
+    return `\uFEFF${joinCsv([
+      ['Comparativo Brasil × Iguatemi'],
+      ['Período', o.periodLabel],
+      ['Captura', run.createdAt],
+      ['Status', 'Comparativo indisponível (faltou uma das unidades)'],
+    ])}\n`
+  }
+  const blocks = [
+    joinCsv([
+      ['Comparativo Brasil × Iguatemi — relatório do mês (MTD) + dia'],
+      ['Período', o.periodLabel],
+      ['Captura', run.createdAt],
+      ['Modo', modeLabel(o.mode, o.partial, o)],
+      [
+        'Δ receita MTD',
+        o.comparison?.deltaRevenuePct == null
+          ? '—'
+          : signedPct(o.comparison.deltaRevenuePct),
+      ],
+    ]),
+    '',
+    joinCsv(cmp),
+  ]
+  return `\uFEFF${blocks.join('\n')}\n`
+}
+
 function styleHeaderRow(row: ExcelJS.Row) {
   row.font = { bold: true, color: { argb: 'FF1A1A1A' } }
   row.fill = {
@@ -520,6 +551,48 @@ export async function buildReportXlsx(run: ReportRunDetail): Promise<Buffer> {
     autosize(sheet, 12, 42)
     sheet.views = [{ state: 'frozen', ySplit: 1 }]
   }
+
+  const buf = await wb.xlsx.writeBuffer()
+  return Buffer.from(buf)
+}
+
+/** XLSX só com capa + aba Comparativo (mês MTD + dia). */
+export async function buildComparativoXlsx(run: ReportRunDetail): Promise<Buffer> {
+  const o = run.payload
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Cérebro ROM'
+  wb.created = new Date(run.createdAt)
+  wb.description = 'Comparativo Brasil × Iguatemi — MTD + dia'
+
+  const capa = wb.addWorksheet('Capa')
+  capa.addRows([
+    ['Comparativo Brasil × Iguatemi'],
+    ['Relatório do mês (MTD) + indicadores do dia'],
+    ['Período', o.periodLabel],
+    ['Captura', run.createdAt],
+    ['Modo', modeLabel(o.mode, o.partial, o)],
+    [
+      'Δ receita MTD',
+      o.comparison?.deltaRevenuePct == null
+        ? '—'
+        : signedPct(o.comparison.deltaRevenuePct),
+    ],
+  ])
+  capa.getRow(1).font = { bold: true, size: 16 }
+  capa.getRow(2).font = { italic: true, color: { argb: 'FF666666' } }
+  capa.getColumn(1).width = 22
+  capa.getColumn(2).width = 56
+
+  const cmp = comparisonTable(o)
+  const sheet = wb.addWorksheet('Comparativo')
+  if (cmp) {
+    sheet.addRows(cmp)
+    styleHeaderRow(sheet.getRow(1))
+  } else {
+    sheet.addRow(['Comparativo indisponível (faltou uma das unidades)'])
+  }
+  autosize(sheet, 12, 42)
+  sheet.views = [{ state: 'frozen', ySplit: 1 }]
 
   const buf = await wb.xlsx.writeBuffer()
   return Buffer.from(buf)

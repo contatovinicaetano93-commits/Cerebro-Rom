@@ -279,6 +279,12 @@ export function Dashboard({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <a
+              href="/comparativo"
+              className="rounded-xl border border-teal/35 bg-teal/10 px-3 py-1.5 text-xs text-teal hover:border-teal/55"
+            >
+              Comparativo
+            </a>
             <div className="hidden text-right sm:block">
               <p className="text-[0.65rem] uppercase tracking-[0.18em] text-muted">Fonte</p>
               <p className="text-sm text-brass-soft">{data.periodLabel}</p>
@@ -348,7 +354,7 @@ export function Dashboard({
           />
         </section>
 
-        <section className="mt-6 space-y-3">
+        <section id="relatorios" className="mt-6 space-y-3">
           <GoalsEditor data={data} onSaved={() => onRefresh?.()} />
           <ReportsPanel />
         </section>
@@ -883,6 +889,14 @@ export function Dashboard({
                   Δ
                 </span>
               </div>
+              <p className="mb-3 text-xs text-muted">
+                Scorecard tabular ·{' '}
+                <a href="/comparativo" className="text-teal underline decoration-dotted underline-offset-2 hover:text-teal-soft">
+                  ver em gráficos
+                </a>
+                {' · '}
+                export Comparativo em Relatórios
+              </p>
               <div className="space-y-5">
                 {comparisonGroups.map(({ group, rows }) => (
                   <div key={group}>
