@@ -51,20 +51,23 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     return v
   }
 
-  /** KPIs do dia: salão quieto → null (não “0% meta / 0% ocupação”). */
+  /** KPIs do dia: exige unidade legível + salão ativo (não never-sync com métricas cache). */
   const dayLive = (u: UnitSnapshot, v: number | null | undefined): number | null => {
-    if (u.sync.offline || !isSalonActiveToday(u)) return null
+    if (!isUnitReadable(u) || !isSalonActiveToday(u)) return null
     if (v == null || !Number.isFinite(v)) return null
     return v
   }
 
   const occ = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !isSalonActiveToday(u) || !hasTrustedAgenda(u) || !u.today.capacitySet
+    !isUnitReadable(u) ||
+    !isSalonActiveToday(u) ||
+    !hasTrustedAgenda(u) ||
+    !u.today.capacitySet
       ? null
       : rate(u.today.appointments, u.today.capacity)
 
   const goalPct = (u: UnitSnapshot): number | null =>
-    u.sync.offline ||
+    !isUnitReadable(u) ||
     !isSalonActiveToday(u) ||
     !u.today.goalSet ||
     (u.today.revenue <= 0 && u.today.attended <= 0)
@@ -72,12 +75,15 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       : rate(u.today.revenue, u.today.dailyGoal)
 
   const noShow = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !isSalonActiveToday(u) || !hasTrustedAgenda(u) || u.today.appointments <= 0
+    !isUnitReadable(u) ||
+    !isSalonActiveToday(u) ||
+    !hasTrustedAgenda(u) ||
+    u.today.appointments <= 0
       ? null
       : rate(u.today.noShows, u.today.appointments)
 
   const lostRevenue = (u: UnitSnapshot): number | null => {
-    if (u.sync.offline || !isSalonActiveToday(u) || !hasTrustedAgenda(u)) return null
+    if (!isUnitReadable(u) || !isSalonActiveToday(u) || !hasTrustedAgenda(u)) return null
     const lost = u.today.noShows + u.today.cancelled
     if (lost <= 0) return 0
     if (u.today.ticketAvg <= 0) return null

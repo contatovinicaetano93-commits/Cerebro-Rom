@@ -376,7 +376,9 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     riskHasKnown = true
     revenueAtRisk = (revenueAtRisk ?? 0) + u.today.noShows * u.today.ticketAvg
   }
-  if (riskHasUnknown && !riskHasKnown) revenueAtRisk = null
+  // Qualquer no-show sem ticket → risco desconhecido (não apresentar soma parcial como total).
+  if (riskHasUnknown) revenueAtRisk = null
+  else if (!riskHasKnown) revenueAtRisk = 0
 
   return {
     todayRevenue,

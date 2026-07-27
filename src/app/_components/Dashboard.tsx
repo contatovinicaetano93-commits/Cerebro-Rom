@@ -518,25 +518,26 @@ export function Dashboard({
                 const u = unitForHoje(data.units, slug)
                 const label = u?.unit.short ?? HOJE_UNIT_LABEL[slug]
                 const offline = !u || Boolean(u.sync.offline)
-                const hardFail = Boolean(u && !offline && isSyncHardFail(u))
-                const unreadableMoney = Boolean(u && !isUnitReadable(u))
-                const syncBad =
-                  !offline &&
-                  (u.sync.status === 'error' ||
-                    u.sync.status === 'partial' ||
-                    u.sync.status === 'stale')
-                const src = offline
+                const syncBad = Boolean(
+                  u &&
+                    !offline &&
+                    (u.sync.status === 'error' ||
+                      u.sync.status === 'partial' ||
+                      u.sync.status === 'stale'),
+                )
+                const src = !u || offline
                   ? 'offline'
                   : sourceHint('Avec', 'ROM', syncSourceLabel(u.sync.status))
                 const dash = '—'
-                const active = !offline && isSalonActiveToday(u)
-                const operable = !offline && isDayOperable(u)
-                const trustedAgenda = !offline && hasTrustedAgenda(u)
-                const quiet = !offline && !syncBad && !active
-                // Token morto / sem sync Avec: chip + números — (não inventar R$0).
-                const revenue = offline || hardFail || unreadableMoney ? dash : formatCurrency(u.today.revenue)
+                const readable = u != null && isUnitReadable(u)
+                const active = Boolean(u && readable && isSalonActiveToday(u))
+                const operable = Boolean(u && readable && isDayOperable(u))
+                const trustedAgenda = Boolean(u && readable && hasTrustedAgenda(u))
+                const quiet = readable && !syncBad && !active
+                // Never-sync / token morto: todos os KPIs do chip → — (não misturar ops com fat —).
+                const revenue = !u || !readable ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
-                  offline || !u.today.capacitySet
+                  !u || !readable || !u.today.capacitySet
                     ? dash
                     : !trustedAgenda
                       ? active
@@ -544,13 +545,17 @@ export function Dashboard({
                         : 'Sem agenda'
                       : String(u.opsToday.openSlotsToday)
                 const vagas2h =
-                  offline || !u.opsToday.slotsNext2hKnown || !trustedAgenda
+                  !u || !readable || !u.opsToday.slotsNext2hKnown || !trustedAgenda
                     ? dash
                     : String(u.opsToday.openSlotsNext2h)
                 const cancelNoshow =
-                  offline || !operable ? dash : `${u.today.cancelled} · ${u.today.noShows}`
+                  !u || !readable || !operable
+                    ? dash
+                    : `${u.today.cancelled} · ${u.today.noShows}`
                 const novosRec =
-                  offline || !active ? dash : `${u.today.newClients} · ${u.today.returningClients}`
+                  !u || !readable || !active
+                    ? dash
+                    : `${u.today.newClients} · ${u.today.returningClients}`
                 const borderAccent =
                   slug === 'rom-brasil' ? 'border-brass/35' : 'border-teal/35'
 
@@ -570,21 +575,21 @@ export function Dashboard({
                           {offline
                             ? 'Sem dados ao vivo'
                             : syncBad
-                              ? u.sync.label
+                              ? (u?.sync.label ?? 'Sync')
                               : quiet
                                 ? 'Sem movimento hoje · salão quieto/fechado'
-                                : u.sync.label}
+                                : (u?.sync.label ?? '')}
                         </p>
                       </div>
                       {offline ? (
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Offline
                         </span>
-                      ) : u.sync.status === 'error' ? (
+                      ) : u?.sync.status === 'error' ? (
                         <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
                           Sync
                         </span>
-                      ) : u.sync.status === 'partial' ? (
+                      ) : u?.sync.status === 'partial' ? (
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Parcial
                         </span>
@@ -619,7 +624,9 @@ export function Dashboard({
                         </p>
                         <p
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
-                            !offline && trustedAgenda && u.opsToday.openSlotsToday >= 4
+                            !offline &&
+                            trustedAgenda &&
+                            (u?.opsToday.openSlotsToday ?? 0) >= 4
                               ? 'text-warning'
                               : !trustedAgenda
                                 ? 'text-muted'
@@ -649,7 +656,9 @@ export function Dashboard({
                         </p>
                         <p
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
-                            operable && u.today.cancelled + u.today.noShows > 0
+                            operable &&
+                            u != null &&
+                            u.today.cancelled + u.today.noShows > 0
                               ? 'text-warning'
                               : 'text-foreground'
                           }`}

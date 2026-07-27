@@ -13,6 +13,7 @@ type ReportRunMeta = {
   unitCount: number
   todayRevenue: number
   mtdRevenue: number
+  networkReadable?: boolean
 }
 
 export function ReportsPanel() {
@@ -139,8 +140,13 @@ export function ReportsPanel() {
                       </p>
                       <p className="text-xs text-muted">
                         {run.periodLabel} · {run.unitCount} un. · hoje{' '}
-                        {formatCurrency(run.todayRevenue)} · MTD{' '}
-                        {formatCurrency(run.mtdRevenue)}
+                        {run.networkReadable === false
+                          ? '—'
+                          : formatCurrency(run.todayRevenue)}{' '}
+                        · MTD{' '}
+                        {run.networkReadable === false
+                          ? '—'
+                          : formatCurrency(run.mtdRevenue)}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
