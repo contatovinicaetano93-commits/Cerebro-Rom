@@ -154,6 +154,7 @@ async function fetchLatestP1(sql: Sql, today: string): Promise<P1Row | null> {
       select professionals, services, acquisition, reactivation_count
       from salon_p1_daily
       where day <= ${today}::date
+        and day >= (${today}::date - interval '14 days')
         and jsonb_typeof(coalesce(professionals, '[]'::jsonb)) = 'array'
         and jsonb_array_length(coalesce(professionals, '[]'::jsonb)) > 0
       order by day desc
@@ -164,6 +165,7 @@ async function fetchLatestP1(sql: Sql, today: string): Promise<P1Row | null> {
       select professionals, services, acquisition, reactivation_count
       from salon_p1_daily
       where day <= ${today}::date
+        and day >= (${today}::date - interval '14 days')
       order by day desc
       limit 1
     `) as P1Row[]
@@ -188,6 +190,7 @@ async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
         birthday_count
       from salon_p2_daily
       where day <= ${today}::date
+        and day >= (${today}::date - interval '14 days')
         and (
           (
             jsonb_typeof(coalesce(booking_channels, '[]'::jsonb)) = 'array'
@@ -213,6 +216,7 @@ async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
         birthday_count
       from salon_p2_daily
       where day <= ${today}::date
+        and day >= (${today}::date - interval '14 days')
       order by day desc
       limit 1
     `) as P2Row[]
@@ -225,14 +229,27 @@ async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
 async function fetchLatestP3(sql: Sql, today: string): Promise<P3Row | null> {
   if (!(await tableExists(sql, 'salon_p3_daily'))) return null
   try {
+    // Prefere dia com taxa de retorno preenchida (evita zero de sync parcial).
     const rows = (await sql`
       select return_rate, new_clients_period
       from salon_p3_daily
       where day <= ${today}::date
+        and day >= (${today}::date - interval '14 days')
+        and return_rate is not null
+        and return_rate > 0
       order by day desc
       limit 1
     `) as P3Row[]
-    return rows[0] ?? null
+    if (rows[0]) return rows[0]
+    const fallback = (await sql`
+      select return_rate, new_clients_period
+      from salon_p3_daily
+      where day <= ${today}::date
+        and day >= (${today}::date - interval '14 days')
+      order by day desc
+      limit 1
+    `) as P3Row[]
+    return fallback[0] ?? null
   } catch {
     return null
   }

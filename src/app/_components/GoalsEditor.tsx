@@ -47,10 +47,10 @@ export function GoalsEditor({
     setSaving('both')
     try {
       const jobs: Promise<void>[] = []
-      if (data.units.some((u) => u.unit.slug === 'rom-brasil')) {
+      if (data.units.some((u) => u.unit.slug === 'rom-brasil' && !u.sync.offline)) {
         jobs.push(saveUnit('rom-brasil', brasil))
       }
-      if (data.units.some((u) => u.unit.slug === 'rom-iguatemi')) {
+      if (data.units.some((u) => u.unit.slug === 'rom-iguatemi' && !u.sync.offline)) {
         jobs.push(saveUnit('rom-iguatemi', iguatemi))
       }
       await Promise.all(jobs)
@@ -102,7 +102,9 @@ export function GoalsEditor({
                 },
               ] as const
             ).map((block) => {
-              const present = data.units.some((u) => u.unit.slug === block.slug)
+              const present = data.units.some(
+                (u) => u.unit.slug === block.slug && !u.sync.offline,
+              )
               return (
                 <div key={block.slug} className="space-y-3">
                   <p className="text-[0.65rem] uppercase tracking-[0.18em] text-muted">
@@ -152,7 +154,7 @@ export function GoalsEditor({
             {error ? <p className="text-xs text-danger">{error}</p> : null}
             {okMsg ? <p className="text-xs text-success">{okMsg}</p> : null}
             {data.mode === 'mock' ? (
-              <p className="text-xs text-muted">Mock: salvar exige Neon live.</p>
+              <p className="text-xs text-muted">Mock: salvar exige DB live da unidade.</p>
             ) : null}
           </div>
         </div>

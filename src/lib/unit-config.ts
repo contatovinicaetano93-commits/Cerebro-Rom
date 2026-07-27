@@ -30,16 +30,38 @@ export const UNIT_META: Record<UnitSlug, UnitMeta> = {
   },
 }
 
+/**
+ * Brasil migrou para Supabase. URL ainda em Neon = conexão “ok” com base morta/vazia.
+ * Preferimos marcar como ausente (placeholder offline) a servir KPI falso.
+ */
+function resolveUnitDatabaseUrl(slug: UnitSlug, raw: string | null | undefined): string | null {
+  const url = raw?.trim() || null
+  if (!url) return null
+  if (slug === 'rom-brasil' && /\.neon\.tech\b/i.test(url)) {
+    console.error(
+      '[cerebro] NEON_BRASIL_DATABASE_URL aponta para Neon — use pooler Supabase (aws-*.pooler.supabase.com)',
+    )
+    return null
+  }
+  return url
+}
+
 export function getUnitConfigs(): UnitRuntimeConfig[] {
   return [
     {
       meta: UNIT_META['rom-brasil'],
-      databaseUrl: process.env.NEON_BRASIL_DATABASE_URL?.trim() || null,
+      databaseUrl: resolveUnitDatabaseUrl(
+        'rom-brasil',
+        process.env.NEON_BRASIL_DATABASE_URL,
+      ),
       envGoals: goalsFromEnv(numEnv('BRASIL_DAILY_GOAL'), numEnv('BRASIL_DAILY_CAPACITY')),
     },
     {
       meta: UNIT_META['rom-iguatemi'],
-      databaseUrl: process.env.NEON_IGUATEMI_DATABASE_URL?.trim() || null,
+      databaseUrl: resolveUnitDatabaseUrl(
+        'rom-iguatemi',
+        process.env.NEON_IGUATEMI_DATABASE_URL,
+      ),
       envGoals: goalsFromEnv(numEnv('IGUATEMI_DAILY_GOAL'), numEnv('IGUATEMI_DAILY_CAPACITY')),
     },
   ]

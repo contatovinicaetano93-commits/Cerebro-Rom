@@ -74,9 +74,13 @@ export interface OpsFinance {
   mtdAttended: number
   mtdTicketAvg: number
   cmv: number
-  /** CMV ÷ receita MTD — null se sem receita. */
+  /** true só quando a query de saídas (0044) rodou com sucesso. */
+  cmvKnown: boolean
+  /** CMV ÷ receita MTD — null se sem receita ou CMV desconhecido. */
   cmvShare: number | null
   paymentsTotal: number
+  /** true só quando há linhas P2/0081 no MTD. */
+  paymentsKnown: boolean
   paymentReconcile: PaymentReconcileStatus
   topPaymentMethod: string | null
   available: boolean
@@ -195,7 +199,8 @@ export interface CerebroOverview {
     stockAlerts: number
   }
   units: UnitSnapshot[]
-  trend30: { day: string; brasil: number; iguatemi: number }[]
+  /** null = unidade offline naquele dia (não plotar como zero). */
+  trend30: { day: string; brasil: number | null; iguatemi: number | null }[]
   /** Próximas ações (alerta + leitura), ordenadas por severidade */
   nextActions: AlertItem[]
   /** Ausente quando só uma unidade está disponível (mock sempre tem as duas). */

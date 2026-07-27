@@ -8,25 +8,26 @@ import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 const SEV = { critical: 0, warning: 1, info: 2 }
 
 function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
-  const brasil = units.find((u) => u.unit.slug === 'rom-brasil')
-  const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
-  const brasilByDay = new Map(brasil?.last30.map((d) => [d.day, d.revenue]) ?? [])
-  const iguatemiByDay = new Map(iguatemi?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  const brasilLive = units.find((u) => u.unit.slug === 'rom-brasil' && !u.sync.offline)
+  const iguatemiLive = units.find((u) => u.unit.slug === 'rom-iguatemi' && !u.sync.offline)
+  const brasilByDay = new Map(brasilLive?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  const iguatemiByDay = new Map(iguatemiLive?.last30.map((d) => [d.day, d.revenue]) ?? [])
   const allDays = [...new Set([...brasilByDay.keys(), ...iguatemiByDay.keys()])].sort()
 
   if (allDays.length === 0) {
-    const days = brasil?.last30 ?? iguatemi?.last30 ?? []
+    const days = brasilLive?.last30 ?? iguatemiLive?.last30 ?? []
     return days.map((row, idx) => ({
       day: row.day.slice(5),
-      brasil: brasil?.last30[idx]?.revenue ?? 0,
-      iguatemi: iguatemi?.last30[idx]?.revenue ?? 0,
+      brasil: brasilLive ? (brasilLive.last30[idx]?.revenue ?? 0) : null,
+      iguatemi: iguatemiLive ? (iguatemiLive.last30[idx]?.revenue ?? 0) : null,
     }))
   }
 
   return allDays.map((day) => ({
     day: day.slice(5),
-    brasil: brasilByDay.get(day) ?? 0,
-    iguatemi: iguatemiByDay.get(day) ?? 0,
+    // Offline → null (gap no gráfico). Live sem dia → 0 (fechado/sem movimento).
+    brasil: brasilLive ? (brasilByDay.get(day) ?? 0) : null,
+    iguatemi: iguatemiLive ? (iguatemiByDay.get(day) ?? 0) : null,
   }))
 }
 
@@ -88,7 +89,7 @@ function buildNextActions(
         unit: u.unit.slug,
         title: `Dados financeiros fracos — ${u.unit.short}`,
         detail:
-          'Há conexão live, mas faturamento/atendidos no Neon estão zerados. Sync Avec precisa popular revenue/attended.',
+          'Há conexão live, mas faturamento/atendidos estão zerados. Sync Avec precisa popular revenue/attended.',
         action: 'Priorizar AVEC_API_TOKEN + sync full diário',
       })
     }
@@ -399,7 +400,8 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
   }
 
   const consolidated = consolidate(liveUnits)
-  const trend30 = buildTrend30(liveUnits)
+  // Trend recebe todas (offline vira null na série — não zero falso).
+  const trend30 = buildTrend30(units)
 
   const nextActions = [
     ...fetchErrors,
@@ -460,7 +462,7 @@ export async function buildOverview(): Promise<CerebroOverview> {
             id: 'no-neon',
             severity: 'critical',
             unit: 'both',
-            title: 'Neons não configurados',
+            title: 'DBs das unidades não configurados',
             detail: 'NEON_*_DATABASE_URL ausente em produção',
             action: 'Configurar connection strings na Vercel',
           },
@@ -475,7 +477,7 @@ export async function buildOverview(): Promise<CerebroOverview> {
   } catch (err) {
     return degradedOverview(
       String(err instanceof Error ? err.message : err),
-      'Checar Neons e reiniciar',
+      'Checar connection strings e reiniciar',
     )
   }
 }

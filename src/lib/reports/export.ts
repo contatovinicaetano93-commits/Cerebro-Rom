@@ -52,7 +52,11 @@ function joinCsv(rows: (string | number | null | undefined)[][]): string {
 }
 
 function modeLabel(mode: CerebroOverview['mode'], partial?: boolean): string {
-  if (mode === 'live') return partial ? 'Live parcial (só unidades online)' : 'Live (Neons das unidades)'
+  if (mode === 'live') {
+    return partial
+      ? 'Live parcial (só unidades online)'
+      : 'Live (Brasil Supabase + Iguatemi Neon)'
+  }
   if (mode === 'degraded') return 'Degradado — live indisponível (sem inventar número)'
   return 'Mock / demonstração'
 }
@@ -137,9 +141,12 @@ const LEGEND_ROWS: [string, string][] = [
   ['Estoque valor', 'Valor da posição de estoque sincronizada da Avec.'],
   ['Alertas estoque', 'Produtos abaixo do mínimo (alertas ativos).'],
   ['Zerados', 'SKUs com saldo zero.'],
-  ['Sync', 'Saúde do sync Avec → Neon da unidade (atraso/erro).'],
-  ['Δ%', 'Variação Iguatemi vs Brasil: (IG − BR) ÷ |BR|.'],
-  ['Modo live', 'Números lidos dos Neons. Zeros podem ser dia sem movimento OU sync fraco.'],
+  ['Sync', 'Saúde do sync Avec → DB da unidade (atraso/erro).'],
+  ['Δ%', 'Moeda/contagem: (BR − IG) ÷ |IG| (positivo = Brasil à frente). Taxas: pontos percentuais.'],
+  [
+    'Modo live',
+    'Números lidos dos DBs das unidades. Zeros podem ser dia sem movimento OU sync fraco.',
+  ],
   ['Modo degradado', 'Live indisponível — o Cérebro não inventa KPIs.'],
 ]
 

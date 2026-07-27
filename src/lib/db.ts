@@ -45,22 +45,20 @@ function wrap(sql: PostgresSql): Sql {
 }
 
 /**
- * Postgres client. Live paths always pass an explicit unit URL.
- * Platform helpers (audit/migrations) may omit it and fall back to env.
- * Aceita Neon TCP ou Supabase pooler (IPv4).
+ * Client Postgres para uma URL explícita (unidade) ou, sem argumento,
+ * apenas CEREBRO_DATABASE_URL — nunca cai no DB de uma unidade.
  *
  * Do NOT switch back to neon() from @neondatabase/serverless for Brasil:
  * neon() is HTTP-only and fails against *.supabase.com / pooler hosts.
  */
 export function getSql(databaseUrl?: string): Sql {
-  const url =
-    databaseUrl?.trim() ||
-    process.env.NEON_BRASIL_DATABASE_URL?.trim() ||
-    process.env.NEON_IGUATEMI_DATABASE_URL?.trim() ||
-    process.env.CEREBRO_DATABASE_URL?.trim() ||
-    ''
+  const url = databaseUrl?.trim() || process.env.CEREBRO_DATABASE_URL?.trim() || ''
   if (!url) {
-    throw new Error('DATABASE_URL vazia')
+    throw new Error(
+      databaseUrl === undefined
+        ? 'CEREBRO_DATABASE_URL vazia — helpers do Cérebro não usam DB das unidades'
+        : 'DATABASE_URL vazia',
+    )
   }
   return wrap(getClient(url))
 }
