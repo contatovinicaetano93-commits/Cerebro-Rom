@@ -80,6 +80,34 @@ export function todayIsoSaoPaulo(): string {
   }).format(new Date())
 }
 
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Valida dia ISO (YYYY-MM-DD) ≤ hoje (America/Sao_Paulo).
+ * Usado em captura/export de relatório com data escolhida.
+ */
+export function parseAsOfDay(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const s = raw.trim()
+  if (!ISO_DAY_RE.test(s)) return null
+  const [y, m, d] = s.split('-').map(Number)
+  if (!y || !m || !d) return null
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  if (
+    dt.getUTCFullYear() !== y ||
+    dt.getUTCMonth() + 1 !== m ||
+    dt.getUTCDate() !== d
+  ) {
+    return null
+  }
+  const today = todayIsoSaoPaulo()
+  if (s > today) return null
+  // Limite prático: métricas diárias no fetch cobrem ~30d; não abrir anos.
+  const earliest = isoDaysBackFrom(today, 120)
+  if (s < earliest) return null
+  return s
+}
+
 export function monthStartIso(dayIso: string): string {
   return `${dayIso.slice(0, 7)}-01`
 }

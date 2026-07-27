@@ -120,8 +120,12 @@ function rowToDay(
 }
 
 /** Placeholder simétrico quando a unidade não responde — mesmos campos, sem inventar números. */
-export function offlineUnitSnapshot(meta: UnitMeta, detail: string): UnitSnapshot {
-  const today = todayIsoSaoPaulo()
+export function offlineUnitSnapshot(
+  meta: UnitMeta,
+  detail: string,
+  asOf?: string,
+): UnitSnapshot {
+  const today = asOf ?? todayIsoSaoPaulo()
   const day = emptyDay(today, 0, 0, false, false)
   return {
     unit: meta,
@@ -169,13 +173,18 @@ export function offlineUnitSnapshot(meta: UnitMeta, detail: string): UnitSnapsho
   }
 }
 
-export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnapshot> {
+export async function fetchLiveUnit(
+  config: UnitRuntimeConfig,
+  asOf?: string,
+): Promise<UnitSnapshot> {
   if (!config.databaseUrl) {
     throw new Error(`Sem DATABASE_URL para ${config.meta.name}`)
   }
 
   const sql = getSql(config.databaseUrl)
-  const today = todayIsoSaoPaulo()
+  const calendarToday = todayIsoSaoPaulo()
+  const today = asOf ?? calendarToday
+  const isHistorical = today < calendarToday
   const monthStart = monthStartIso(today)
   const from30 = isoDaysBackFrom(today, 29)
 
@@ -196,6 +205,7 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
       ticket_avg
     from salon_daily_metrics
     where day >= ${from30}::date
+      and day <= ${today}::date
     order by day asc
   `) as MetricRow[]
 
@@ -225,7 +235,7 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
   const last30: DayMetrics[] = []
   for (let i = 29; i >= 0; i--) {
     const day = isoDaysBackFrom(today, i)
-    const isToday = day === today
+    const isAsOf = day === today
     last30.push(
       rowToDay(
         byDay.get(day),
@@ -234,8 +244,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
         dailyGoal,
         goalSet,
         capacitySet,
-        isToday ? leadsToday : 0,
-        isToday ? convertedToday : 0,
+        isAsOf ? leadsToday : 0,
+        isAsOf ? convertedToday : 0,
       ),
     )
   }
@@ -275,7 +285,8 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
       trustCsForNext2h = scheduled > 0 && scheduled === todayMetrics.appointments
     }
 
-    if (trustCsForNext2h) {
+    // Vagas 2h só fazem sentido no dia corrente (janela wall-clock).
+    if (trustCsForNext2h && !isHistorical) {
       const next2h = (await sql`
         select count(*)::int as n
         from client_services
@@ -285,6 +296,9 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
           and scheduled_at < now() + interval '2 hours'
       `) as { n: number }[]
       appointmentsNext2h = n(next2h[0]?.n)
+    } else if (isHistorical) {
+      trustCsForNext2h = false
+      appointmentsNext2h = 0
     }
   } catch {
     trustCsForNext2h = false
@@ -386,6 +400,13 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
     }
   } catch {
     // ok
+  }
+
+  if (isHistorical && sync.status !== 'error') {
+    sync = {
+      ...sync,
+      label: `${sync.label} · métricas do dia ${today} (estoque/sync = agora)`,
+    }
   }
 
   return {

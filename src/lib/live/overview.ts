@@ -488,14 +488,17 @@ function degradedOverview(
   }
 }
 
-export async function buildLiveOverview(): Promise<CerebroOverview> {
+export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview> {
   const configs = getUnitConfigs()
   const configured = configs.filter((c) => c.databaseUrl)
   if (configured.length === 0) {
     throw new Error('Nenhuma DATABASE_URL de unidade configurada (ou Brasil ainda em Neon)')
   }
 
-  const settled = await Promise.allSettled(configured.map((c) => fetchLiveUnit(c)))
+  const day = asOf ?? todayIsoSaoPaulo()
+  const isHistorical = day < todayIsoSaoPaulo()
+
+  const settled = await Promise.allSettled(configured.map((c) => fetchLiveUnit(c, day)))
   const liveBySlug = new Map<string, UnitSnapshot>()
   const fetchErrors: AlertItem[] = []
 
@@ -515,7 +518,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
       })
       liveBySlug.set(
         cfg.meta.slug,
-        offlineUnitSnapshot(cfg.meta, `Offline — ${detail.slice(0, 80)}`),
+        offlineUnitSnapshot(cfg.meta, `Offline — ${detail.slice(0, 80)}`, day),
       )
     }
   })
@@ -539,11 +542,11 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
           ? 'NEON_BRASIL_DATABASE_URL = pooler Supabase na Vercel'
           : 'Completar NEON_IGUATEMI_DATABASE_URL na Vercel',
     })
-    liveBySlug.set(cfg.meta.slug, offlineUnitSnapshot(cfg.meta, detail))
+    liveBySlug.set(cfg.meta.slug, offlineUnitSnapshot(cfg.meta, detail, day))
   }
 
   const units = [UNIT_META['rom-brasil'], UNIT_META['rom-iguatemi']].map(
-    (meta) => liveBySlug.get(meta.slug) ?? offlineUnitSnapshot(meta, 'Sem dados'),
+    (meta) => liveBySlug.get(meta.slug) ?? offlineUnitSnapshot(meta, 'Sem dados', day),
   )
 
   const liveUnits = units.filter((u) => !u.sync.offline)
@@ -575,17 +578,18 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
   const partial =
     liveUnits.length < 2 || fetchErrors.length > 0 || syncHardFail || syncPartial
 
+  const histNote = isHistorical ? ' · MTD até a data' : ''
   return {
     generatedAt: new Date().toISOString(),
     mode: 'live',
     partial,
     periodLabel: partial
       ? syncHardFail
-        ? `Live parcial · sync com erro · ${todayIsoSaoPaulo()}`
+        ? `Live parcial · sync com erro · ${day}${histNote}`
         : syncPartial
-          ? `Live parcial · sync incompleto · ${todayIsoSaoPaulo()}`
-          : `Live parcial · ${todayIsoSaoPaulo()}`
-      : `Live · ${todayIsoSaoPaulo()}`,
+          ? `Live parcial · sync incompleto · ${day}${histNote}`
+          : `Live parcial · ${day}${histNote}`
+      : `Live · ${day}${histNote}`,
     consolidated,
     units,
     trend30,
@@ -594,7 +598,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
   }
 }
 
-export async function buildOverview(): Promise<CerebroOverview> {
+export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
   const hasDb = getUnitConfigs().some((c) => c.databaseUrl)
   const forceMock = process.env.CEREBRO_FORCE_MOCK === '1'
   const isProd = isProduction()
@@ -627,7 +631,7 @@ export async function buildOverview(): Promise<CerebroOverview> {
   }
 
   try {
-    return await buildLiveOverview()
+    return await buildLiveOverview(asOf)
   } catch (err) {
     return degradedOverview(
       String(err instanceof Error ? err.message : err),
