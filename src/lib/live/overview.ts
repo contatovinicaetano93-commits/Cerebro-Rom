@@ -3,6 +3,7 @@ import { fetchLiveUnit, offlineUnitSnapshot } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo, UNIT_META } from '@/lib/unit-config'
 import { rate, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
+import { evictSql } from '@/lib/db'
 import {
   hasTrustedAgenda,
   isDayOperable,
@@ -12,6 +13,33 @@ import {
   trustsRollingKpis,
 } from '@/lib/salon-day'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
+
+/** Uma unidade lenta (Neon quota / rede) não pode travar o painel inteiro. */
+const UNIT_FETCH_TIMEOUT_MS = 12_000
+
+async function fetchUnitBounded(
+  config: ReturnType<typeof getUnitConfigs>[number],
+  day: string,
+): Promise<UnitSnapshot> {
+  const url = config.databaseUrl
+  if (!url) throw new Error(`Sem DATABASE_URL para ${config.meta.name}`)
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`Timeout ${UNIT_FETCH_TIMEOUT_MS / 1000}s — ${config.meta.short}`))
+    }, UNIT_FETCH_TIMEOUT_MS)
+  })
+
+  try {
+    return await Promise.race([fetchLiveUnit(config, day), timeout])
+  } catch (err) {
+    evictSql(url)
+    throw err
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 const SEV = { critical: 0, warning: 1, info: 2 }
 
@@ -498,7 +526,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
   const day = asOf ?? todayIsoSaoPaulo()
   const isHistorical = day < todayIsoSaoPaulo()
 
-  const settled = await Promise.allSettled(configured.map((c) => fetchLiveUnit(c, day)))
+  const settled = await Promise.allSettled(configured.map((c) => fetchUnitBounded(c, day)))
   const liveBySlug = new Map<string, UnitSnapshot>()
   const fetchErrors: AlertItem[] = []
 

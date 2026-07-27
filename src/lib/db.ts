@@ -26,11 +26,22 @@ function getClient(databaseUrl: string): PostgresSql {
       prepare: false,
       idle_timeout: 20,
       max_lifetime: 60 * 5,
-      connect_timeout: 15,
+      // Neon morto/quota pode aceitar TCP e não responder — não ficar preso.
+      connect_timeout: 8,
     })
     clients.set(databaseUrl, client)
   }
   return client
+}
+
+/** Descarta client preso (timeout/quota) para a próxima tentativa não herdar hang. */
+export function evictSql(databaseUrl: string): void {
+  const url = databaseUrl.trim()
+  if (!url) return
+  const client = clients.get(url)
+  if (!client) return
+  clients.delete(url)
+  void client.end({ timeout: 1 }).catch(() => {})
 }
 
 function wrap(sql: PostgresSql): Sql {
