@@ -247,10 +247,12 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
     }
 
     const official = await fetchOfficialStockTotal(sql)
+    // Valorização conhecida só com custo local > 0 (0045 sozinho não inventa R$0).
+    const valueKnown = localTotal > 0
     const drift =
-      official != null ? Math.round((localTotal - official) * 100) / 100 : null
-    // SKUs sem custo → não inventar estoque R$0 conhecido (alertas ainda podem aparecer).
-    const valueKnown = localTotal > 0 || official != null
+      valueKnown && official != null
+        ? Math.round((localTotal - official) * 100) / 100
+        : null
 
     return {
       available: true,
@@ -259,7 +261,7 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
       productCount,
       activeAlerts,
       zeroProducts,
-      drift: valueKnown ? drift : null,
+      drift,
     }
   } catch {
     return { ...EMPTY_OPS_STOCK }
