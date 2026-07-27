@@ -12,6 +12,8 @@ export interface ReportRunMeta {
   unitCount: number
   todayRevenue: number
   mtdRevenue: number
+  /** false quando a captura não tinha unidade legível (não mostrar R$0 como real). */
+  networkReadable: boolean
 }
 
 export interface ReportRunDetail extends ReportRunMeta {
@@ -79,6 +81,10 @@ export async function ensureReportTables(sql?: Sql): Promise<void> {
   `
   // Migração leve: retorno pode ser null (P3 ausente).
   await db`alter table report_unit_metrics alter column return_rate drop not null`.catch(() => {})
+  await db`
+    alter table report_runs
+      add column if not exists network_readable boolean not null default true
+  `.catch(() => {})
   await db`
     create index if not exists report_unit_metrics_run_idx
       on report_unit_metrics (run_id)
@@ -168,10 +174,11 @@ export async function captureReportSnapshot(
   const createdAt = new Date().toISOString()
   const unitCount = overview.units.length
 
+  const networkReadable = overview.consolidated.networkReadable
   await sql`
     insert into report_runs (
       id, created_at, trigger, mode, period_label,
-      unit_count, today_revenue, mtd_revenue, payload
+      unit_count, today_revenue, mtd_revenue, network_readable, payload
     ) values (
       ${id},
       ${createdAt},
@@ -179,8 +186,9 @@ export async function captureReportSnapshot(
       ${overview.mode},
       ${overview.periodLabel},
       ${unitCount},
-      ${overview.consolidated.todayRevenue},
-      ${overview.consolidated.mtdRevenue},
+      ${networkReadable ? overview.consolidated.todayRevenue : 0},
+      ${networkReadable ? overview.consolidated.mtdRevenue : 0},
+      ${networkReadable},
       ${JSON.stringify(overview)}
     )
   `
@@ -217,8 +225,9 @@ export async function captureReportSnapshot(
     mode: overview.mode,
     periodLabel: overview.periodLabel,
     unitCount,
-    todayRevenue: overview.consolidated.todayRevenue,
-    mtdRevenue: overview.consolidated.mtdRevenue,
+    todayRevenue: networkReadable ? overview.consolidated.todayRevenue : 0,
+    mtdRevenue: networkReadable ? overview.consolidated.mtdRevenue : 0,
+    networkReadable,
   }
 }
 
@@ -235,7 +244,8 @@ export async function listReportRuns(limit = 20): Promise<ReportRunMeta[]> {
       period_label,
       unit_count,
       today_revenue::float as today_revenue,
-      mtd_revenue::float as mtd_revenue
+      mtd_revenue::float as mtd_revenue,
+      coalesce(network_readable, true) as network_readable
     from report_runs
     order by created_at desc
     limit ${limit}
@@ -248,6 +258,7 @@ export async function listReportRuns(limit = 20): Promise<ReportRunMeta[]> {
     unit_count: number
     today_revenue: number
     mtd_revenue: number
+    network_readable: boolean
   }[]
 
   return rows.map((r) => ({
@@ -259,6 +270,7 @@ export async function listReportRuns(limit = 20): Promise<ReportRunMeta[]> {
     unitCount: r.unit_count,
     todayRevenue: Number(r.today_revenue) || 0,
     mtdRevenue: Number(r.mtd_revenue) || 0,
+    networkReadable: Boolean(r.network_readable),
   }))
 }
 
@@ -276,6 +288,7 @@ export async function getReportRun(id: string): Promise<ReportRunDetail | null> 
       unit_count,
       today_revenue::float as today_revenue,
       mtd_revenue::float as mtd_revenue,
+      coalesce(network_readable, true) as network_readable,
       payload
     from report_runs
     where id = ${id}
@@ -289,6 +302,7 @@ export async function getReportRun(id: string): Promise<ReportRunDetail | null> 
     unit_count: number
     today_revenue: number
     mtd_revenue: number
+    network_readable: boolean
     payload: CerebroOverview
   }[]
 
@@ -303,6 +317,7 @@ export async function getReportRun(id: string): Promise<ReportRunDetail | null> 
     unitCount: r.unit_count,
     todayRevenue: Number(r.today_revenue) || 0,
     mtdRevenue: Number(r.mtd_revenue) || 0,
+    networkReadable: Boolean(r.network_readable),
     payload: r.payload,
   }
 }
