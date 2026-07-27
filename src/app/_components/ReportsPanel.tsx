@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { Download, FileSpreadsheet, Camera } from 'lucide-react'
+import { BarChart3, Camera, Download, FileSpreadsheet } from 'lucide-react'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 
 type ReportRunMeta = {
@@ -80,7 +81,7 @@ export function ReportsPanel() {
           <div>
             <p className="text-sm font-medium text-foreground">Relatórios</p>
             <p className="text-xs text-muted">
-              Snapshot sob demanda · export CSV / XLSX
+              Completo · comparativo Brasil × Iguatemi (MTD) · CSV / XLSX
             </p>
           </div>
         </div>
@@ -113,13 +114,21 @@ export function ReportsPanel() {
                 >
                   Atualizar lista
                 </button>
+                <Link
+                  href="/comparativo"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-teal/35 bg-teal/10 px-3 py-2 text-xs text-teal hover:border-teal/55"
+                >
+                  <BarChart3 size={12} />
+                  Ver gráficos
+                </Link>
                 {error ? <p className="text-xs text-danger">{error}</p> : null}
                 {okMsg ? <p className="text-xs text-success">{okMsg}</p> : null}
               </div>
 
               <p className="mt-3 text-xs text-muted">
-                Grava o overview atual (KPIs do painel) no Neon do Cérebro para histórico e
-                download.
+                Capture o overview atual. No download completo: aba/seção{' '}
+                <span className="text-foreground">Comparativo</span> (Brasil × Iguatemi,
+                com receita MTD do mês). Ou baixe só o comparativo.
               </p>
 
               <ul className="mt-4 space-y-2">
@@ -150,6 +159,22 @@ export function ReportsPanel() {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      <a
+                        href={`/api/reports/${run.id}?format=csv&scope=comparativo`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-teal/35 px-2.5 py-1.5 text-xs text-teal hover:border-teal/55"
+                        title="Só Brasil × Iguatemi (MTD + dia)"
+                      >
+                        <Download size={12} />
+                        Comparativo CSV
+                      </a>
+                      <a
+                        href={`/api/reports/${run.id}?format=xlsx&scope=comparativo`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-teal/35 px-2.5 py-1.5 text-xs text-teal hover:border-teal/55"
+                        title="Só Brasil × Iguatemi (MTD + dia)"
+                      >
+                        <Download size={12} />
+                        Comparativo XLSX
+                      </a>
                       <a
                         href={`/api/reports/${run.id}?format=csv`}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground hover:border-brass/40"
