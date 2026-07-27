@@ -582,12 +582,12 @@ function commerceTable(o: CerebroOverview): (string | number | null)[][] {
           u.unit.short,
           `Canal: ${ch.channel}`,
           '—',
+          '—',
+          '—',
+          '—',
+          '—',
+          '—',
           num(ch.count),
-          '—',
-          '—',
-          '—',
-          '—',
-          '—',
           '—',
         ])
       }
