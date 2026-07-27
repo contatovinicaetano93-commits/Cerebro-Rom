@@ -4,6 +4,7 @@ import { getUnitConfigs, todayIsoSaoPaulo, UNIT_META } from '@/lib/unit-config'
 import { rate, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
 import {
+  hasTrustedAgenda,
   isDayOperable,
   isSalonActiveToday,
   isSyncHardFail,
@@ -154,7 +155,13 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    if (dayOk && u.today.capacitySet && u.opsToday.openSlotsNext2h >= 2) {
+    // Vagas: exige agenda confiável (não inventar capacity cheia com sync parcial).
+    if (
+      dayOk &&
+      hasTrustedAgenda(u) &&
+      u.today.capacitySet &&
+      u.opsToday.openSlotsNext2h >= 2
+    ) {
       actions.push({
         id: `slots-${u.unit.slug}`,
         severity: 'info',
@@ -222,18 +229,19 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
 
     // Centenas/milhares de alertas = higiene de catálogo, não crise operacional.
     if (rolling && u.opsStock.available && u.opsStock.activeAlerts >= 50) {
-      const huge = u.opsStock.activeAlerts >= 200
       actions.push({
         id: `stock-alert-${u.unit.slug}`,
-        severity: huge ? 'info' : 'warning',
+        severity: 'info',
         unit: u.unit.slug,
-        title: huge
-          ? `Estoque: muitos alertas — ${u.unit.short}`
-          : `Estoque baixo — ${u.unit.short}`,
+        title:
+          u.opsStock.activeAlerts >= 200
+            ? `Estoque: muitos alertas — ${u.unit.short}`
+            : `Estoque baixo — ${u.unit.short}`,
         detail: `${u.opsStock.activeAlerts} alertas · ${u.opsStock.zeroProducts} zerados`,
-        action: huge
-          ? 'Revisar critérios de alerta no ROM Estoque'
-          : 'Fila de compra no ROM Estoque',
+        action:
+          u.opsStock.activeAlerts >= 200
+            ? 'Revisar critérios de alerta no ROM Estoque'
+            : 'Fila de compra no ROM Estoque',
       })
     }
 
@@ -298,19 +306,22 @@ function sortNextActions(actions: AlertItem[]): AlertItem[] {
 
 function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const active = units.filter(isSalonActiveToday)
-  /** Meta/vagas do dia: só unidades em operação — sem fallback para salão quieto. */
+  /** Meta do dia: unidades com movimento. */
   const dayOps = active
+  /** Ocupação/vagas: só com agenda confiável (não capacity cheia pós-wipe parcial). */
+  const agendaOps = dayOps.filter(hasTrustedAgenda)
 
   const todayRevenue = units.reduce((a, u) => a + u.today.revenue, 0)
   const todayGoal = dayOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
   const goalsConfigured = units.every((u) => u.today.goalSet)
   const mtdRevenue = units.reduce((a, u) => a + u.mtd.revenue, 0)
+  const mtdAttended = units.reduce((a, u) => a + u.mtd.attended, 0)
   const mtdGoal = units.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
-  const attended = dayOps.reduce((a, u) => a + u.today.attended, 0)
-  const appointments = dayOps.reduce((a, u) => a + u.today.appointments, 0)
-  const noShows = dayOps.reduce((a, u) => a + u.today.noShows, 0)
-  const capacity = dayOps.reduce((a, u) => a + (u.today.capacitySet ? u.today.capacity : 0), 0)
-  const occupancyConfigured = dayOps.length > 0 && dayOps.every((u) => u.today.capacitySet)
+  const attended = agendaOps.reduce((a, u) => a + u.today.attended, 0)
+  const appointments = agendaOps.reduce((a, u) => a + u.today.appointments, 0)
+  const noShows = agendaOps.reduce((a, u) => a + u.today.noShows, 0)
+  const capacity = agendaOps.reduce((a, u) => a + (u.today.capacitySet ? u.today.capacity : 0), 0)
+  const occupancyConfigured = agendaOps.length > 0 && agendaOps.every((u) => u.today.capacitySet)
   const newClients = dayOps.reduce((a, u) => a + u.today.newClients, 0)
   const returningClients = dayOps.reduce((a, u) => a + u.today.returningClients, 0)
   const leads = dayOps.reduce((a, u) => a + u.today.leads, 0)
@@ -334,20 +345,22 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
         ? rate(dayRevenue, todayGoal)
         : 0,
     goalsConfigured,
+    todayOpsActive: dayOps.length > 0,
     mtdRevenue,
     mtdGoal,
     mtdGoalProgress: goalsConfigured && mtdGoal > 0 ? rate(mtdRevenue, mtdGoal) : 0,
+    mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0,
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
     occupancyRate: occupancyConfigured ? rate(appointments, capacity) : 0,
     occupancyConfigured,
     ticketAvg: attended > 0 ? Math.round(dayRevenue / attended) : 0,
-    revenueAtRisk: dayOps.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
+    revenueAtRisk: agendaOps.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
     newClients,
     returningClients,
     conversionRate: rate(converted, leads),
-    openSlotsToday: dayOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
-    openSlotsNext2h: dayOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
+    openSlotsToday: agendaOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
+    openSlotsNext2h: agendaOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
     cancelledToday: dayOps.reduce((a, u) => a + u.today.cancelled, 0),
     noShowsToday: noShows,
     newShare: mixBase > 0 ? newClients / mixBase : 0,
@@ -364,9 +377,11 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     todayGoal: 0,
     todayGoalProgress: 0,
     goalsConfigured: false,
+    todayOpsActive: false,
     mtdRevenue: 0,
     mtdGoal: 0,
     mtdGoalProgress: 0,
+    mtdTicketAvg: 0,
     attendanceRate: 0,
     noShowRate: 0,
     occupancyRate: 0,
@@ -498,17 +513,20 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
 
   const syncHardFail = units.some(isSyncHardFail)
   const syncPartial = units.some((u) => !u.sync.offline && u.sync.status === 'partial')
-  const partial = liveUnits.length < 2 || fetchErrors.length > 0 || syncHardFail
+  const partial =
+    liveUnits.length < 2 || fetchErrors.length > 0 || syncHardFail || syncPartial
 
   return {
     generatedAt: new Date().toISOString(),
     mode: 'live',
     partial,
     periodLabel: partial
-      ? `Live parcial · ${todayIsoSaoPaulo()}`
-      : syncPartial
-        ? `Live · sync parcial · ${todayIsoSaoPaulo()}`
-        : `Live · ${todayIsoSaoPaulo()}`,
+      ? syncHardFail
+        ? `Live parcial · sync com erro · ${todayIsoSaoPaulo()}`
+        : syncPartial
+          ? `Live parcial · sync incompleto · ${todayIsoSaoPaulo()}`
+          : `Live parcial · ${todayIsoSaoPaulo()}`
+      : `Live · ${todayIsoSaoPaulo()}`,
     consolidated,
     units,
     trend30,
