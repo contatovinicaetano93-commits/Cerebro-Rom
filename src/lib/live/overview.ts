@@ -320,8 +320,12 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const attended = agendaOps.reduce((a, u) => a + u.today.attended, 0)
   const appointments = agendaOps.reduce((a, u) => a + u.today.appointments, 0)
   const noShows = agendaOps.reduce((a, u) => a + u.today.noShows, 0)
-  const capacity = agendaOps.reduce((a, u) => a + (u.today.capacitySet ? u.today.capacity : 0), 0)
-  const occupancyConfigured = agendaOps.length > 0 && agendaOps.every((u) => u.today.capacitySet)
+  /** Ocupação: só unidades com capacidade definida (não all-or-nothing). */
+  const capacityOps = agendaOps.filter((u) => u.today.capacitySet)
+  const capacity = capacityOps.reduce((a, u) => a + u.today.capacity, 0)
+  const capacityAppointments = capacityOps.reduce((a, u) => a + u.today.appointments, 0)
+  const occupancyConfigured = capacityOps.length > 0 && capacity > 0
+  const attendanceConfigured = appointments > 0
   const newClients = dayOps.reduce((a, u) => a + u.today.newClients, 0)
   const returningClients = dayOps.reduce((a, u) => a + u.today.returningClients, 0)
   const leads = dayOps.reduce((a, u) => a + u.today.leads, 0)
@@ -353,16 +357,17 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0,
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
-    occupancyRate: occupancyConfigured ? rate(appointments, capacity) : 0,
+    occupancyRate: occupancyConfigured ? rate(capacityAppointments, capacity) : 0,
     occupancyConfigured,
+    attendanceConfigured,
     // Ticket do dia: só unidades com agenda confiável (não misturar receita órfã).
     ticketAvg: attended > 0 ? Math.round(agendaRevenue / attended) : 0,
     revenueAtRisk: agendaOps.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
     newClients,
     returningClients,
     conversionRate: rate(converted, leads),
-    openSlotsToday: agendaOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
-    openSlotsNext2h: agendaOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
+    openSlotsToday: capacityOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
+    openSlotsNext2h: capacityOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
     cancelledToday: dayOps.reduce((a, u) => a + u.today.cancelled, 0),
     noShowsToday: noShows,
     newShare: mixBase > 0 ? newClients / mixBase : 0,
@@ -388,6 +393,7 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     noShowRate: 0,
     occupancyRate: 0,
     occupancyConfigured: false,
+    attendanceConfigured: false,
     ticketAvg: 0,
     revenueAtRisk: 0,
     newClients: 0,

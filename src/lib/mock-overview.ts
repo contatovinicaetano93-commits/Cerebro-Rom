@@ -257,6 +257,7 @@ export function buildMockOverview(): CerebroOverview {
       noShowRate: rate(noShows, appointments),
       occupancyRate: rate(appointments, capacity),
       occupancyConfigured: true,
+      attendanceConfigured: true,
       ticketAvg,
       revenueAtRisk: units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
       newClients,

@@ -330,11 +330,12 @@ export async function fetchLiveUnit(config: UnitRuntimeConfig): Promise<UnitSnap
             : `Último sync com erro (~${ageLabel})`,
         }
       } else if (last.status === 'partial') {
+        // Nunca rebaixar partial→stale: incompleto continua incompleto no chip Live.
         sync = {
-          status: ageH > 6 ? 'stale' : 'partial',
+          status: 'partial',
           lastSyncAt,
           label: last.error
-            ? `Sync parcial (${last.kind}): ${last.error.slice(0, 80)}`
+            ? `Sync parcial (${last.kind}, ~${ageLabel}): ${last.error.slice(0, 80)}`
             : `Sync parcial (${last.kind}, ~${ageLabel}) · dados usáveis`,
         }
       } else if (ageH > 6) {
