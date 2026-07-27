@@ -87,7 +87,7 @@ async function fetchOfficialStockTotal(sql: Sql): Promise<number | null> {
 export const EMPTY_OPS_FINANCE: OpsFinance = {
   mtdRevenue: 0,
   mtdAttended: 0,
-  mtdTicketAvg: 0,
+  mtdTicketAvg: null,
   cmv: 0,
   cmvKnown: false,
   cmvShare: null,
@@ -118,7 +118,7 @@ export async function fetchOpsFinance(
   mtdRevenue: number,
   mtdAttended: number,
 ): Promise<OpsFinance> {
-  const mtdTicketAvg = mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0
+  const mtdTicketAvg = mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : null
 
   let cmv = 0
   let cmvOk = false

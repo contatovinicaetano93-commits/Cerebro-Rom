@@ -176,8 +176,12 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'packages',
       label: 'Pacotes (receita)',
       group: 'comercial',
-      brasil: live(brasil, brasil.opsCommerce.packagesRevenue),
-      iguatemi: live(iguatemi, iguatemi.opsCommerce.packagesRevenue),
+      brasil: brasil.opsCommerce.packagesKnown
+        ? live(brasil, brasil.opsCommerce.packagesRevenue)
+        : null,
+      iguatemi: iguatemi.opsCommerce.packagesKnown
+        ? live(iguatemi, iguatemi.opsCommerce.packagesRevenue)
+        : null,
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -194,8 +198,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_ticket',
       label: 'Ticket MTD',
       group: 'financeiro',
-      brasil: live(brasil, brasil.opsFinance.mtdTicketAvg || null),
-      iguatemi: live(iguatemi, iguatemi.opsFinance.mtdTicketAvg || null),
+      brasil: live(brasil, brasil.opsFinance.mtdTicketAvg),
+      iguatemi: live(iguatemi, iguatemi.opsFinance.mtdTicketAvg),
       format: 'currency',
       higherIsBetter: true,
     }),

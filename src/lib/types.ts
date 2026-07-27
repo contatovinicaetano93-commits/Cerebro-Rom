@@ -49,7 +49,8 @@ export interface OpsWeek {
   reactivationCount: number
   /** null quando P3 não trouxe taxa (não inventar 0%). */
   returnRate: number | null
-  newClientsPeriod: number
+  /** null quando P3 ausente (não inventar “0 novos”). */
+  newClientsPeriod: number | null
 }
 
 /** Comercial leve — Avec 0056, 0061, 0104, 0001 (sem despesas manuais) */
@@ -58,6 +59,8 @@ export interface OpsCommerce {
   packages: { name: string; quantity: number; revenue: number }[]
   packagesSold: number
   packagesRevenue: number
+  /** false quando P2 comercial ausente — não inventar R$0 de pacotes. */
+  packagesKnown: boolean
   ratingsAvg: number
   ratingsCount: number
   birthdayCount: number
@@ -78,7 +81,8 @@ export type PaymentReconcileStatus =
 export interface OpsFinance {
   mtdRevenue: number
   mtdAttended: number
-  mtdTicketAvg: number
+  /** null quando sem atendidos MTD (não inventar ticket R$0). */
+  mtdTicketAvg: number | null
   cmv: number
   /** true só quando a query de saídas (0044) rodou com sucesso. */
   cmvKnown: boolean
@@ -186,8 +190,8 @@ export interface CerebroOverview {
     mtdRevenue: number
     mtdGoal: number
     mtdGoalProgress: number
-    /** Ticket médio do mês (receita MTD ÷ atendidos MTD). */
-    mtdTicketAvg: number
+    /** Ticket médio do mês (receita MTD ÷ atendidos MTD). null sem atendidos. */
+    mtdTicketAvg: number | null
     attendanceRate: number
     noShowRate: number
     occupancyRate: number

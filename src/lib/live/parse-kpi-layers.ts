@@ -111,7 +111,7 @@ export const EMPTY_OPS_WEEK: OpsWeek = {
   acquisition: [],
   reactivationCount: 0,
   returnRate: null,
-  newClientsPeriod: 0,
+  newClientsPeriod: null,
 }
 
 export const EMPTY_OPS_COMMERCE: OpsCommerce = {
@@ -119,6 +119,7 @@ export const EMPTY_OPS_COMMERCE: OpsCommerce = {
   packages: [],
   packagesSold: 0,
   packagesRevenue: 0,
+  packagesKnown: false,
   ratingsAvg: 0,
   ratingsCount: 0,
   birthdayCount: 0,
@@ -265,7 +266,7 @@ export async function fetchOpsWeek(sql: Sql, today: string): Promise<OpsWeek> {
     acquisition: parseAcquisition(p1?.acquisition),
     reactivationCount: n(p1?.reactivation_count),
     returnRate: p3?.return_rate == null ? null : n(p3.return_rate),
-    newClientsPeriod: n(p3?.new_clients_period),
+    newClientsPeriod: p3 == null ? null : n(p3.new_clients_period),
   }
 }
 
@@ -290,6 +291,7 @@ export async function fetchOpsCommerce(sql: Sql, today: string): Promise<OpsComm
     packages,
     packagesSold: n(p2.packages_sold),
     packagesRevenue,
+    packagesKnown: true,
     ratingsAvg: n(p2.ratings_avg),
     ratingsCount: n(p2.ratings_count),
     birthdayCount: n(p2.birthday_count),
