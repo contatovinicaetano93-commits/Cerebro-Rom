@@ -1,7 +1,7 @@
 import { getCerebroSql, isCerebroDbConfigured, type Sql } from '@/lib/db'
 import type { CerebroOverview, UnitSlug, UnitSnapshot } from '@/lib/types'
 import { rate } from '@/lib/comparison'
-import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail } from '@/lib/salon-day'
+import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail, isUnitReadable } from '@/lib/salon-day'
 
 export interface ReportRunMeta {
   id: string
@@ -92,8 +92,8 @@ export async function ensureReportTables(sql?: Sql): Promise<void> {
 function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
   const offline = Boolean(u.sync.offline)
   const hardFail = !offline && isSyncHardFail(u)
-  /** Offline ou token morto: não persistir dinheiro/rolling como se fossem reais. */
-  const blankMoney = offline || hardFail
+  /** Offline, token morto ou never-sync: não persistir dinheiro como real. */
+  const blankMoney = offline || hardFail || !isUnitReadable(u)
   const active = !blankMoney && isSalonActiveToday(u)
   const trusted = active && hasTrustedAgenda(u)
 
