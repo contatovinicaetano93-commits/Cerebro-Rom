@@ -252,10 +252,11 @@ export function Dashboard({
 
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
-    if (statuses.some((s) => s === 'stale')) return 'desatualizado' as const
+    // Prioridade: error/partial (incompleto) > stale (desatualizado) — não suavizar token morto.
     if (statuses.some((s) => s === 'error' || s === 'partial') || data.partial) {
       return 'incompleto' as const
     }
+    if (statuses.some((s) => s === 'stale')) return 'desatualizado' as const
     return null
   }, [data.units, data.partial])
 
@@ -409,10 +410,12 @@ export function Dashboard({
                 !c.networkReadable
                   ? 'Nenhuma unidade com sync legível'
                   : c.goalsConfigured
-                    ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.mtdTicketAvg)}`
-                    : `Ticket ${formatCurrency(c.mtdTicketAvg)}${
-                        c.cmvKnown ? ` · CMV ${formatCurrency(c.cmv)}` : ''
+                    ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${
+                        c.mtdTicketAvg != null ? formatCurrency(c.mtdTicketAvg) : '—'
                       }`
+                    : `Ticket ${
+                        c.mtdTicketAvg != null ? formatCurrency(c.mtdTicketAvg) : '—'
+                      }${c.cmvKnown ? ` · CMV ${formatCurrency(c.cmv)}` : ''}`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.mtd}
@@ -738,7 +741,8 @@ export function Dashboard({
                           title="Sem retorno = clientes sem visita na janela Avec 0107 (90 dias). 5.000+ = lista truncada pela paginação."
                         >
                           Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel} ·
-                          novos {formatNumber(w.newClientsPeriod)}
+                          novos{' '}
+                          {w.newClientsPeriod == null ? '—' : formatNumber(w.newClientsPeriod)}
                         </p>
                       </div>
                     )}
@@ -819,13 +823,16 @@ export function Dashboard({
                               </li>
                             ))}
                             {co.packages.length === 0 ? (
-                              <li className="text-xs text-muted">Sem pacotes</li>
+                              <li className="text-xs text-muted">
+                                {co.packagesKnown ? 'Sem pacotes' : 'Pacotes indisponíveis'}
+                              </li>
                             ) : null}
                           </ul>
                         </div>
                         <p className="text-xs text-muted">
-                          Pacotes {formatCurrency(co.packagesRevenue)} · {formatNumber(co.packagesSold)}{' '}
-                          vendidos
+                          Pacotes{' '}
+                          {co.packagesKnown ? formatCurrency(co.packagesRevenue) : '—'} ·{' '}
+                          {co.packagesKnown ? formatNumber(co.packagesSold) : '—'} vendidos
                           {co.ratingsCount > 0
                             ? ` · nota ${co.ratingsAvg.toFixed(1)} (${formatNumber(co.ratingsCount)})`
                             : ''}

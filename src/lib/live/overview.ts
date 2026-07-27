@@ -364,7 +364,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     mtdGoal,
     mtdGoalProgress:
       readable.length > 0 && goalsConfigured && mtdGoal > 0 ? rate(mtdRevenue, mtdGoal) : 0,
-    mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0,
+    mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : null,
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
     occupancyRate: occupancyConfigured ? rate(capacityAppointments, capacity) : 0,
@@ -402,7 +402,7 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     mtdRevenue: 0,
     mtdGoal: 0,
     mtdGoalProgress: 0,
-    mtdTicketAvg: 0,
+    mtdTicketAvg: null,
     attendanceRate: 0,
     noShowRate: 0,
     occupancyRate: 0,
