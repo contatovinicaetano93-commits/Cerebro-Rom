@@ -198,15 +198,17 @@ export function Dashboard({
   onRefresh?: () => void
 }) {
   const c = data.consolidated
-  const goalTone = !c.goalsConfigured
+  const goalTone = !c.networkReadable
     ? 'warn'
-    : !c.todayOpsActive
-      ? 'default'
-      : c.todayGoalProgress >= 1
-        ? 'good'
-        : c.todayGoalProgress >= 0.7
-          ? 'default'
-          : 'warn'
+    : !c.goalsConfigured
+      ? 'warn'
+      : !c.todayOpsActive
+        ? 'default'
+        : c.todayGoalProgress >= 1
+          ? 'good'
+          : c.todayGoalProgress >= 0.7
+            ? 'default'
+            : 'warn'
 
   const [openMap, setOpenMap] = useState(DEFAULT_OPEN)
   const allOpen = useMemo(
@@ -354,19 +356,21 @@ export function Dashboard({
           <Panel>
             <KpiStat
               label="Faturamento hoje"
-              value={formatCurrency(c.todayRevenue)}
+              value={c.networkReadable ? formatCurrency(c.todayRevenue) : '—'}
               hint={
-                !c.goalsConfigured
-                  ? 'Defina as metas para acompanhar progresso'
-                  : !c.todayOpsActive
-                    ? 'Sem unidades em operação hoje'
-                    : `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
+                !c.networkReadable
+                  ? 'Nenhuma unidade com sync legível'
+                  : !c.goalsConfigured
+                    ? 'Defina as metas para acompanhar progresso'
+                    : !c.todayOpsActive
+                      ? 'Sem unidades em operação hoje'
+                      : `Meta ${formatCurrency(c.todayGoal)} · ${formatPct(c.todayGoalProgress)}`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.faturamento}
               tone={goalTone}
             />
-            {c.goalsConfigured && c.todayOpsActive ? (
+            {c.networkReadable && c.goalsConfigured && c.todayOpsActive ? (
               <div className="mt-3">
                 <ProgressBar
                   value={c.todayGoalProgress}
@@ -400,18 +404,20 @@ export function Dashboard({
           <Panel>
             <KpiStat
               label="MTD · Ticket"
-              value={formatCurrency(c.mtdRevenue)}
+              value={c.networkReadable ? formatCurrency(c.mtdRevenue) : '—'}
               hint={
-                c.goalsConfigured
-                  ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.mtdTicketAvg)}`
-                  : `Ticket ${formatCurrency(c.mtdTicketAvg)}${
-                      c.cmvKnown ? ` · CMV ${formatCurrency(c.cmv)}` : ''
-                    }`
+                !c.networkReadable
+                  ? 'Nenhuma unidade com sync legível'
+                  : c.goalsConfigured
+                    ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${formatCurrency(c.mtdTicketAvg)}`
+                    : `Ticket ${formatCurrency(c.mtdTicketAvg)}${
+                        c.cmvKnown ? ` · CMV ${formatCurrency(c.cmv)}` : ''
+                      }`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.mtd}
             />
-            {c.goalsConfigured ? (
+            {c.networkReadable && c.goalsConfigured ? (
               <div className="mt-3">
                 <ProgressBar value={c.mtdGoalProgress} color="teal" />
               </div>
@@ -419,7 +425,7 @@ export function Dashboard({
           </Panel>
         </section>
 
-        {(c.cmvKnown || c.stockValue > 0 || c.stockAlerts > 0) && (
+        {(c.cmvKnown || c.stockKnown) && (
           <section className="mt-3 grid gap-3 sm:grid-cols-3">
             <Panel>
               <KpiStat
@@ -433,7 +439,7 @@ export function Dashboard({
             <Panel>
               <KpiStat
                 label="Estoque (valor)"
-                value={formatCurrency(c.stockValue)}
+                value={c.stockKnown ? formatCurrency(c.stockValue) : '—'}
                 source={sourceHint('Avec', networkSyncSource)}
                 legend={LEGEND.estoqueValor}
               />
@@ -441,8 +447,16 @@ export function Dashboard({
             <Panel>
               <KpiStat
                 label="Alertas estoque"
-                value={formatNumber(c.stockAlerts)}
-                tone={c.stockAlerts >= 200 ? 'default' : c.stockAlerts >= 3 ? 'warn' : 'default'}
+                value={c.stockKnown ? formatNumber(c.stockAlerts) : '—'}
+                tone={
+                  !c.stockKnown
+                    ? 'default'
+                    : c.stockAlerts >= 200
+                      ? 'default'
+                      : c.stockAlerts >= 3
+                        ? 'warn'
+                        : 'default'
+                }
                 source={sourceHint('Avec')}
                 legend={LEGEND.estoqueAlertas}
               />

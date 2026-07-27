@@ -39,8 +39,9 @@ const ACTION_FAMILY_RANK: Record<string, number> = {
 }
 
 function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
-  const brasilLive = units.find((u) => u.unit.slug === 'rom-brasil' && !u.sync.offline)
-  const iguatemiLive = units.find((u) => u.unit.slug === 'rom-iguatemi' && !u.sync.offline)
+  // Offline / hard-fail → null (gap). Alinha com consolidate / scorecard.
+  const brasilLive = units.find((u) => u.unit.slug === 'rom-brasil' && isUnitReadable(u))
+  const iguatemiLive = units.find((u) => u.unit.slug === 'rom-iguatemi' && isUnitReadable(u))
   const brasilByDay = new Map(brasilLive?.last30.map((d) => [d.day, d.revenue]) ?? [])
   const iguatemiByDay = new Map(iguatemiLive?.last30.map((d) => [d.day, d.revenue]) ?? [])
   const allDays = [...new Set([...brasilByDay.keys(), ...iguatemiByDay.keys()])].sort()
@@ -56,7 +57,7 @@ function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
 
   return allDays.map((day) => ({
     day: day.slice(5),
-    // Offline → null (gap no gráfico). Live sem dia → 0 (fechado/sem movimento).
+    // Não legível → null (gap no gráfico). Legível sem dia → 0 (fechado/sem movimento).
     brasil: brasilLive ? (brasilByDay.get(day) ?? 0) : null,
     iguatemi: iguatemiLive ? (iguatemiByDay.get(day) ?? 0) : null,
   }))
@@ -346,6 +347,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     (a, u) => a + (u.opsStock.available ? u.opsStock.activeAlerts : 0),
     0,
   )
+  const stockKnown = readable.some((u) => u.opsStock.available)
   const dayRevenue = dayOps.reduce((a, u) => a + u.today.revenue, 0)
   const agendaRevenue = agendaOps.reduce((a, u) => a + u.today.revenue, 0)
 
@@ -360,7 +362,8 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     todayOpsActive: dayOps.length > 0,
     mtdRevenue,
     mtdGoal,
-    mtdGoalProgress: goalsConfigured && mtdGoal > 0 ? rate(mtdRevenue, mtdGoal) : 0,
+    mtdGoalProgress:
+      readable.length > 0 && goalsConfigured && mtdGoal > 0 ? rate(mtdRevenue, mtdGoal) : 0,
     mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : 0,
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
@@ -384,6 +387,8 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     cmvShare: cmvKnownUnits.length > 0 && cmvMtd > 0 ? cmv / cmvMtd : null,
     stockValue,
     stockAlerts,
+    stockKnown,
+    networkReadable: readable.length > 0,
   }
 }
 
@@ -419,6 +424,8 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     cmvShare: null,
     stockValue: 0,
     stockAlerts: 0,
+    stockKnown: false,
+    networkReadable: false,
   }
 }
 
@@ -512,7 +519,7 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
   }
 
   const consolidated = consolidate(liveUnits)
-  // Trend recebe todas (offline vira null na série — não zero falso).
+  // Trend recebe todas (offline/hard-fail → null na série — não zero falso).
   const trend30 = buildTrend30(units)
 
   const nextActions = [
