@@ -649,8 +649,8 @@ export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
             severity: 'critical',
             unit: 'both',
             title: 'DBs das unidades não configurados',
-            detail: 'Connection strings ausentes ou Brasil ainda em Neon',
-            action: 'Configurar URLs na Vercel (Brasil=pooler Supabase)',
+            detail: 'Connection strings ausentes ou ainda em Neon (Brasil+Iguatemi)',
+            action: 'Configurar URLs na Vercel (Brasil+Iguatemi=pooler Supabase)',
           },
         ],
       }
