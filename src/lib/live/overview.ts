@@ -136,12 +136,16 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
 
     const dayOk = isDayOperable(u)
     if (dayOk && u.today.noShows > 0) {
+      const risk =
+        u.today.ticketAvg > 0
+          ? ` · risco ~R$ ${Math.round(u.today.noShows * u.today.ticketAvg)}`
+          : ' · ticket ainda indisponível'
       actions.push({
         id: `noshow-${u.unit.slug}`,
         severity: u.today.noShows >= 3 ? 'critical' : 'warning',
         unit: u.unit.slug,
         title: `No-show — ${u.unit.short}`,
-        detail: `${u.today.noShows} hoje · risco ~R$ ${Math.round(u.today.noShows * u.today.ticketAvg)}`,
+        detail: `${u.today.noShows} hoje${risk}`,
         action: 'Remarcar + confirmação WhatsApp',
       })
     }
@@ -176,7 +180,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
 
     const rolling = trustsRollingKpis(u)
     // 5.000+ = teto Avec — útil como info, não como “reativar 5000”.
-    if (rolling && u.opsWeek.reactivationCount >= 5000) {
+    if (rolling && u.opsWeek.reactivationCount != null && u.opsWeek.reactivationCount >= 5000) {
       actions.push({
         id: `react-cap-${u.unit.slug}`,
         severity: 'info',
@@ -185,7 +189,11 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
         detail: '5.000+ sem retorno (90d) · paginação Avec truncada',
         action: 'Tratar lista no ROM Contatos / campanha',
       })
-    } else if (rolling && u.opsWeek.reactivationCount >= 50) {
+    } else if (
+      rolling &&
+      u.opsWeek.reactivationCount != null &&
+      u.opsWeek.reactivationCount >= 50
+    ) {
       actions.push({
         id: `react-${u.unit.slug}`,
         severity: 'info',
@@ -259,24 +267,26 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
     }
   }
 
-  // Meta do dia: só unidades em operação (não soma meta de salão fechado).
-  const active = units.filter(isSalonActiveToday)
-  if (active.length > 0 && active.every((u) => u.today.goalSet)) {
-    const activeGoal = active.reduce((a, u) => a + u.today.dailyGoal, 0)
-    const activeRevenue = active.reduce((a, u) => a + u.today.revenue, 0)
+  // Meta do dia: só unidades com faturamento/atendido (não agenda sem dinheiro).
+  const moneyActive = units.filter(
+    (u) => isSalonActiveToday(u) && (u.today.revenue > 0 || u.today.attended > 0),
+  )
+  if (moneyActive.length > 0 && moneyActive.every((u) => u.today.goalSet)) {
+    const activeGoal = moneyActive.reduce((a, u) => a + u.today.dailyGoal, 0)
+    const activeRevenue = moneyActive.reduce((a, u) => a + u.today.revenue, 0)
     const gap = Math.max(0, activeGoal - activeRevenue)
     if (gap > 500) {
       const who =
-        active.length === 1 ? active[0]!.unit.slug : ('both' as const)
+        moneyActive.length === 1 ? moneyActive[0]!.unit.slug : ('both' as const)
       actions.push({
         id: 'goal-gap',
         severity: 'info',
         unit: who,
         title:
-          active.length === 1
-            ? `Meta do dia em aberto — ${active[0]!.unit.short}`
+          moneyActive.length === 1
+            ? `Meta do dia em aberto — ${moneyActive[0]!.unit.short}`
             : 'Meta do dia em aberto',
-        detail: `Faltam R$ ${Math.round(gap).toLocaleString('pt-BR')} (só unidades em operação)`,
+        detail: `Faltam R$ ${Math.round(gap).toLocaleString('pt-BR')} (só unidades com faturamento)`,
         action: 'Vagas + upsell nos restantes',
       })
     }
@@ -312,12 +322,14 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const active = units.filter(isSalonActiveToday)
   /** Meta do dia: unidades com movimento. */
   const dayOps = active
+  /** % meta / gap: só com receita ou atendido (não agenda sem dinheiro). */
+  const moneyOps = dayOps.filter((u) => u.today.revenue > 0 || u.today.attended > 0)
   /** Ocupação/vagas: só com agenda confiável (não capacity cheia pós-wipe parcial). */
   const agendaOps = dayOps.filter(hasTrustedAgenda)
 
   const todayRevenue = readable.reduce((a, u) => a + u.today.revenue, 0)
-  const todayGoal = dayOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
-  const goalsConfigured = units.every((u) => u.today.goalSet)
+  const todayGoal = moneyOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
+  const goalsConfigured = units.every((u) => u.today.goalSet && u.today.capacitySet)
   const mtdRevenue = readable.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdAttended = readable.reduce((a, u) => a + u.mtd.attended, 0)
   const mtdGoal = readable.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
@@ -348,18 +360,33 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     0,
   )
   const stockKnown = readable.some((u) => u.opsStock.available)
-  const dayRevenue = dayOps.reduce((a, u) => a + u.today.revenue, 0)
+  const dayRevenue = moneyOps.reduce((a, u) => a + u.today.revenue, 0)
   const agendaRevenue = agendaOps.reduce((a, u) => a + u.today.revenue, 0)
+
+  let revenueAtRisk: number | null = 0
+  let riskHasUnknown = false
+  let riskHasKnown = false
+  for (const u of agendaOps) {
+    if (u.today.noShows <= 0) continue
+    if (u.today.ticketAvg <= 0) {
+      riskHasUnknown = true
+      continue
+    }
+    riskHasKnown = true
+    revenueAtRisk = (revenueAtRisk ?? 0) + u.today.noShows * u.today.ticketAvg
+  }
+  if (riskHasUnknown && !riskHasKnown) revenueAtRisk = null
 
   return {
     todayRevenue,
     todayGoal,
     todayGoalProgress:
-      dayOps.length > 0 && dayOps.every((u) => u.today.goalSet) && todayGoal > 0
+      moneyOps.length > 0 && moneyOps.every((u) => u.today.goalSet) && todayGoal > 0
         ? rate(dayRevenue, todayGoal)
         : 0,
     goalsConfigured,
     todayOpsActive: dayOps.length > 0,
+    todayMoneyActive: moneyOps.length > 0,
     mtdRevenue,
     mtdGoal,
     mtdGoalProgress:
@@ -372,7 +399,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     attendanceConfigured,
     // Ticket do dia: só unidades com agenda confiável (não misturar receita órfã).
     ticketAvg: attended > 0 ? Math.round(agendaRevenue / attended) : 0,
-    revenueAtRisk: agendaOps.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
+    revenueAtRisk,
     newClients,
     returningClients,
     conversionRate: rate(converted, leads),
@@ -399,6 +426,7 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     todayGoalProgress: 0,
     goalsConfigured: false,
     todayOpsActive: false,
+    todayMoneyActive: false,
     mtdRevenue: 0,
     mtdGoal: 0,
     mtdGoalProgress: 0,
@@ -409,7 +437,7 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     occupancyConfigured: false,
     attendanceConfigured: false,
     ticketAvg: 0,
-    revenueAtRisk: 0,
+    revenueAtRisk: null,
     newClients: 0,
     returningClients: 0,
     conversionRate: 0,

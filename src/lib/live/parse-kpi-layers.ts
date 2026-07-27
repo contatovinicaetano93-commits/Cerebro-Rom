@@ -109,7 +109,7 @@ export const EMPTY_OPS_WEEK: OpsWeek = {
   professionals: [],
   services: [],
   acquisition: [],
-  reactivationCount: 0,
+  reactivationCount: null,
   returnRate: null,
   newClientsPeriod: null,
 }
@@ -264,7 +264,7 @@ export async function fetchOpsWeek(sql: Sql, today: string): Promise<OpsWeek> {
     professionals: parseProfessionals(p1?.professionals),
     services: parseServices(p1?.services),
     acquisition: parseAcquisition(p1?.acquisition),
-    reactivationCount: n(p1?.reactivation_count),
+    reactivationCount: p1 == null || p1.reactivation_count == null ? null : n(p1.reactivation_count),
     returnRate: p3?.return_rate == null ? null : n(p3.return_rate),
     newClientsPeriod: p3 == null ? null : n(p3.new_clients_period),
   }

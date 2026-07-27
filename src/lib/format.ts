@@ -20,8 +20,8 @@ export function formatSignedPct(value: number | null | undefined, digits = 0): s
 }
 
 export function formatNumber(value: number | null | undefined): string {
-  const n = typeof value === 'number' && Number.isFinite(value) ? value : 0
-  return new Intl.NumberFormat('pt-BR').format(n)
+  if (value == null || !Number.isFinite(value)) return '—'
+  return new Intl.NumberFormat('pt-BR').format(value)
 }
 
 export function formatShortDate(isoDay: string): string {

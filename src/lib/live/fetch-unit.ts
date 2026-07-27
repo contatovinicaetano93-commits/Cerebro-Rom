@@ -131,7 +131,7 @@ export function offlineUnitSnapshot(meta: UnitMeta, detail: string): UnitSnapsho
       professionals: [],
       services: [],
       acquisition: [],
-      reactivationCount: 0,
+      reactivationCount: null,
       returnRate: null,
       newClientsPeriod: null,
     },

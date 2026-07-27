@@ -106,9 +106,11 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
   const noShowRate =
     trusted && u.today.appointments > 0 ? rate(u.today.noShows, u.today.appointments) : null
   // Colunas NOT NULL no snapshot: 0 quando offline/não confiável; taxas nullable = null.
-  const lostRevenue = trusted
-    ? Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
-    : 0
+  const lostCount = u.today.noShows + u.today.cancelled
+  const lostRevenue =
+    trusted && lostCount > 0 && u.today.ticketAvg > 0
+      ? Math.round(lostCount * u.today.ticketAvg)
+      : 0
 
   return {
     id: crypto.randomUUID(),

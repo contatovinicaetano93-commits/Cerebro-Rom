@@ -46,7 +46,7 @@ export interface OpsWeek {
   professionals: { name: string; revenue: number; attended: number; ticketAvg: number; occupancy: number }[]
   services: { name: string; quantity: number; revenue: number }[]
   acquisition: { channel: string; clients: number }[]
-  reactivationCount: number
+  reactivationCount: number | null
   /** null quando P3 não trouxe taxa (não inventar 0%). */
   returnRate: number | null
   /** null quando P3 ausente (não inventar “0 novos”). */
@@ -187,6 +187,8 @@ export interface CerebroOverview {
     goalsConfigured: boolean
     /** Há unidade com movimento hoje (meta/ocupação do dia fazem sentido). */
     todayOpsActive: boolean
+    /** Há unidade com receita ou atendido hoje (% meta / gap de dinheiro). */
+    todayMoneyActive: boolean
     mtdRevenue: number
     mtdGoal: number
     mtdGoalProgress: number
@@ -201,7 +203,8 @@ export interface CerebroOverview {
     attendanceConfigured: boolean
     /** Ticket médio do dia (rede em operação). */
     ticketAvg: number
-    revenueAtRisk: number
+    /** null quando há no-shows sem ticket (não inventar R$0 em risco). */
+    revenueAtRisk: number | null
     newClients: number
     returningClients: number
     conversionRate: number

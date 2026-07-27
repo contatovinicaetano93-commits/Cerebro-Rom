@@ -120,8 +120,11 @@ function formatCmpSide(row: ComparisonRow, side: 'brasil' | 'iguatemi'): string 
   }
 }
 
-function lostRevenue(u: UnitSnapshot): number {
-  return Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
+function lostRevenue(u: UnitSnapshot): number | null {
+  const lost = u.today.noShows + u.today.cancelled
+  if (lost <= 0) return 0
+  if (u.today.ticketAvg <= 0) return null
+  return Math.round(lost * u.today.ticketAvg)
 }
 
 const LEGEND_ROWS: [string, string][] = [
@@ -217,13 +220,13 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     [
       'Meta hoje',
-      c.goalsConfigured && c.todayOpsActive ? money(c.todayGoal) : c.goalsConfigured ? '— (sem operação hoje)' : '— (meta não definida)',
+      c.goalsConfigured && c.todayMoneyActive ? money(c.todayGoal) : c.goalsConfigured ? '— (sem faturamento hoje)' : '— (meta/capacidade não definidas)',
       'R$',
-      'Definida no painel Metas · só unidades em operação.',
+      'Definida no painel Metas · só unidades com faturamento.',
     ],
     [
       '% meta hoje',
-      c.goalsConfigured && c.todayOpsActive ? pct(c.todayGoalProgress) : '—',
+      c.goalsConfigured && c.todayMoneyActive ? pct(c.todayGoalProgress) : '—',
       '%',
       'Faturamento ÷ meta.',
     ],
@@ -259,7 +262,7 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     [
       'Receita em risco',
-      c.attendanceConfigured ? money(c.revenueAtRisk) : '—',
+      c.attendanceConfigured && c.revenueAtRisk != null ? money(c.revenueAtRisk) : '—',
       'R$',
       'No-shows × ticket.',
     ],
@@ -386,7 +389,11 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       active && u.today.attended > 0 ? money(u.today.ticketAvg) : '—',
       u.today.capacitySet ? num(u.today.capacity) : '—',
       u.today.goalSet ? money(u.today.dailyGoal) : '—',
-      active && hasTrustedAgenda(u) ? money(lostRevenue(u)) : '—',
+      (() => {
+        if (!active || !hasTrustedAgenda(u)) return '—'
+        const lost = lostRevenue(u)
+        return lost == null ? '—' : money(lost)
+      })(),
       active && u.today.capacitySet && hasTrustedAgenda(u)
         ? num(u.opsToday.openSlotsToday)
         : '—',
