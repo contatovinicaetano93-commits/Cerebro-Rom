@@ -167,7 +167,12 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
       notes.push('Totais parciais: sync incompleto/com erro em alguma unidade.')
     }
   }
-  if (o.mode === 'live' && o.consolidated.todayRevenue === 0 && o.consolidated.mtdRevenue > 0) {
+  if (
+    o.mode === 'live' &&
+    o.consolidated.networkReadable &&
+    o.consolidated.todayRevenue === 0 &&
+    o.consolidated.mtdRevenue > 0
+  ) {
     notes.push('Faturamento hoje = R$ 0 com MTD > 0: dia sem venda ainda OU sync do dia atrasado.')
   }
   for (const u of o.units) {
