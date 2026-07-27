@@ -5,9 +5,21 @@ import type { CerebroOverview } from '@/lib/types'
 import { Dashboard } from './_components/Dashboard'
 
 const OVERVIEW_POLL_MS = 60_000
+const OVERVIEW_FETCH_TIMEOUT_MS = 25_000
 
 async function fetchOverview(): Promise<CerebroOverview> {
-  const res = await fetch('/api/overview', { cache: 'no-store' })
+  let res: Response
+  try {
+    res = await fetch('/api/overview', {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(OVERVIEW_FETCH_TIMEOUT_MS),
+    })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'TimeoutError') {
+      throw new Error('Painel demorou demais — DB de unidade pode estar offline/quota')
+    }
+    throw e
+  }
   if (res.status === 401) {
     window.location.href = '/login?next=/'
     throw new Error('Não autorizado')
