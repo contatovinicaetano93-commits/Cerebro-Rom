@@ -97,7 +97,7 @@ function sourceHint(
 }
 
 function syncSourceLabel(status: string | undefined): 'incompleto' | 'desatualizado' | null {
-  if (status === 'error') return 'incompleto'
+  if (status === 'error' || status === 'partial') return 'incompleto'
   if (status === 'stale') return 'desatualizado'
   return null
 }
@@ -248,7 +248,9 @@ export function Dashboard({
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
     if (statuses.some((s) => s === 'stale')) return 'desatualizado' as const
-    if (statuses.some((s) => s === 'error') || data.partial) return 'incompleto' as const
+    if (statuses.some((s) => s === 'error' || s === 'partial') || data.partial) {
+      return 'incompleto' as const
+    }
     return null
   }, [data.units, data.partial])
 
@@ -476,11 +478,22 @@ export function Dashboard({
                 const u = unitForHoje(data.units, slug)
                 const label = u?.unit.short ?? HOJE_UNIT_LABEL[slug]
                 const offline = !u || Boolean(u.sync.offline)
+                const syncBad =
+                  !offline &&
+                  (u.sync.status === 'error' ||
+                    u.sync.status === 'partial' ||
+                    u.sync.status === 'stale')
                 const src = offline
                   ? 'offline'
                   : sourceHint('Avec', 'ROM', syncSourceLabel(u.sync.status))
                 const dash = '—'
                 const quiet =
+                  !offline &&
+                  !syncBad &&
+                  u.today.revenue === 0 &&
+                  u.today.appointments === 0 &&
+                  u.today.attended === 0
+                const noDayMovement =
                   !offline &&
                   u.today.revenue === 0 &&
                   u.today.appointments === 0 &&
@@ -489,19 +502,19 @@ export function Dashboard({
                 const vagasHoje =
                   offline || !u.today.capacitySet
                     ? dash
-                    : quiet
+                    : noDayMovement
                       ? 'Sem agenda'
                       : String(u.opsToday.openSlotsToday)
                 const vagas2h =
                   offline || !u.today.capacitySet
                     ? dash
-                    : quiet
+                    : noDayMovement
                       ? '—'
                       : String(u.opsToday.openSlotsNext2h)
                 const cancelNoshow = offline
                   ? dash
-                  : quiet
-                    ? '0 · 0'
+                  : noDayMovement
+                    ? dash
                     : `${u.today.cancelled} · ${u.today.noShows}`
                 const novosRec = offline
                   ? dash
@@ -524,14 +537,24 @@ export function Dashboard({
                         <p className="mt-0.5 text-[0.65rem] text-muted">
                           {offline
                             ? 'Sem dados ao vivo'
-                            : quiet
-                              ? 'Sem movimento hoje · salão quieto/fechado'
-                              : u.sync.label}
+                            : syncBad
+                              ? u.sync.label
+                              : quiet
+                                ? 'Sem movimento hoje · salão quieto/fechado'
+                                : u.sync.label}
                         </p>
                       </div>
                       {offline ? (
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Offline
+                        </span>
+                      ) : u.sync.status === 'error' ? (
+                        <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
+                          Sync
+                        </span>
+                      ) : u.sync.status === 'partial' ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Parcial
                         </span>
                       ) : quiet ? (
                         <span className="rounded-md border border-border/60 bg-panel px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted">
@@ -564,9 +587,9 @@ export function Dashboard({
                         </p>
                         <p
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
-                            !offline && !quiet && u.opsToday.openSlotsToday >= 4
+                            !offline && !noDayMovement && u.opsToday.openSlotsToday >= 4
                               ? 'text-warning'
-                              : quiet
+                              : noDayMovement
                                 ? 'text-muted'
                                 : 'text-foreground'
                           }`}
@@ -594,7 +617,9 @@ export function Dashboard({
                         </p>
                         <p
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
-                            !offline && u.today.cancelled + u.today.noShows > 0
+                            !offline &&
+                            !noDayMovement &&
+                            u.today.cancelled + u.today.noShows > 0
                               ? 'text-warning'
                               : 'text-foreground'
                           }`}

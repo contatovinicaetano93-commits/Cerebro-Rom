@@ -3,13 +3,37 @@ import { fetchLiveUnit, offlineUnitSnapshot } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo, UNIT_META } from '@/lib/unit-config'
 import { rate, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
+import {
+  isDayOperable,
+  isSalonActiveToday,
+  isSyncHardFail,
+  trustsRollingKpis,
+} from '@/lib/salon-day'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
 const SEV = { critical: 0, warning: 1, info: 2 }
 
-/** Unidade com movimento no dia — evita tratar domingo fechado / pré-abertura como crise de vagas/meta. */
-function isSalonActiveToday(u: UnitSnapshot): boolean {
-  return u.today.revenue > 0 || u.today.appointments > 0 || u.today.attended > 0
+/** Famílias de alerta — sync/token antes de ruído de estoque. */
+const ACTION_FAMILY_RANK: Record<string, number> = {
+  fetch: 0,
+  missing: 0,
+  'sync-error': 1,
+  'sync-partial': 2,
+  'sync-stale': 2,
+  'partial-units': 2,
+  sparse: 3,
+  noshow: 4,
+  cancel: 4,
+  slots: 5,
+  'goal-gap': 5,
+  return: 6,
+  rate: 6,
+  react: 7,
+  'react-cap': 7,
+  pay: 8,
+  'stock-alert': 9,
+  'stock-drift': 9,
+  'goals-unset': 10,
 }
 
 function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
@@ -53,13 +77,25 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
 
   for (const u of units) {
     if (u.sync.status === 'error') {
+      const tokenish = /token|AVEC_API_TOKEN|expirado|refresh/i.test(u.sync.label)
       actions.push({
         id: `sync-error-${u.unit.slug}`,
         severity: 'critical',
         unit: u.unit.slug,
         title: `Sync com erro — ${u.unit.short}`,
         detail: u.sync.label,
-        action: 'Checar token Avec e rodar sync full',
+        action: tokenish
+          ? 'ROM Admin → refresh token Avec (force) + sync full'
+          : 'Ver logs Avec na unidade e rerodar sync',
+      })
+    } else if (u.sync.status === 'partial') {
+      actions.push({
+        id: `sync-partial-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Sync parcial — ${u.unit.short}`,
+        detail: u.sync.label,
+        action: 'Completar sync / reprocessar etapas que falharam',
       })
     } else if (u.sync.status === 'stale') {
       const awaiting = /Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)
@@ -95,7 +131,8 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    if (u.today.noShows > 0) {
+    const dayOk = isDayOperable(u)
+    if (dayOk && u.today.noShows > 0) {
       actions.push({
         id: `noshow-${u.unit.slug}`,
         severity: u.today.noShows >= 3 ? 'critical' : 'warning',
@@ -106,7 +143,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    if (u.today.cancelled > 0) {
+    if (dayOk && u.today.cancelled > 0) {
       actions.push({
         id: `cancel-${u.unit.slug}`,
         severity: u.today.cancelled >= 3 ? 'warning' : 'info',
@@ -117,12 +154,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    // Só alerta vagas se a unidade está em operação hoje (evita domingo fechado = “227 vagas”).
-    if (
-      isSalonActiveToday(u) &&
-      u.today.capacitySet &&
-      u.opsToday.openSlotsNext2h >= 2
-    ) {
+    if (dayOk && u.today.capacitySet && u.opsToday.openSlotsNext2h >= 2) {
       actions.push({
         id: `slots-${u.unit.slug}`,
         severity: 'info',
@@ -133,9 +165,9 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
+    const rolling = trustsRollingKpis(u)
     // 5.000+ = teto Avec — útil como info, não como “reativar 5000”.
-    // Contagens reais só abaixo do teto.
-    if (u.opsWeek.reactivationCount >= 5000) {
+    if (rolling && u.opsWeek.reactivationCount >= 5000) {
       actions.push({
         id: `react-cap-${u.unit.slug}`,
         severity: 'info',
@@ -144,7 +176,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
         detail: '5.000+ sem retorno (90d) · paginação Avec truncada',
         action: 'Tratar lista no ROM Contatos / campanha',
       })
-    } else if (u.opsWeek.reactivationCount >= 50) {
+    } else if (rolling && u.opsWeek.reactivationCount >= 50) {
       actions.push({
         id: `react-${u.unit.slug}`,
         severity: 'info',
@@ -155,7 +187,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    if (u.opsWeek.returnRate > 0 && u.opsWeek.returnRate < 0.45) {
+    if (rolling && u.opsWeek.returnRate > 0 && u.opsWeek.returnRate < 0.45) {
       actions.push({
         id: `return-${u.unit.slug}`,
         severity: 'warning',
@@ -166,7 +198,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    if (u.opsCommerce.ratingsCount > 0 && u.opsCommerce.ratingsAvg < 4.2) {
+    if (rolling && u.opsCommerce.ratingsCount > 0 && u.opsCommerce.ratingsAvg < 4.2) {
       actions.push({
         id: `rate-${u.unit.slug}`,
         severity: 'warning',
@@ -177,7 +209,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    if (u.opsFinance.paymentReconcile === 'divergent') {
+    if (rolling && u.opsFinance.paymentReconcile === 'divergent') {
       actions.push({
         id: `pay-${u.unit.slug}`,
         severity: 'warning',
@@ -188,18 +220,24 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    if (u.opsStock.available && u.opsStock.activeAlerts >= 3) {
+    // Centenas/milhares de alertas = higiene de catálogo, não crise operacional.
+    if (rolling && u.opsStock.available && u.opsStock.activeAlerts >= 50) {
+      const huge = u.opsStock.activeAlerts >= 200
       actions.push({
         id: `stock-alert-${u.unit.slug}`,
-        severity: 'warning',
+        severity: huge ? 'info' : 'warning',
         unit: u.unit.slug,
-        title: `Estoque baixo — ${u.unit.short}`,
+        title: huge
+          ? `Estoque: muitos alertas — ${u.unit.short}`
+          : `Estoque baixo — ${u.unit.short}`,
         detail: `${u.opsStock.activeAlerts} alertas · ${u.opsStock.zeroProducts} zerados`,
-        action: 'Fila de compra no ROM Estoque',
+        action: huge
+          ? 'Revisar critérios de alerta no ROM Estoque'
+          : 'Fila de compra no ROM Estoque',
       })
     }
 
-    if (u.opsStock.available && u.opsStock.drift != null && Math.abs(u.opsStock.drift) > 50) {
+    if (rolling && u.opsStock.available && u.opsStock.drift != null && Math.abs(u.opsStock.drift) > 50) {
       actions.push({
         id: `stock-drift-${u.unit.slug}`,
         severity: 'info',
@@ -237,19 +275,21 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
   return sortNextActions(actions)
 }
 
-/** Severidade → família do alerta → unidade (BR, IG, both) — sem cortar a lista. */
+/** Severidade → prioridade de família → unidade — sem cortar a lista. */
 function sortNextActions(actions: AlertItem[]): AlertItem[] {
   const unitOrder = (unit: AlertItem['unit']) => {
     if (unit === 'rom-brasil') return 0
     if (unit === 'rom-iguatemi') return 1
     return 2
   }
-  /** id `vagas-2h-rom-brasil` → família `vagas-2h` para manter BR/IG juntos. */
   const family = (id: string) => id.replace(/-(rom-brasil|rom-iguatemi|both)$/i, '')
+  const familyRank = (id: string) => ACTION_FAMILY_RANK[family(id)] ?? 50
 
   return [...actions].sort((a, b) => {
     const bySev = SEV[a.severity] - SEV[b.severity]
     if (bySev !== 0) return bySev
+    const byRank = familyRank(a.id) - familyRank(b.id)
+    if (byRank !== 0) return byRank
     const byFam = family(a.id).localeCompare(family(b.id), 'pt-BR')
     if (byFam !== 0) return byFam
     return unitOrder(a.unit) - unitOrder(b.unit)
@@ -258,23 +298,23 @@ function sortNextActions(actions: AlertItem[]): AlertItem[] {
 
 function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const active = units.filter(isSalonActiveToday)
-  /** Meta/vagas do dia: unidades em operação; se nenhuma abriu ainda, usa todas com capacidade. */
-  const dayOps = active.length > 0 ? active : units.filter((u) => u.today.capacitySet)
+  /** Meta/vagas do dia: só unidades em operação — sem fallback para salão quieto. */
+  const dayOps = active
 
   const todayRevenue = units.reduce((a, u) => a + u.today.revenue, 0)
   const todayGoal = dayOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
   const goalsConfigured = units.every((u) => u.today.goalSet)
   const mtdRevenue = units.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdGoal = units.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
-  const attended = units.reduce((a, u) => a + u.today.attended, 0)
-  const appointments = units.reduce((a, u) => a + u.today.appointments, 0)
-  const noShows = units.reduce((a, u) => a + u.today.noShows, 0)
+  const attended = dayOps.reduce((a, u) => a + u.today.attended, 0)
+  const appointments = dayOps.reduce((a, u) => a + u.today.appointments, 0)
+  const noShows = dayOps.reduce((a, u) => a + u.today.noShows, 0)
   const capacity = dayOps.reduce((a, u) => a + (u.today.capacitySet ? u.today.capacity : 0), 0)
   const occupancyConfigured = dayOps.length > 0 && dayOps.every((u) => u.today.capacitySet)
-  const newClients = units.reduce((a, u) => a + u.today.newClients, 0)
-  const returningClients = units.reduce((a, u) => a + u.today.returningClients, 0)
-  const leads = units.reduce((a, u) => a + u.today.leads, 0)
-  const converted = units.reduce((a, u) => a + u.today.converted, 0)
+  const newClients = dayOps.reduce((a, u) => a + u.today.newClients, 0)
+  const returningClients = dayOps.reduce((a, u) => a + u.today.returningClients, 0)
+  const leads = dayOps.reduce((a, u) => a + u.today.leads, 0)
+  const converted = dayOps.reduce((a, u) => a + u.today.converted, 0)
   const mixBase = newClients + returningClients
   const cmvKnownUnits = units.filter((u) => u.opsFinance.cmvKnown)
   const cmv = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.cmv, 0)
@@ -290,7 +330,9 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     todayRevenue,
     todayGoal,
     todayGoalProgress:
-      goalsConfigured && todayGoal > 0 ? rate(dayRevenue, todayGoal) : 0,
+      dayOps.length > 0 && dayOps.every((u) => u.today.goalSet) && todayGoal > 0
+        ? rate(dayRevenue, todayGoal)
+        : 0,
     goalsConfigured,
     mtdRevenue,
     mtdGoal,
@@ -299,14 +341,14 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     noShowRate: rate(noShows, appointments),
     occupancyRate: occupancyConfigured ? rate(appointments, capacity) : 0,
     occupancyConfigured,
-    ticketAvg: attended > 0 ? Math.round(todayRevenue / attended) : 0,
-    revenueAtRisk: units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
+    ticketAvg: attended > 0 ? Math.round(dayRevenue / attended) : 0,
+    revenueAtRisk: dayOps.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
     newClients,
     returningClients,
     conversionRate: rate(converted, leads),
     openSlotsToday: dayOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
     openSlotsNext2h: dayOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
-    cancelledToday: units.reduce((a, u) => a + u.today.cancelled, 0),
+    cancelledToday: dayOps.reduce((a, u) => a + u.today.cancelled, 0),
     noShowsToday: noShows,
     newShare: mixBase > 0 ? newClients / mixBase : 0,
     cmv,
@@ -454,7 +496,9 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
     })
   }
 
-  const partial = liveUnits.length < 2 || fetchErrors.length > 0
+  const syncHardFail = units.some(isSyncHardFail)
+  const syncPartial = units.some((u) => !u.sync.offline && u.sync.status === 'partial')
+  const partial = liveUnits.length < 2 || fetchErrors.length > 0 || syncHardFail
 
   return {
     generatedAt: new Date().toISOString(),
@@ -462,7 +506,9 @@ export async function buildLiveOverview(): Promise<CerebroOverview> {
     partial,
     periodLabel: partial
       ? `Live parcial · ${todayIsoSaoPaulo()}`
-      : `Live · ${todayIsoSaoPaulo()}`,
+      : syncPartial
+        ? `Live · sync parcial · ${todayIsoSaoPaulo()}`
+        : `Live · ${todayIsoSaoPaulo()}`,
     consolidated,
     units,
     trend30,

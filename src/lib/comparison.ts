@@ -1,4 +1,5 @@
 import { clamp01 } from './format'
+import { isSalonActiveToday } from './salon-day'
 import type { ComparisonRow, UnitComparison, UnitSnapshot } from './types'
 
 /** Compartilhado entre live (overview.ts) e mock (mock-overview.ts). */
@@ -50,21 +51,30 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     return v
   }
 
+  /** KPIs do dia: salão quieto → null (não “0% meta / 0% ocupação”). */
+  const dayLive = (u: UnitSnapshot, v: number | null | undefined): number | null => {
+    if (u.sync.offline || !isSalonActiveToday(u)) return null
+    if (v == null || !Number.isFinite(v)) return null
+    return v
+  }
+
   const occ = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !u.today.capacitySet
+    u.sync.offline || !isSalonActiveToday(u) || !u.today.capacitySet
       ? null
       : rate(u.today.appointments, u.today.capacity)
 
   const goalPct = (u: UnitSnapshot): number | null =>
-    u.sync.offline || !u.today.goalSet ? null : rate(u.today.revenue, u.today.dailyGoal)
+    u.sync.offline || !isSalonActiveToday(u) || !u.today.goalSet
+      ? null
+      : rate(u.today.revenue, u.today.dailyGoal)
 
   const noShow = (u: UnitSnapshot): number | null =>
-    u.sync.offline || u.today.appointments <= 0
+    u.sync.offline || !isSalonActiveToday(u) || u.today.appointments <= 0
       ? null
       : rate(u.today.noShows, u.today.appointments)
 
   const lostRevenue = (u: UnitSnapshot): number | null =>
-    u.sync.offline
+    u.sync.offline || !isSalonActiveToday(u)
       ? null
       : Math.round((u.today.noShows + u.today.cancelled) * u.today.ticketAvg)
 
@@ -102,8 +112,9 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'revenue_today',
       label: 'Receita hoje',
       group: 'ops',
-      brasil: live(brasil, brasil.today.revenue),
-      iguatemi: live(iguatemi, iguatemi.today.revenue),
+      // Quiet → null; ativo com R$0 continua 0.
+      brasil: dayLive(brasil, brasil.today.revenue),
+      iguatemi: dayLive(iguatemi, iguatemi.today.revenue),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -147,8 +158,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'ticket',
       label: 'Ticket médio',
       group: 'ops',
-      brasil: live(brasil, brasil.today.ticketAvg || null),
-      iguatemi: live(iguatemi, iguatemi.today.ticketAvg || null),
+      brasil: dayLive(brasil, brasil.today.ticketAvg || null),
+      iguatemi: dayLive(iguatemi, iguatemi.today.ticketAvg || null),
       format: 'currency',
       higherIsBetter: true,
     }),

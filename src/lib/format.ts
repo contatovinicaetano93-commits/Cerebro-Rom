@@ -1,10 +1,10 @@
 export function formatCurrency(value: number | null | undefined): string {
-  const n = typeof value === 'number' && Number.isFinite(value) ? value : 0
+  if (value == null || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
     maximumFractionDigits: 0,
-  }).format(n)
+  }).format(value)
 }
 
 export function formatPct(value: number | null | undefined, digits = 0): string {
