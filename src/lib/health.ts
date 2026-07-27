@@ -63,7 +63,7 @@ export async function getHealthStatus() {
       neon_iguatemi: Boolean(ig?.databaseUrl),
       // Cérebro não guarda AVEC_API_TOKEN — sync vive nas unidades.
       awaiting_avec_token: false,
-      note: 'Brasil=Supabase pooler · Iguatemi=Neon · sync Avec nas unidades ROM',
+      note: 'Brasil=Supabase pooler · Iguatemi=Supabase pooler · sync Avec nas unidades ROM',
     },
     units: probes,
     overview: overview
