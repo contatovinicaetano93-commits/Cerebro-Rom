@@ -460,8 +460,18 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       active ? num(u.today.attended) : '—',
       active ? num(u.today.noShows) : '—',
       active ? num(u.today.cancelled) : '—',
-      active ? num(u.today.newClients) : '—',
-      active ? num(u.today.returningClients) : '—',
+      (() => {
+        if (!active) return '—'
+        const mix = u.today.newClients + u.today.returningClients
+        if (mix <= 0 && (u.today.attended > 0 || u.today.appointments > 0)) return '—'
+        return num(u.today.newClients)
+      })(),
+      (() => {
+        if (!active) return '—'
+        const mix = u.today.newClients + u.today.returningClients
+        if (mix <= 0 && (u.today.attended > 0 || u.today.appointments > 0)) return '—'
+        return num(u.today.returningClients)
+      })(),
       active && u.today.attended > 0 ? money(u.today.ticketAvg) : '—',
       u.today.capacitySet ? num(u.today.capacity) : '—',
       u.today.goalSet ? money(u.today.dailyGoal) : '—',
