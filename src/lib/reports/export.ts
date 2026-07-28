@@ -366,7 +366,7 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     [
       'Alertas estoque',
-      c.stockKnown ? num(c.stockAlerts) : '—',
+      c.stockAlertsKnown ? num(c.stockAlerts) : '—',
       'qtd',
       'Abaixo do mínimo.',
     ],

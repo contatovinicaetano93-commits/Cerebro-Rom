@@ -284,6 +284,7 @@ export function buildMockOverview(): CerebroOverview {
       stockValue: units.reduce((a, u) => a + u.opsStock.totalValue, 0),
       stockAlerts: units.reduce((a, u) => a + u.opsStock.activeAlerts, 0),
       stockKnown: true,
+      stockAlertsKnown: true,
       stockValueKnown: true,
       networkReadable: true,
     },
