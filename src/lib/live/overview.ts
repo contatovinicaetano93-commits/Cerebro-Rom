@@ -35,7 +35,12 @@ async function fetchUnitBounded(
   try {
     return await Promise.race([fetchLiveUnit(config, day), timeout])
   } catch (err) {
-    evictSql(url)
+    // Timeout: não evict — a query órfã ainda pode estar no client max:1;
+    // matar o client no meio piora a corrida com o próximo poll.
+    const msg = String(err instanceof Error ? err.message : err)
+    if (!/Timeout \d+s/i.test(msg)) {
+      evictSql(url)
+    }
     throw err
   } finally {
     if (timer) clearTimeout(timer)

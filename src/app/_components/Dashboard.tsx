@@ -90,6 +90,27 @@ function unitForHoje(units: UnitSnapshot[], slug: UnitSlug): UnitSnapshot | null
   return units.find((u) => u.unit.slug === slug) ?? null
 }
 
+function unreadableBlockCopy(
+  u: UnitSnapshot,
+  scope: 'semana' | 'comercial',
+): string {
+  const offline = Boolean(u.sync.offline)
+  const hollow = isMetricsHollow(u)
+  const hardFail = !offline && isSyncHardFail(u)
+  if (scope === 'semana') {
+    if (offline) return 'Unidade offline — sem ranking/retorno desta base.'
+    if (hollow) return 'Base sem métricas — sem ranking/retorno desta base.'
+    if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return u.sync.label
+    if (hardFail) return 'Sync quebrado — sem ranking/retorno desta base.'
+    return 'Dados indisponíveis desta base.'
+  }
+  if (offline) return 'Unidade offline — sem canais/pacotes desta base.'
+  if (hollow) return 'Base sem métricas — sem canais/pacotes desta base.'
+  if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return u.sync.label
+  if (hardFail) return 'Sync quebrado — sem canais/pacotes desta base.'
+  return 'Dados indisponíveis desta base.'
+}
+
 /** Rótulo curto de fonte (Avec / proxy / incompleto / desatualizado). */
 function sourceHint(
   ...parts: Array<'Avec' | 'proxy' | 'manual' | 'ROM' | 'incompleto' | 'desatualizado' | null | undefined>
@@ -731,6 +752,7 @@ export function Dashboard({
                 const w = u.opsWeek
                 const offline = Boolean(u.sync.offline)
                 const hardFail = !offline && isSyncHardFail(u)
+                const hollow = !offline && isMetricsHollow(u)
                 const unreadable = offline || hardFail || !isUnitReadable(u)
                 const empty =
                   !unreadable &&
@@ -762,14 +784,14 @@ export function Dashboard({
                         <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
                           Sync
                         </span>
+                      ) : hollow ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Vazio
+                        </span>
                       ) : null}
                     </div>
                     {unreadable ? (
-                      <p className="mt-3 text-sm text-muted">
-                        {offline
-                          ? 'Unidade offline — sem ranking/retorno desta base.'
-                          : 'Sync quebrado — sem ranking/retorno desta base.'}
-                      </p>
+                      <p className="mt-3 text-sm text-muted">{unreadableBlockCopy(u, 'semana')}</p>
                     ) : empty ? (
                       <p className="mt-3 text-sm text-muted">Sem dados — sync full + token Avec.</p>
                     ) : (
@@ -815,6 +837,7 @@ export function Dashboard({
                 const co = u.opsCommerce
                 const offline = Boolean(u.sync.offline)
                 const hardFail = !offline && isSyncHardFail(u)
+                const hollow = !offline && isMetricsHollow(u)
                 const unreadable = offline || hardFail || !isUnitReadable(u)
                 const empty =
                   !unreadable &&
@@ -838,14 +861,14 @@ export function Dashboard({
                         <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
                           Sync
                         </span>
+                      ) : hollow ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Vazio
+                        </span>
                       ) : null}
                     </div>
                     {unreadable ? (
-                      <p className="mt-3 text-sm text-muted">
-                        {offline
-                          ? 'Unidade offline — sem canais/pacotes desta base.'
-                          : 'Sync quebrado — sem canais/pacotes desta base.'}
-                      </p>
+                      <p className="mt-3 text-sm text-muted">{unreadableBlockCopy(u, 'comercial')}</p>
                     ) : empty ? (
                       <p className="mt-3 text-sm text-muted">
                         Sem canais/pacotes no último sync full Avec (0056/0061).

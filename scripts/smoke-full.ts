@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Smoke test completo — HTTP + Neon + buildOverview local.
+ * Smoke test completo — HTTP + Supabase pooler + buildOverview local.
  * Uso: npm run smoke:full
  */
 import { readFileSync, existsSync } from 'node:fs'

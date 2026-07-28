@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { buildOverview } from '@/lib/live/overview'
+import { getCachedLiveOverview } from '@/lib/overview-cache'
 import { captureReportSnapshot, listReportRuns } from '@/lib/reports/store'
 import { isCerebroDbConfigured } from '@/lib/db'
-import { parseAsOfDay } from '@/lib/unit-config'
+import { parseAsOfDay, todayIsoSaoPaulo } from '@/lib/unit-config'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -54,7 +55,10 @@ export async function POST(req: Request) {
       }
     }
 
-    const overview = await buildOverview(asOf)
+    const overview =
+      !asOf || asOf === todayIsoSaoPaulo()
+        ? await getCachedLiveOverview()
+        : await buildOverview(asOf)
     if (overview.mode === 'mock') {
       return NextResponse.json(
         { error: 'Modo mock — captura de relatório só com dados live' },

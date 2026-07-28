@@ -411,6 +411,13 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     const unreadable = offline || hardFail || !isUnitReadable(u)
     const active = !offline && isSalonActiveToday(u)
     if (unreadable) {
+      const syncCell = offline
+        ? u.sync.label || 'offline'
+        : isMetricsHollow(u)
+          ? `Base sem métricas · ${u.sync.label || 'conectado'}`
+          : hardFail
+            ? u.sync.label || 'sync com erro'
+            : u.sync.label || 'sync indisponível'
       return [
         u.unit.short,
         u.today.day,
@@ -440,7 +447,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
         '—',
         '—',
         '—',
-        u.sync.label || (offline ? 'offline' : 'sync indisponível'),
+        syncCell,
       ]
     }
     return [

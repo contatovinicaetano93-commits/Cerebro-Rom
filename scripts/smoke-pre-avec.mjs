@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Smoke test pré-Avec — valida deploy + schema Neon antes de terça.
+ * Smoke test pré-Avec — valida deploy + schema Supabase (pooler) das unidades.
  *
  * Uso:
  *   cd cerebro-rom
  *   node scripts/smoke-pre-avec.mjs
  *
- * Lê .env.local se existir (NEON_*_DATABASE_URL).
+ * Lê .env.local se existir (NEON_*_DATABASE_URL = pooler Supabase).
  */
 
 import { readFileSync, existsSync } from 'node:fs'

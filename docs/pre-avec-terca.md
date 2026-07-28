@@ -13,7 +13,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 ## Sábado — código e deploy
 
 - [x] Push `cerebro-rom` (leitura P1/P2/P3 + merge #10–14)
-- [x] Push `ROM` + `ROM-IGUATEMI` (sync realtime webhook + cron full 10 min)
+- [x] Push `ROM` + `ROM-IGUATEMI` (webhook + crons espaçados: fast ~5 min, full ~30 min)
 - [ ] Confirmar deploys: cerebro-rom.vercel.app, rom-club, rom-iguatemi
 - [ ] Login Waltter no Cérebro OK
 - [ ] Smoke test: `npm run smoke` e `npm run smoke:full` no cerebro-rom

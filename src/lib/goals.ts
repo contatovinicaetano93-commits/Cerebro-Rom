@@ -34,7 +34,7 @@ export async function ensureGoalsTable(sql: Sql): Promise<void> {
 
 export async function readGoalsFromDb(sql: Sql): Promise<UnitGoals | null> {
   try {
-    await ensureGoalsTable(sql)
+    // Sem DDL no hot path do overview — CREATE só em writeGoalsToDb.
     const rows = (await sql`
       select
         daily_goal::float as daily_goal,

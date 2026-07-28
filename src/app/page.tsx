@@ -8,10 +8,11 @@ import { Dashboard } from './_components/Dashboard'
 const OVERVIEW_POLL_MS = 180_000
 const OVERVIEW_FETCH_TIMEOUT_MS = 25_000
 
-async function fetchOverview(): Promise<CerebroOverview> {
+async function fetchOverview(opts?: { fresh?: boolean }): Promise<CerebroOverview> {
   let res: Response
+  const qs = opts?.fresh ? '?fresh=1' : ''
   try {
-    res = await fetch('/api/overview', {
+    res = await fetch(`/api/overview${qs}`, {
       cache: 'no-store',
       signal: AbortSignal.timeout(OVERVIEW_FETCH_TIMEOUT_MS),
     })
@@ -42,9 +43,9 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
+  const load = useCallback(async (opts?: { silent?: boolean; fresh?: boolean }) => {
     try {
-      const next = await fetchOverview()
+      const next = await fetchOverview({ fresh: opts?.fresh })
       setData(next)
       setError(null)
     } catch (e) {
@@ -104,5 +105,5 @@ export default function HomePage() {
     )
   }
 
-  return <Dashboard data={data} onRefresh={() => void load({ silent: true })} />
+  return <Dashboard data={data} onRefresh={() => void load({ silent: true, fresh: true })} />
 }
