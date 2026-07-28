@@ -10,6 +10,7 @@ import {
   isMetricsHollow,
   isSalonActiveToday,
   isSyncHardFail,
+  isUnitConnected,
   isUnitReadable,
   trustsRollingKpis,
 } from '@/lib/salon-day'
@@ -345,8 +346,10 @@ function sortNextActions(actions: AlertItem[]): AlertItem[] {
 }
 
 function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
-  /** Totais rede: exclui offline + token morto (alinha ao scorecard `live()`). */
+  /** Totais de caixa/MTD: só unidades com métricas diárias confiáveis. */
   const readable = units.filter(isUnitReadable)
+  /** CMV/estoque/metas config: unidade no ar basta (não exige MTD hollow-free). */
+  const connected = units.filter((u) => isUnitConnected(u) && trustsRollingKpis(u))
   const active = units.filter(isSalonActiveToday)
   /** Meta do dia: unidades com movimento. */
   const dayOps = active
@@ -358,7 +361,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const todayRevenue = readable.reduce((a, u) => a + u.today.revenue, 0)
   const todayGoal = moneyOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
   const goalsConfigured =
-    readable.length > 0 && readable.every((u) => u.today.goalSet && u.today.capacitySet)
+    connected.length > 0 && connected.every((u) => u.today.goalSet && u.today.capacitySet)
   const mtdRevenue = readable.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdAttended = readable.reduce((a, u) => a + u.mtd.attended, 0)
   const mtdGoal = readable.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
@@ -377,19 +380,19 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const leads = dayOps.reduce((a, u) => a + u.today.leads, 0)
   const converted = dayOps.reduce((a, u) => a + u.today.converted, 0)
   const mixBase = newClients + returningClients
-  const cmvKnownUnits = readable.filter((u) => u.opsFinance.cmvKnown)
+  const cmvKnownUnits = connected.filter((u) => u.opsFinance.cmvKnown)
   const cmv = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.cmv, 0)
   const cmvMtd = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.mtdRevenue, 0)
-  const stockValue = readable.reduce(
+  const stockValue = connected.reduce(
     (a, u) => a + (u.opsStock.valueKnown ? u.opsStock.totalValue : 0),
     0,
   )
-  const stockAlerts = readable.reduce(
+  const stockAlerts = connected.reduce(
     (a, u) => a + (u.opsStock.available ? u.opsStock.activeAlerts : 0),
     0,
   )
-  const stockKnown = readable.some((u) => u.opsStock.available)
-  const stockValueKnown = readable.some((u) => u.opsStock.valueKnown)
+  const stockKnown = connected.some((u) => u.opsStock.available)
+  const stockValueKnown = connected.some((u) => u.opsStock.valueKnown)
   const dayRevenue = moneyOps.reduce((a, u) => a + u.today.revenue, 0)
   const agendaRevenue = agendaOps.reduce((a, u) => a + u.today.revenue, 0)
 

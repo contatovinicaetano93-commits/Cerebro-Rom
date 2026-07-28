@@ -33,6 +33,7 @@ import {
   isMetricsHollow,
   isSalonActiveToday,
   isSyncHardFail,
+  isUnitConnected,
   isUnitReadable,
 } from '@/lib/salon-day'
 import { KpiStat, Panel, ProgressBar } from './ui'
@@ -95,20 +96,28 @@ function unreadableBlockCopy(
   scope: 'semana' | 'comercial',
 ): string {
   const offline = Boolean(u.sync.offline)
-  const hollow = isMetricsHollow(u)
   const hardFail = !offline && isSyncHardFail(u)
   if (scope === 'semana') {
     if (offline) return 'Unidade offline — sem ranking/retorno desta base.'
-    if (hollow) return 'Base sem métricas — sem ranking/retorno desta base.'
     if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return u.sync.label
     if (hardFail) return 'Sync quebrado — sem ranking/retorno desta base.'
     return 'Dados indisponíveis desta base.'
   }
   if (offline) return 'Unidade offline — sem canais/pacotes desta base.'
-  if (hollow) return 'Base sem métricas — sem canais/pacotes desta base.'
   if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return u.sync.label
   if (hardFail) return 'Sync quebrado — sem canais/pacotes desta base.'
   return 'Dados indisponíveis desta base.'
+}
+
+function layerEmptyCopy(scope: 'semana' | 'comercial', hollow: boolean): string {
+  if (scope === 'semana') {
+    return hollow
+      ? 'Ranking/retorno ainda vazios nesta base (sync full + P1/P3).'
+      : 'Sem ranking/retorno no último sync full Avec.'
+  }
+  return hollow
+    ? 'Canais/pacotes ainda vazios nesta base (sync full + 0056/0061).'
+    : 'Sem canais/pacotes no último sync full Avec (0056/0061).'
 }
 
 /** Rótulo curto de fonte (Avec / proxy / incompleto / desatualizado). */
@@ -138,11 +147,11 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   noshow: 'No-shows ÷ agendamentos do dia.',
   lost_revenue: '(Cancelamentos + no-shows) × ticket médio do dia.',
   ticket: 'Receita ÷ atendidos (hoje).',
-  return: 'Taxa de retorno (Avec / P3).',
+  return: 'Taxa de retorno (Avec / P3). — = P3 sem taxa nesta base (ex.: cutover).',
   packages: 'Receita de pacotes (Avec 0061).',
   mtd_revenue: 'Receita acumulada no mês.',
   mtd_ticket: 'Receita MTD ÷ atendidos MTD.',
-  cmv: 'Proxy: custo das saídas de estoque no mês (0044).',
+  cmv: 'Proxy: custo das saídas de estoque no mês. — = sem saídas/0044 nesta base.',
   cmv_share: 'CMV proxy ÷ receita MTD.',
   payments_total: 'Soma das formas de pagamento (Avec 0081).',
   payment_gap: 'Pagamentos 0081 − receita MTD (ideal ≈ 0).',
@@ -565,12 +574,12 @@ export function Dashboard({
                 const u = unitForHoje(data.units, slug)
                 const label = u?.unit.short ?? HOJE_UNIT_LABEL[slug]
                 const offline = !u || Boolean(u.sync.offline)
-                const syncBad = Boolean(
+                const syncHard = Boolean(u && !offline && isSyncHardFail(u))
+                const syncSoft = Boolean(
                   u &&
                     !offline &&
-                    (u.sync.status === 'error' ||
-                      u.sync.status === 'partial' ||
-                      u.sync.status === 'stale'),
+                    !syncHard &&
+                    (u.sync.status === 'partial' || u.sync.status === 'stale'),
                 )
                 const src = !u || offline
                   ? 'offline'
@@ -581,7 +590,8 @@ export function Dashboard({
                 const operable = Boolean(u && readable && isDayOperable(u))
                 const trustedAgenda = Boolean(u && readable && hasTrustedAgenda(u))
                 const hollow = Boolean(u && isMetricsHollow(u))
-                const quiet = readable && !syncBad && !hollow && !active
+                // Quieto mesmo com sync parcial — não confundir dia sem agenda com falha.
+                const quiet = readable && !syncHard && !hollow && !active
                 // Never-sync / token morto: todos os KPIs do chip → — (não misturar ops com fat —).
                 const revenue = !u || !readable ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
@@ -624,10 +634,12 @@ export function Dashboard({
                             ? 'Sem dados ao vivo'
                             : hollow
                               ? 'Sem histórico de métricas · sync/schema'
-                              : syncBad
+                              : syncHard
                                 ? (u?.sync.label ?? 'Sync')
                                 : quiet
-                                  ? 'Sem movimento hoje · salão quieto/fechado'
+                                  ? syncSoft
+                                    ? `Sem movimento hoje · ${u?.sync.label ?? 'sync parcial'}`
+                                    : 'Sem movimento hoje · salão quieto/fechado'
                                   : (u?.sync.label ?? '')}
                         </p>
                       </div>
@@ -635,7 +647,7 @@ export function Dashboard({
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Offline
                         </span>
-                      ) : u?.sync.status === 'error' ? (
+                      ) : syncHard ? (
                         <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
                           Sync
                         </span>
@@ -643,13 +655,13 @@ export function Dashboard({
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Vazio
                         </span>
-                      ) : u?.sync.status === 'partial' ? (
-                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Parcial
-                        </span>
                       ) : quiet ? (
                         <span className="rounded-md border border-border/60 bg-panel px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted">
                           Quieto
+                        </span>
+                      ) : u?.sync.status === 'partial' ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Parcial
                         </span>
                       ) : null}
                     </div>
@@ -753,9 +765,10 @@ export function Dashboard({
                 const offline = Boolean(u.sync.offline)
                 const hardFail = isSyncHardFail(u)
                 const hollow = isMetricsHollow(u)
-                const unreadable = !isUnitReadable(u)
+                // Semana/comercial: conectado basta — hollow não esconde P1/P3 se existirem.
+                const blocked = !isUnitConnected(u)
                 const empty =
-                  !unreadable &&
+                  !blocked &&
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
                   (w.returnRate == null || w.returnRate === 0) &&
@@ -790,10 +803,10 @@ export function Dashboard({
                         </span>
                       ) : null}
                     </div>
-                    {unreadable ? (
+                    {blocked ? (
                       <p className="mt-3 text-sm text-muted">{unreadableBlockCopy(u, 'semana')}</p>
                     ) : empty ? (
-                      <p className="mt-3 text-sm text-muted">Sem dados — sync full + token Avec.</p>
+                      <p className="mt-3 text-sm text-muted">{layerEmptyCopy('semana', hollow)}</p>
                     ) : (
                       <div className="mt-3 space-y-3 text-sm">
                         <ul className="space-y-1">
@@ -838,12 +851,13 @@ export function Dashboard({
                 const offline = Boolean(u.sync.offline)
                 const hardFail = isSyncHardFail(u)
                 const hollow = isMetricsHollow(u)
-                const unreadable = !isUnitReadable(u)
+                const blocked = !isUnitConnected(u)
                 const empty =
-                  !unreadable &&
+                  !blocked &&
                   co.bookingChannels.length === 0 &&
                   co.packages.length === 0 &&
-                  co.ratingsCount === 0
+                  co.ratingsCount === 0 &&
+                  !co.packagesKnown
                 return (
                   <div
                     key={u.unit.slug}
@@ -867,12 +881,10 @@ export function Dashboard({
                         </span>
                       ) : null}
                     </div>
-                    {unreadable ? (
+                    {blocked ? (
                       <p className="mt-3 text-sm text-muted">{unreadableBlockCopy(u, 'comercial')}</p>
                     ) : empty ? (
-                      <p className="mt-3 text-sm text-muted">
-                        Sem canais/pacotes no último sync full Avec (0056/0061).
-                      </p>
+                      <p className="mt-3 text-sm text-muted">{layerEmptyCopy('comercial', hollow)}</p>
                     ) : (
                       <div className="mt-3 space-y-3 text-sm">
                         <div className="grid grid-cols-2 gap-3">
@@ -947,6 +959,11 @@ export function Dashboard({
                 {' · '}
                 export Comparativo em Relatórios
               </p>
+              <p className="mb-3 text-xs text-muted">
+                Em Operação, <span className="tabular-nums">—</span> no dia = salão quieto (sem
+                movimento), não falha de sync. CMV/retorno <span className="tabular-nums">—</span>{' '}
+                = dado ausente naquela base (saídas/P3).
+              </p>
               <div className="space-y-5">
                 {comparisonGroups.map(({ group, rows }) => (
                   <div key={group}>
@@ -1018,7 +1035,14 @@ export function Dashboard({
             <CollapsibleSection
               eyebrow="Tendência"
               title="Receita 30 dias"
-              summary="Brasil vs Iguatemi"
+              summary={(() => {
+                const hasBr = data.trend30.some((d) => d.brasil != null)
+                const hasIg = data.trend30.some((d) => d.iguatemi != null)
+                if (hasBr && hasIg) return 'Brasil vs Iguatemi'
+                if (hasBr) return 'só Brasil (Iguatemi sem série)'
+                if (hasIg) return 'só Iguatemi (Brasil sem série)'
+                return 'sem séries'
+              })()}
               open={openMap.trend}
               onOpenChange={(v) => setSection('trend', v)}
             >

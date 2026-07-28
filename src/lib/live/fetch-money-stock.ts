@@ -55,16 +55,17 @@ const STOCK_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 async function fetchOfficialStockTotal(sql: Sql): Promise<number | null> {
   if (!(await tableExists(sql, 'avec_report_snapshots'))) return null
   try {
+    // Schema real (BR/IG Supabase): fetched_at — não created_at.
     const rows = (await sql`
-      select payload, created_at
+      select payload, fetched_at
       from avec_report_snapshots
       where report_id = '0045'
-      order by created_at desc
+      order by fetched_at desc nulls last
       limit 1
-    `) as { payload: unknown; created_at: string | Date | null }[]
+    `) as { payload: unknown; fetched_at: string | Date | null }[]
     const row = rows[0]
     if (!row || !Array.isArray(row.payload) || row.payload.length === 0) return null
-    const captured = row.created_at ? new Date(row.created_at).getTime() : NaN
+    const captured = row.fetched_at ? new Date(row.fetched_at).getTime() : NaN
     if (Number.isFinite(captured) && Date.now() - captured > STOCK_SNAPSHOT_MAX_AGE_MS) {
       return null
     }

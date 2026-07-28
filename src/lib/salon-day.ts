@@ -14,26 +14,14 @@ function isDeadOrAwaiting(u: UnitSnapshot): boolean {
   return /Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)
 }
 
-/**
- * Unidade em operação real no dia.
- * 1 agendamento fantasma (cancel-only / sync parcial) NÃO abre meta/vagas da rede.
- * Never-sync / offline / token morto: não abrir meta/alertas com métricas de cache.
- */
-export function isSalonActiveToday(u: UnitSnapshot): boolean {
-  if (!isUnitReadable(u)) return false
-  if (u.today.revenue > 0 || u.today.attended > 0) return true
-  // Agenda sozinha: volume mínimo + sync usável (ok/stale — não partial).
-  return syncUsableForAgenda(u) && u.today.appointments >= 3
-}
-
 /** Sync quebrado (token) — não tratar zeros do dia como KPI operacional. */
 export function isSyncHardFail(u: UnitSnapshot): boolean {
   return !u.sync.offline && u.sync.status === 'error'
 }
 
 /**
- * Base conectada mas sem histórico de métricas (ex.: Supabase novo pós-cutover).
- * Não confundir com salão quieto/fechado, nem com awaiting token / never-sync.
+ * Base conectada mas sem histórico de métricas diárias (ex.: cutover).
+ * Não bloqueia semana/financeiro/estoque se essas camadas tiverem dado.
  */
 export function isMetricsHollow(u: UnitSnapshot): boolean {
   if (isDeadOrAwaiting(u)) return false
@@ -44,18 +32,36 @@ export function isMetricsHollow(u: UnitSnapshot): boolean {
 }
 
 /**
- * Unidade legível para totais de rede / painel / export.
- * Offline, token morto, never-sync ou base oca → não soma zeros como real.
+ * Unidade no ar (DB ok) — serve para pares Semana/Comercial/Financeiro/Estoque.
+ * Diferente de isUnitReadable (métricas do dia/MTD).
+ */
+export function isUnitConnected(u: UnitSnapshot): boolean {
+  return !isDeadOrAwaiting(u)
+}
+
+/**
+ * Métricas diárias/MTD confiáveis para totais de rede e tendência.
+ * Offline, token morto, never-sync ou base oca → não soma R$0 fantasma.
  */
 export function isUnitReadable(u: UnitSnapshot): boolean {
-  if (isDeadOrAwaiting(u)) return false
+  if (!isUnitConnected(u)) return false
   if (isMetricsHollow(u)) return false
   return true
 }
 
-/** KPIs semanais/financeiros ainda legíveis com sync parcial ou stale. */
-export function trustsRollingKpis(u: UnitSnapshot): boolean {
+/**
+ * Unidade em operação real no dia.
+ * 1 agendamento fantasma NÃO abre meta/vagas da rede.
+ */
+export function isSalonActiveToday(u: UnitSnapshot): boolean {
   if (!isUnitReadable(u)) return false
+  if (u.today.revenue > 0 || u.today.attended > 0) return true
+  return syncUsableForAgenda(u) && u.today.appointments >= 3
+}
+
+/** KPIs rolling (semana/finance/estoque) com sync ok|partial|stale. */
+export function trustsRollingKpis(u: UnitSnapshot): boolean {
+  if (!isUnitConnected(u)) return false
   return u.sync.status === 'ok' || u.sync.status === 'partial' || u.sync.status === 'stale'
 }
 

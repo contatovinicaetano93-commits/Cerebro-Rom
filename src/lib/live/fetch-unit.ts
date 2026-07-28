@@ -297,68 +297,6 @@ export async function fetchLiveUnit(
 
   const byDay = new Map(metricRows.map((r) => [r.day.slice(0, 10), r]))
 
-  const last30Skeleton: DayMetrics[] = []
-  for (let i = 29; i >= 0; i--) {
-    const day = isoDaysBackFrom(today, i)
-    last30Skeleton.push(rowToDay(byDay.get(day), day, capacity, dailyGoal, goalSet, capacitySet, 0, 0))
-  }
-  const mtdAttendedEarly = last30Skeleton
-    .filter((d) => d.day >= monthStart && d.day <= today)
-    .reduce((a, d) => a + d.attended, 0)
-  const mtdRevenueEarly = last30Skeleton
-    .filter((d) => d.day >= monthStart && d.day <= today)
-    .reduce((a, d) => a + d.revenue, 0)
-  const last30Empty = last30Skeleton.every(
-    (d) => d.revenue === 0 && d.attended === 0 && d.appointments === 0,
-  )
-  const metricsHollow = mtdRevenueEarly === 0 && mtdAttendedEarly === 0 && last30Empty
-
-  // Base oca: não fan-out P1/P2/P3/estoque/finance — só sync para badge/alertas.
-  if (metricsHollow && !isHistorical) {
-    const todayMetrics = last30Skeleton[last30Skeleton.length - 1]!
-    const mtd = {
-      revenue: 0,
-      attended: 0,
-      noShows: 0,
-      appointments: 0,
-      newClients: 0,
-      returningClients: 0,
-      cancelled: 0,
-      goal: goalSet ? dailyGoal * dayOfMonth(today) : 0,
-      goalSet,
-    }
-    const sync = await readUnitSyncStatus(sql)
-    return {
-      unit: config.meta,
-      today: todayMetrics,
-      opsToday: buildOpsToday(todayMetrics, 0, false),
-      opsWeek: {
-        professionals: [],
-        services: [],
-        acquisition: [],
-        reactivationCount: null,
-        returnRate: null,
-        newClientsPeriod: null,
-      },
-      opsCommerce: {
-        bookingChannels: [],
-        packages: [],
-        packagesSold: 0,
-        packagesRevenue: 0,
-        packagesKnown: false,
-        ratingsAvg: 0,
-        ratingsCount: 0,
-        birthdayCount: 0,
-        topBookingChannel: null,
-      },
-      opsFinance: { ...EMPTY_OPS_FINANCE },
-      opsStock: { ...EMPTY_OPS_STOCK },
-      mtd,
-      last30: last30Skeleton,
-      sync,
-    }
-  }
-
   let leadsToday = 0
   let convertedToday = 0
   try {

@@ -1,5 +1,11 @@
 import { clamp01 } from './format'
-import { hasTrustedAgenda, isSalonActiveToday, isUnitReadable } from './salon-day'
+import {
+  hasTrustedAgenda,
+  isSalonActiveToday,
+  isUnitConnected,
+  isUnitReadable,
+  trustsRollingKpis,
+} from './salon-day'
 import type { ComparisonRow, UnitComparison, UnitSnapshot } from './types'
 
 /** Compartilhado entre live (overview.ts) e mock (mock-overview.ts). */
@@ -44,14 +50,17 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
   if (!brasil || !iguatemi) return undefined
 
-  /** Offline ou sync error (token) → null (não R$ 0 / MTD fantasma no scorecard). */
-  const live = (u: UnitSnapshot, v: number | null | undefined): number | null => {
-    if (!isUnitReadable(u)) return null
+  /**
+   * Rolling (MTD / comercial / CMV / estoque): unidade conectada + sync usável.
+   * Dia quieto ou métricas ocas não zeram estas camadas.
+   */
+  const rolling = (u: UnitSnapshot, v: number | null | undefined): number | null => {
+    if (!isUnitConnected(u) || !trustsRollingKpis(u)) return null
     if (v == null || !Number.isFinite(v)) return null
     return v
   }
 
-  /** KPIs do dia: exige unidade legível + salão ativo (não never-sync com métricas cache). */
+  /** KPIs do dia: exige métricas legíveis + salão ativo (quiet → null, não R$0). */
   const dayLive = (u: UnitSnapshot, v: number | null | undefined): number | null => {
     if (!isUnitReadable(u) || !isSalonActiveToday(u)) return null
     if (v == null || !Number.isFinite(v)) return null
@@ -91,7 +100,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   }
 
   const paymentGap = (u: UnitSnapshot): number | null => {
-    if (!isUnitReadable(u) || !u.opsFinance.paymentsKnown) return null
+    if (!isUnitConnected(u) || !trustsRollingKpis(u) || !u.opsFinance.paymentsKnown) return null
     if (u.opsFinance.paymentReconcile === 'unknown') return null
     if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
       return null
@@ -100,7 +109,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   }
 
   const reconcileLabel = (u: UnitSnapshot): string | null => {
-    if (!isUnitReadable(u) || !u.opsFinance.paymentsKnown) return null
+    if (!isUnitConnected(u) || !trustsRollingKpis(u) || !u.opsFinance.paymentsKnown) return null
     switch (u.opsFinance.paymentReconcile) {
       case 'aligned':
         return 'Ok'
@@ -179,8 +188,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'return',
       label: 'Taxa de retorno',
       group: 'comercial',
-      brasil: live(brasil, brasil.opsWeek.returnRate),
-      iguatemi: live(iguatemi, iguatemi.opsWeek.returnRate),
+      brasil: rolling(brasil, brasil.opsWeek.returnRate),
+      iguatemi: rolling(iguatemi, iguatemi.opsWeek.returnRate),
       format: 'pct',
       higherIsBetter: true,
     }),
@@ -189,10 +198,10 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Pacotes (receita)',
       group: 'comercial',
       brasil: brasil.opsCommerce.packagesKnown
-        ? live(brasil, brasil.opsCommerce.packagesRevenue)
+        ? rolling(brasil, brasil.opsCommerce.packagesRevenue)
         : null,
       iguatemi: iguatemi.opsCommerce.packagesKnown
-        ? live(iguatemi, iguatemi.opsCommerce.packagesRevenue)
+        ? rolling(iguatemi, iguatemi.opsCommerce.packagesRevenue)
         : null,
       format: 'currency',
       higherIsBetter: true,
@@ -201,8 +210,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_revenue',
       label: 'Receita MTD',
       group: 'financeiro',
-      brasil: live(brasil, brasil.opsFinance.mtdRevenue),
-      iguatemi: live(iguatemi, iguatemi.opsFinance.mtdRevenue),
+      brasil: rolling(brasil, brasil.opsFinance.mtdRevenue),
+      iguatemi: rolling(iguatemi, iguatemi.opsFinance.mtdRevenue),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -210,8 +219,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_ticket',
       label: 'Ticket MTD',
       group: 'financeiro',
-      brasil: live(brasil, brasil.opsFinance.mtdTicketAvg),
-      iguatemi: live(iguatemi, iguatemi.opsFinance.mtdTicketAvg),
+      brasil: rolling(brasil, brasil.opsFinance.mtdTicketAvg),
+      iguatemi: rolling(iguatemi, iguatemi.opsFinance.mtdTicketAvg),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -219,8 +228,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'cmv',
       label: 'CMV proxy (saídas)',
       group: 'financeiro',
-      brasil: brasil.opsFinance.cmvKnown ? live(brasil, brasil.opsFinance.cmv) : null,
-      iguatemi: iguatemi.opsFinance.cmvKnown ? live(iguatemi, iguatemi.opsFinance.cmv) : null,
+      brasil: brasil.opsFinance.cmvKnown ? rolling(brasil, brasil.opsFinance.cmv) : null,
+      iguatemi: iguatemi.opsFinance.cmvKnown ? rolling(iguatemi, iguatemi.opsFinance.cmv) : null,
       format: 'currency',
       higherIsBetter: false,
     }),
@@ -228,8 +237,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'cmv_share',
       label: 'CMV / receita',
       group: 'financeiro',
-      brasil: live(brasil, brasil.opsFinance.cmvShare),
-      iguatemi: live(iguatemi, iguatemi.opsFinance.cmvShare),
+      brasil: rolling(brasil, brasil.opsFinance.cmvShare),
+      iguatemi: rolling(iguatemi, iguatemi.opsFinance.cmvShare),
       format: 'pct',
       higherIsBetter: false,
     }),
@@ -238,10 +247,10 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Pagamentos 0081',
       group: 'financeiro',
       brasil: brasil.opsFinance.paymentsKnown
-        ? live(brasil, brasil.opsFinance.paymentsTotal)
+        ? rolling(brasil, brasil.opsFinance.paymentsTotal)
         : null,
       iguatemi: iguatemi.opsFinance.paymentsKnown
-        ? live(iguatemi, iguatemi.opsFinance.paymentsTotal)
+        ? rolling(iguatemi, iguatemi.opsFinance.paymentsTotal)
         : null,
       format: 'currency',
       higherIsBetter: true,
@@ -273,8 +282,14 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       group: 'financeiro',
       brasil: null,
       iguatemi: null,
-      brasilText: isUnitReadable(brasil) ? brasil.opsFinance.topPaymentMethod : null,
-      iguatemiText: isUnitReadable(iguatemi) ? iguatemi.opsFinance.topPaymentMethod : null,
+      brasilText:
+        isUnitConnected(brasil) && trustsRollingKpis(brasil)
+          ? brasil.opsFinance.topPaymentMethod
+          : null,
+      iguatemiText:
+        isUnitConnected(iguatemi) && trustsRollingKpis(iguatemi)
+          ? iguatemi.opsFinance.topPaymentMethod
+          : null,
       format: 'text',
       higherIsBetter: true,
       deltaPct: null,
@@ -284,11 +299,11 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Valor em estoque',
       group: 'estoque',
       brasil:
-        isUnitReadable(brasil) && brasil.opsStock.valueKnown
+        isUnitConnected(brasil) && trustsRollingKpis(brasil) && brasil.opsStock.valueKnown
           ? brasil.opsStock.totalValue
           : null,
       iguatemi:
-        isUnitReadable(iguatemi) && iguatemi.opsStock.valueKnown
+        isUnitConnected(iguatemi) && trustsRollingKpis(iguatemi) && iguatemi.opsStock.valueKnown
           ? iguatemi.opsStock.totalValue
           : null,
       format: 'currency',
@@ -299,9 +314,11 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Alertas estoque',
       group: 'estoque',
       brasil:
-        isUnitReadable(brasil) && brasil.opsStock.available ? brasil.opsStock.activeAlerts : null,
+        isUnitConnected(brasil) && trustsRollingKpis(brasil) && brasil.opsStock.available
+          ? brasil.opsStock.activeAlerts
+          : null,
       iguatemi:
-        isUnitReadable(iguatemi) && iguatemi.opsStock.available
+        isUnitConnected(iguatemi) && trustsRollingKpis(iguatemi) && iguatemi.opsStock.available
           ? iguatemi.opsStock.activeAlerts
           : null,
       format: 'number',
@@ -312,9 +329,11 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'SKUs zerados',
       group: 'estoque',
       brasil:
-        isUnitReadable(brasil) && brasil.opsStock.available ? brasil.opsStock.zeroProducts : null,
+        isUnitConnected(brasil) && trustsRollingKpis(brasil) && brasil.opsStock.available
+          ? brasil.opsStock.zeroProducts
+          : null,
       iguatemi:
-        isUnitReadable(iguatemi) && iguatemi.opsStock.available
+        isUnitConnected(iguatemi) && trustsRollingKpis(iguatemi) && iguatemi.opsStock.available
           ? iguatemi.opsStock.zeroProducts
           : null,
       format: 'number',
@@ -323,7 +342,10 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   ]
 
   const deltaRevenuePct =
-    !isUnitReadable(brasil) || !isUnitReadable(iguatemi)
+    !isUnitConnected(brasil) ||
+    !isUnitConnected(iguatemi) ||
+    !trustsRollingKpis(brasil) ||
+    !trustsRollingKpis(iguatemi)
       ? null
       : deltaRelative(brasil.mtd.revenue, iguatemi.mtd.revenue)
 
