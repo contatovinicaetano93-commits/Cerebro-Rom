@@ -281,8 +281,8 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
         ? Math.round((localTotal - official) * 100) / 100
         : null
 
-    // 0 alertas + milhares de zerados + tabela vazia → sync de alertas faltando (não “estoque ok”).
-    const alertsKnown = !(alertsTableRows === 0 && zeroProducts >= 100 && activeAlerts === 0)
+    // Catálogo com tabela de alertas vazia = sync ausente (não “0 ok”), mesmo com poucos zerados.
+    const alertsKnown = alertsTableRows > 0 || activeAlerts > 0
 
     return {
       available: true,

@@ -242,6 +242,11 @@ export interface CerebroOverview {
     stockAlerts: number
     /** true quando há unidade legível com posição de estoque Disponível. */
     stockKnown: boolean
+    /**
+     * true só quando toda unidade com estoque disponível tem alertas conhecidos.
+     * Sem isso, somar 0 de IG ausente fingiria “rede ok”.
+     */
+    stockAlertsKnown: boolean
     /** true quando há valorização real (não SKUs sem custo → R$0). */
     stockValueKnown: boolean
     /**

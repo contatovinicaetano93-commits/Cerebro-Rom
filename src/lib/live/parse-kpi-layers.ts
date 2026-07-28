@@ -285,7 +285,7 @@ async function fetchReturnRateFromDailyMix(
   sql: Sql,
   monthStart: string,
   today: string,
-): Promise<number | null> {
+): Promise<{ rate: number; newClients: number } | null> {
   if (!(await tableExists(sql, 'salon_daily_metrics'))) return null
   try {
     const rows = (await sql`
@@ -300,7 +300,10 @@ async function fetchReturnRateFromDailyMix(
     const neu = n(rows[0]?.new_clients)
     const denom = returning + neu
     if (denom <= 0 || returning <= 0) return null
-    return Math.round((returning / denom) * 10000) / 10000
+    return {
+      rate: Math.round((returning / denom) * 10000) / 10000,
+      newClients: neu,
+    }
   } catch {
     return null
   }
@@ -312,20 +315,24 @@ export async function fetchOpsWeek(
   monthStart?: string,
 ): Promise<OpsWeek> {
   const [p1, p3] = await Promise.all([fetchLatestP1(sql, today), fetchLatestP3(sql, today)])
-  if (!p1 && !p3) return EMPTY_OPS_WEEK
 
   let returnRate =
     p3?.return_rate == null || n(p3.return_rate) <= 0 ? null : n(p3.return_rate)
   let returnAsOfDay = dayIso(p3?.day)
+  let newClientsPeriod =
+    p3 == null || p3.new_clients_period == null ? null : n(p3.new_clients_period)
 
-  // IG: P3 frequentemente null/0 — não deixar comparativo em "—".
+  // IG: P3 frequentemente null/0 — tentar mix mesmo sem P1/P3 (cutover).
   if (returnRate == null && monthStart) {
     const fromMix = await fetchReturnRateFromDailyMix(sql, monthStart, today)
-    if (fromMix != null && fromMix > 0) {
-      returnRate = fromMix
+    if (fromMix != null && fromMix.rate > 0) {
+      returnRate = fromMix.rate
       returnAsOfDay = today
+      if (newClientsPeriod == null) newClientsPeriod = fromMix.newClients
     }
   }
+
+  if (!p1 && !p3 && returnRate == null) return EMPTY_OPS_WEEK
 
   return {
     professionals: parseProfessionals(p1?.professionals),
@@ -333,8 +340,7 @@ export async function fetchOpsWeek(
     acquisition: parseAcquisition(p1?.acquisition),
     reactivationCount: p1 == null || p1.reactivation_count == null ? null : n(p1.reactivation_count),
     returnRate,
-    newClientsPeriod:
-      p3 == null || p3.new_clients_period == null ? null : n(p3.new_clients_period),
+    newClientsPeriod,
     asOfDay: dayIso(p1?.day),
     returnAsOfDay,
   }

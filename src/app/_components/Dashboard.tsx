@@ -70,16 +70,16 @@ const LEGEND = {
   cmv: 'Proxy: custo das saídas de estoque no mês (Avec 0044) — não é CMV fiscal.',
   estoqueValor: 'Valor da posição de estoque sincronizada da Avec.',
   estoqueAlertas:
-    'Alertas ativos Avec. — no comparativo se sync de alertas estiver vazio com muitos zerados.',
+    'Alertas ativos Avec. — se alguma unidade com estoque ainda não tem sync de alertas.',
   vagasHoje: 'Capacidade do dia (Metas) − agendamentos do dia.',
   vagas2h: 'Estimativa de encaixes nas próximas 2h: (capacidade ÷ 8) × 2 − agenda nesse intervalo.',
   cancelNoshow: 'Cancelamentos e faltas do dia (Avec).',
-  novosRec: 'Clientes novos vs recorrentes no dia.',
+  novosRec: 'Clientes novos vs recorrentes no dia. — se mix ausente/sanitizado com agenda ativa.',
   unitHoje: 'Faturamento Avec da unidade hoje.',
   unitVagas: 'Capacidade (Metas) − agendamentos do dia nesta unidade.',
   unit2h: 'Vagas livres estimadas nas próximas 2 horas nesta unidade.',
   unitCancel: 'Cancelamentos e no-shows do dia nesta unidade.',
-  unitNovos: 'Clientes novos vs recorrentes no dia nesta unidade.',
+  unitNovos: 'Clientes novos vs recorrentes no dia. — se mix ausente/sanitizado com agenda ativa.',
 } as const
 
 const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
@@ -149,7 +149,7 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   lost_revenue:
     '(Cancelamentos + no-shows) × ticket do dia; se ainda sem atendimento, usa ticket MTD.',
   ticket: 'Receita ÷ atendidos (hoje).',
-  return: 'Taxa de retorno (Avec / P3). — = P3 sem taxa nesta base (ex.: cutover).',
+  return: 'Taxa de retorno (P3 ou mix MTD se P3 vazio). — = sem taxa nesta base.',
   packages: 'Receita de pacotes (Avec 0061).',
   mtd_revenue: 'Receita acumulada no mês.',
   mtd_ticket: 'Receita MTD ÷ atendidos MTD.',
@@ -162,7 +162,7 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   top_payment: 'Forma de pagamento com maior volume no período.',
   stock_value: 'Valor em estoque (posição Avec).',
   stock_alerts:
-    'Alertas ativos Avec. — = sync de alertas ausente (zerados altos + tabela vazia).',
+    'Alertas ativos Avec. — = sync de alertas ausente (tabela vazia com catálogo).',
   stock_zero: 'SKUs com saldo zero.',
 }
 
@@ -592,9 +592,9 @@ export function Dashboard({
             <Panel>
               <KpiStat
                 label="Alertas estoque"
-                value={c.stockKnown ? formatNumber(c.stockAlerts) : '—'}
+                value={c.stockAlertsKnown ? formatNumber(c.stockAlerts) : '—'}
                 tone={
-                  !c.stockKnown
+                  !c.stockAlertsKnown
                     ? 'default'
                     : c.stockAlerts >= 200
                       ? 'default'
@@ -789,7 +789,10 @@ export function Dashboard({
                 const novosRec =
                   !u || !readable || !active || (u.today.attended <= 0 && u.today.revenue <= 0)
                     ? dash
-                    : `${u.today.newClients} · ${u.today.returningClients}`
+                    : u.today.newClients + u.today.returningClients <= 0 &&
+                        (u.today.attended > 0 || u.today.appointments > 0)
+                      ? dash
+                      : `${u.today.newClients} · ${u.today.returningClients}`
                 const borderAccent =
                   slug === 'rom-brasil' ? 'border-brass/35' : 'border-teal/35'
 

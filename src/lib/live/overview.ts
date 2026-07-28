@@ -267,12 +267,15 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
     }
 
     if (rolling && u.opsFinance.paymentReconcile === 'divergent') {
+      const gap = u.opsFinance.paymentGap
+      const gapLabel =
+        gap == null ? 'gap desconhecido' : `gap R$ ${Math.round(gap).toLocaleString('pt-BR')}`
       actions.push({
         id: `pay-${u.unit.slug}`,
         severity: 'warning',
         unit: u.unit.slug,
         title: `Conciliação 0081 — ${u.unit.short}`,
-        detail: `Pagamentos ${Math.round(u.opsFinance.paymentsTotal)} vs receita MTD ${Math.round(u.opsFinance.mtdRevenue)}`,
+        detail: `${gapLabel} · pagamentos ${Math.round(u.opsFinance.paymentsTotal).toLocaleString('pt-BR')} vs receita nos mesmos dias`,
         action: 'Conferir sync Avec 0081 no ROM',
       })
     }
@@ -408,12 +411,15 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     (a, u) => a + (u.opsStock.valueKnown ? u.opsStock.totalValue : 0),
     0,
   )
-  const stockAlerts = connected.reduce(
-    (a, u) =>
-      a + (u.opsStock.available && u.opsStock.alertsKnown ? u.opsStock.activeAlerts : 0),
+  const stockUnits = connected.filter((u) => u.opsStock.available)
+  const stockAlerts = stockUnits.reduce(
+    (a, u) => a + (u.opsStock.alertsKnown ? u.opsStock.activeAlerts : 0),
     0,
   )
-  const stockKnown = connected.some((u) => u.opsStock.available)
+  const stockKnown = stockUnits.length > 0
+  // Todas as unidades com estoque precisam ter alertas conhecidos — senão 0 = mentira.
+  const stockAlertsKnown =
+    stockUnits.length > 0 && stockUnits.every((u) => u.opsStock.alertsKnown)
   const stockValueKnown = connected.some((u) => u.opsStock.valueKnown)
   const dayRevenue = moneyOps.reduce((a, u) => a + u.today.revenue, 0)
   const agendaRevenue = agendaOps.reduce((a, u) => a + u.today.revenue, 0)
@@ -472,6 +478,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     stockValue,
     stockAlerts,
     stockKnown,
+    stockAlertsKnown,
     stockValueKnown,
     networkReadable: readable.length > 0,
   }
@@ -511,6 +518,7 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     stockValue: 0,
     stockAlerts: 0,
     stockKnown: false,
+    stockAlertsKnown: false,
     stockValueKnown: false,
     networkReadable: false,
   }
