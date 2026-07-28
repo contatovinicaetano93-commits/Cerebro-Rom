@@ -317,42 +317,53 @@ export function Dashboard({
       .filter((g) => g.rows.length > 0)
   }, [data.comparison])
 
-  const actionsByBucket = useMemo(() => {
-    type Bucket = 'agora' | 'brasil' | 'iguatemi' | 'rede'
-    const buckets: Record<Bucket, AlertItem[]> = {
-      agora: [],
-      brasil: [],
-      iguatemi: [],
-      rede: [],
-    }
-    for (const a of data.nextActions) {
+  const actionsBoard = useMemo(() => {
+    const all = data.nextActions
+    const score = (a: AlertItem): number => {
+      const sev = a.severity === 'critical' ? 0 : a.severity === 'warning' ? 1 : 2
       const family = a.id.replace(/-(rom-brasil|rom-iguatemi|both)$/i, '')
-      const isNow =
-        a.severity === 'critical' ||
-        /^(sync-|noshow|cancel|pay|return-missing|stock-alerts-missing)/.test(family) ||
-        family === 'return' ||
-        family.startsWith('sync')
-      if (isNow && (a.severity === 'critical' || a.severity === 'warning')) {
-        buckets.agora.push(a)
-        continue
+      const familyRank: Record<string, number> = {
+        'sync-error': 0,
+        'sync-partial': 1,
+        'sync-stale': 2,
+        noshow: 3,
+        cancel: 4,
+        pay: 5,
+        'return-missing': 6,
+        return: 7,
+        'stock-alerts-missing': 8,
+        'goal-gap': 9,
+        slots: 10,
+        'stock-alert': 11,
+        'react-cap': 12,
+        react: 13,
       }
-      if (a.unit === 'rom-brasil') buckets.brasil.push(a)
-      else if (a.unit === 'rom-iguatemi') buckets.iguatemi.push(a)
-      else buckets.rede.push(a)
+      return sev * 100 + (familyRank[family] ?? 50)
     }
-    return buckets
+    const ranked = [...all].sort((a, b) => score(a) - score(b))
+    // Top 3: só critical/warning — o que Waltter resolve agora.
+    const topNow = ranked
+      .filter((a) => a.severity === 'critical' || a.severity === 'warning')
+      .slice(0, 3)
+    const topIds = new Set(topNow.map((a) => a.id))
+    const rest = ranked.filter((a) => !topIds.has(a.id))
+    return {
+      topNow,
+      brasil: rest.filter((a) => a.unit === 'rom-brasil'),
+      iguatemi: rest.filter((a) => a.unit === 'rom-iguatemi'),
+      rede: rest.filter((a) => a.unit === 'both'),
+    }
   }, [data.nextActions])
 
   const actionsSummary = useMemo(() => {
     const n = data.nextActions.length
     if (n === 0) return ''
+    const top = actionsBoard.topNow.length
     const critical = data.nextActions.filter((a) => a.severity === 'critical').length
-    const agora = actionsByBucket.agora.length
-    const base = `${n} item${n === 1 ? '' : 's'}`
-    if (critical > 0) return `${base} · ${critical} crítico${critical === 1 ? '' : 's'}`
-    if (agora > 0) return `${base} · ${agora} agora`
-    return base
-  }, [data.nextActions, actionsByBucket])
+    if (critical > 0) return `${n} · ${critical} crítico${critical === 1 ? '' : 's'}`
+    if (top > 0) return `${n} · ${top} agora`
+    return `${n} item${n === 1 ? '' : 's'}`
+  }, [data.nextActions, actionsBoard])
 
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
@@ -603,62 +614,121 @@ export function Dashboard({
               open={openMap.acoes}
               onOpenChange={(v) => setSection('acoes', v)}
             >
-              <p className="mb-3 text-xs text-muted">
-                Agrupado: <span className="text-foreground/80">Agora</span> (sync/ops do dia) → por
-                unidade → rede.
-              </p>
-              {(
-                [
-                  { key: 'agora' as const, label: 'Agora', hint: 'Sync · cancel · retorno · 0081' },
-                  { key: 'brasil' as const, label: 'Brasil', hint: 'Só BR' },
-                  { key: 'iguatemi' as const, label: 'Iguatemi', hint: 'Só IG' },
-                  { key: 'rede' as const, label: 'Rede', hint: 'Meta / ambos' },
-                ] as const
-              ).map(({ key, label, hint }) => {
-                const items = actionsByBucket[key]
-                if (items.length === 0) return null
-                return (
-                  <div key={key} className="mb-4 last:mb-0">
-                    <div className="mb-2 flex items-baseline justify-between gap-2">
-                      <p
-                        className={`text-[0.65rem] uppercase tracking-[0.16em] ${
-                          key === 'brasil'
-                            ? 'text-brass'
-                            : key === 'iguatemi'
-                              ? 'text-teal'
-                              : 'text-muted'
-                        }`}
+              {/* Modelo: Top 3 numerados → BR | IG → Rede */}
+              {actionsBoard.topNow.length > 0 ? (
+                <div className="mb-5">
+                  <p className="mb-2 text-[0.65rem] uppercase tracking-[0.18em] text-brass">
+                    Fazer agora
+                  </p>
+                  <ol className="space-y-2">
+                    {actionsBoard.topNow.map((a, idx) => (
+                      <li
+                        key={a.id}
+                        className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${severityStyles(a.severity)}`}
                       >
-                        {label}
-                      </p>
-                      <p className="text-[0.65rem] text-muted">
-                        {hint} · {items.length}
-                      </p>
-                    </div>
-                    <ul className="space-y-2">
-                      {items.map((a) => (
-                        <li
-                          key={a.id}
-                          className={`flex items-start gap-2 rounded-xl border px-4 py-3 ${severityStyles(a.severity)}`}
-                        >
-                          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-medium text-foreground">{a.title}</p>
-                              {key === 'agora' ? unitChip(a.unit) : null}
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-current/25 bg-surface/40 font-display text-sm tabular-nums">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-foreground">{a.title}</p>
+                            {unitChip(a.unit)}
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
+                          <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/85">
+                            <ArrowRight size={11} />
+                            {a.action}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(
+                  [
+                    {
+                      key: 'brasil' as const,
+                      label: 'Brasil',
+                      accent: 'text-brass border-brass/30',
+                      items: actionsBoard.brasil,
+                    },
+                    {
+                      key: 'iguatemi' as const,
+                      label: 'Iguatemi',
+                      accent: 'text-teal border-teal/30',
+                      items: actionsBoard.iguatemi,
+                    },
+                  ] as const
+                ).map((col) => (
+                  <div
+                    key={col.key}
+                    className={`rounded-xl border ${col.accent} bg-panel-2/30 p-3`}
+                  >
+                    <p
+                      className={`text-[0.65rem] uppercase tracking-[0.16em] ${
+                        col.key === 'brasil' ? 'text-brass' : 'text-teal'
+                      }`}
+                    >
+                      {col.label}
+                      <span className="ml-2 text-muted">{col.items.length}</span>
+                    </p>
+                    {col.items.length === 0 ? (
+                      <p className="mt-3 text-xs text-muted">Nada pendente nesta coluna.</p>
+                    ) : (
+                      <ul className="mt-2 divide-y divide-border/40">
+                        {col.items.map((a) => (
+                          <li key={a.id} className="py-2.5 first:pt-1 last:pb-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm text-foreground">{a.title.replace(/ — (Brasil|Iguatemi)$/, '')}</p>
+                              <span
+                                className={`shrink-0 text-[0.6rem] uppercase tracking-wide ${
+                                  a.severity === 'critical'
+                                    ? 'text-danger'
+                                    : a.severity === 'warning'
+                                      ? 'text-warning'
+                                      : 'text-muted'
+                                }`}
+                              >
+                                {a.severity === 'critical'
+                                  ? 'crítico'
+                                  : a.severity === 'warning'
+                                    ? 'atenção'
+                                    : 'info'}
+                              </span>
                             </div>
                             <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
-                            <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/80">
-                              <ArrowRight size={11} />
-                              {a.action}
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                            <p className="mt-1 text-[0.7rem] text-foreground/70">→ {a.action}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                )
-              })}
+                ))}
+              </div>
+
+              {actionsBoard.rede.length > 0 ? (
+                <div className="mt-4 rounded-xl border border-border/50 bg-panel/40 px-3 py-3">
+                  <p className="mb-2 text-[0.65rem] uppercase tracking-[0.16em] text-muted">
+                    Rede
+                  </p>
+                  <ul className="space-y-2">
+                    {actionsBoard.rede.map((a) => (
+                      <li key={a.id} className="flex items-start gap-2">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-info" />
+                        <div className="min-w-0">
+                          <p className="text-sm text-foreground">{a.title}</p>
+                          <p className="text-xs text-muted">
+                            {a.detail} · → {a.action}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </CollapsibleSection>
           </section>
         ) : null}
