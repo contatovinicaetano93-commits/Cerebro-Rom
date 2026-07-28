@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { MemoryCache } from '@/lib/cache'
 import { getSql } from '@/lib/db'
 import { getUnitConfig } from '@/lib/unit-config'
 import { writeGoalsToDb } from '@/lib/goals'
@@ -47,6 +48,8 @@ export async function PUT(req: Request) {
       )
     }
     const goals = await writeGoalsToDb(sql, dailyGoal, capacity)
+    // Metas entram no overview — invalidar TTL de 45s para o refresh pós-save.
+    MemoryCache.delete('overview:live')
     return NextResponse.json({
       data: {
         unit,

@@ -58,11 +58,11 @@ export function trustsRollingKpis(u: UnitSnapshot): boolean {
 
 /**
  * Base conectada mas sem histórico de métricas (ex.: Supabase novo pós-cutover).
- * Não confundir com salão quieto/fechado no dia.
+ * Não confundir com salão quieto/fechado no dia, nem com awaiting token / never-sync.
  */
 export function isMetricsHollow(u: UnitSnapshot): boolean {
-  if (u.sync.offline || isSyncHardFail(u)) return false
-  if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return true
+  // Token/never-sync já têm caminho próprio (syncBad / Aguardando token) — não marcar hollow.
+  if (!isUnitReadable(u)) return false
   const last30Empty = (u.last30 ?? []).every(
     (d) => d.revenue === 0 && d.attended === 0 && d.appointments === 0,
   )
