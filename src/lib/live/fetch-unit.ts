@@ -458,7 +458,7 @@ export async function fetchLiveUnit(
   const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, trustCsForNext2h)
 
   const [opsWeek, opsCommerce, opsFinance, opsStock] = await Promise.all([
-    fetchOpsWeek(sql, today),
+    fetchOpsWeek(sql, today, monthStart),
     fetchOpsCommerce(sql, today),
     fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended),
     fetchOpsStock(sql),

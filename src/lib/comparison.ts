@@ -150,6 +150,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
       return null
     }
+    if (u.opsFinance.paymentGap != null) return u.opsFinance.paymentGap
     return Math.round((u.opsFinance.paymentsTotal - u.opsFinance.mtdRevenue) * 100) / 100
   }
 

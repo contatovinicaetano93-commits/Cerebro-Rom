@@ -7,6 +7,12 @@ function n(v: unknown): number {
     const x = Number(v)
     return Number.isFinite(x) ? x : 0
   }
+  // postgres.js / drivers às vezes devolvem Numeric como objeto.
+  if (typeof v === 'bigint') return Number(v)
+  if (v != null && typeof v === 'object') {
+    const x = Number(String(v))
+    return Number.isFinite(x) ? x : 0
+  }
   return 0
 }
 
@@ -247,7 +253,7 @@ async function fetchLatestP3(sql: Sql, today: string): Promise<P3Row | null> {
     // Prefere dia com taxa de retorno preenchida (evita zero de sync parcial).
     // Janela 30d: P3 full costuma ser raro (BR às vezes só no fim de semana).
     const rows = (await sql`
-      select day::text as day, return_rate, new_clients_period
+      select day::text as day, return_rate::float as return_rate, new_clients_period
       from salon_p3_daily
       where day <= ${today}::date
         and day >= (${today}::date - interval '30 days')
@@ -258,7 +264,7 @@ async function fetchLatestP3(sql: Sql, today: string): Promise<P3Row | null> {
     `) as P3Row[]
     if (rows[0]) return rows[0]
     const fallback = (await sql`
-      select day::text as day, return_rate, new_clients_period
+      select day::text as day, return_rate::float as return_rate, new_clients_period
       from salon_p3_daily
       where day <= ${today}::date
         and day >= (${today}::date - interval '30 days')
@@ -271,22 +277,66 @@ async function fetchLatestP3(sql: Sql, today: string): Promise<P3Row | null> {
   }
 }
 
-export async function fetchOpsWeek(sql: Sql, today: string): Promise<OpsWeek> {
+/**
+ * Fallback quando salon_p3_daily.return_rate está vazio (ex.: IG cutover / 0007 lista).
+ * Mix MTD: returning / (returning + new) em salon_daily_metrics.
+ */
+async function fetchReturnRateFromDailyMix(
+  sql: Sql,
+  monthStart: string,
+  today: string,
+): Promise<number | null> {
+  if (!(await tableExists(sql, 'salon_daily_metrics'))) return null
+  try {
+    const rows = (await sql`
+      select
+        coalesce(sum(returning_clients), 0)::int as returning_clients,
+        coalesce(sum(new_clients), 0)::int as new_clients
+      from salon_daily_metrics
+      where day >= ${monthStart}::date
+        and day <= ${today}::date
+    `) as { returning_clients: number; new_clients: number }[]
+    const returning = n(rows[0]?.returning_clients)
+    const neu = n(rows[0]?.new_clients)
+    const denom = returning + neu
+    if (denom <= 0 || returning <= 0) return null
+    return Math.round((returning / denom) * 10000) / 10000
+  } catch {
+    return null
+  }
+}
+
+export async function fetchOpsWeek(
+  sql: Sql,
+  today: string,
+  monthStart?: string,
+): Promise<OpsWeek> {
   const [p1, p3] = await Promise.all([fetchLatestP1(sql, today), fetchLatestP3(sql, today)])
   if (!p1 && !p3) return EMPTY_OPS_WEEK
+
+  let returnRate =
+    p3?.return_rate == null || n(p3.return_rate) <= 0 ? null : n(p3.return_rate)
+  let returnAsOfDay = dayIso(p3?.day)
+
+  // IG: P3 frequentemente null/0 — não deixar comparativo em "—".
+  if (returnRate == null && monthStart) {
+    const fromMix = await fetchReturnRateFromDailyMix(sql, monthStart, today)
+    if (fromMix != null && fromMix > 0) {
+      returnRate = fromMix
+      returnAsOfDay = today
+    }
+  }
 
   return {
     professionals: parseProfessionals(p1?.professionals),
     services: parseServices(p1?.services),
     acquisition: parseAcquisition(p1?.acquisition),
     reactivationCount: p1 == null || p1.reactivation_count == null ? null : n(p1.reactivation_count),
-    // 0% no fallback parcial = ausência, não retenção zero.
-    returnRate:
-      p3?.return_rate == null || n(p3.return_rate) <= 0 ? null : n(p3.return_rate),
+    returnRate,
     newClientsPeriod:
       p3 == null || p3.new_clients_period == null ? null : n(p3.new_clients_period),
     asOfDay: dayIso(p1?.day),
-    returnAsOfDay: dayIso(p3?.day),
+    returnAsOfDay,
   }
 }
 

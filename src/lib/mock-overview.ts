@@ -165,6 +165,7 @@ function buildUnit(
       cmvShare: mtdRevenue > 0 ? cmv / mtdRevenue : null,
       paymentsTotal: Math.round(mtdRevenue * 0.98),
       paymentsKnown: true,
+      paymentGap: Math.round(mtdRevenue * 0.98) - mtdRevenue,
       paymentReconcile: 'aligned',
       topPaymentMethod: 'Cartão',
       available: true,

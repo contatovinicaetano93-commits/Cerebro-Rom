@@ -94,6 +94,7 @@ export const EMPTY_OPS_FINANCE: OpsFinance = {
   cmvShare: null,
   paymentsTotal: 0,
   paymentsKnown: false,
+  paymentGap: null,
   paymentReconcile: 'unknown',
   topPaymentMethod: null,
   available: false,
@@ -151,43 +152,61 @@ export async function fetchOpsFinance(
   }
 
   let paymentsTotal = 0
+  let pairedRevenue = 0
   let topPaymentMethod: string | null = null
   let mixOk = false
   if (await tableExists(sql, 'salon_p2_daily')) {
     try {
+      // Casa 0081 com receita do MESMO dia — somar mix do mês contra MTD
+      // inteiro inventa gap quando faltam dias de pagamento (BR) ou distorce IG.
       const rows = (await sql`
-        select payment_mix
-        from salon_p2_daily
-        where day >= ${monthStart}::date and day <= ${today}::date
-        order by day desc
-      `) as { payment_mix: unknown }[]
+        select
+          coalesce(d.revenue, 0)::float as revenue,
+          p.payment_mix
+        from salon_p2_daily p
+        inner join salon_daily_metrics d on d.day = p.day
+        where p.day >= ${monthStart}::date
+          and p.day <= ${today}::date
+      `) as { revenue: number; payment_mix: unknown }[]
 
       const byMethod = new Map<string, number>()
       for (const row of rows) {
         const mix = Array.isArray(row.payment_mix) ? row.payment_mix : []
+        let dayPay = 0
         for (const item of mix) {
           if (item == null || typeof item !== 'object') continue
           const rec = item as Record<string, unknown>
           const method = typeof rec.method === 'string' ? rec.method.trim() : ''
           if (!method) continue
-          byMethod.set(method, (byMethod.get(method) ?? 0) + n(rec.amount))
+          const amount = n(rec.amount)
+          if (amount === 0) continue
+          byMethod.set(method, (byMethod.get(method) ?? 0) + amount)
+          dayPay += amount
         }
+        if (dayPay <= 0) continue
+        paymentsTotal += dayPay
+        pairedRevenue += n(row.revenue)
       }
       for (const [method, amount] of byMethod) {
-        paymentsTotal += amount
         if (topPaymentMethod == null || amount > (byMethod.get(topPaymentMethod) ?? 0)) {
           topPaymentMethod = method
         }
       }
       paymentsTotal = Math.round(paymentsTotal * 100) / 100
-      // Linhas P2 sem payment_mix → unknown (não inventar Gap 0081 ≈ −MTD).
-      mixOk = byMethod.size > 0
+      pairedRevenue = Math.round(pairedRevenue * 100) / 100
+      mixOk = byMethod.size > 0 && paymentsTotal > 0
     } catch {
       // ok
     }
   }
 
+  // Conciliação e gap usam receita dos dias com 0081 (pareado), não o MTD cheio.
+  const reconcileBase = mixOk && pairedRevenue > 0 ? pairedRevenue : mtdRevenue
   const cmvShare = cmvOk && mtdRevenue > 0 ? cmv / mtdRevenue : null
+  const rawGap = mixOk ? Math.round((paymentsTotal - reconcileBase) * 100) / 100 : null
+  // Ruído de centavos/arredondamento — não pintar −R$28 como “dado”.
+  const paymentGap =
+    rawGap == null ? null : Math.abs(rawGap) < 50 ? 0 : rawGap
 
   return {
     mtdRevenue,
@@ -198,7 +217,8 @@ export async function fetchOpsFinance(
     cmvShare,
     paymentsTotal: mixOk ? paymentsTotal : 0,
     paymentsKnown: mixOk,
-    paymentReconcile: mixOk ? reconcile(mtdRevenue, paymentsTotal) : 'unknown',
+    paymentGap,
+    paymentReconcile: mixOk ? reconcile(reconcileBase, paymentsTotal) : 'unknown',
     topPaymentMethod: mixOk ? topPaymentMethod : null,
     // Disponível se há qualquer fonte Avec financeira — não inventa CMV/0081 via só MTD.
     available: cmvOk || mixOk || mtdRevenue > 0,

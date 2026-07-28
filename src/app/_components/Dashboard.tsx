@@ -157,7 +157,7 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   cmv_share: 'CMV proxy ÷ receita MTD.',
   payments_total: 'Soma das formas de pagamento (Avec 0081).',
   payment_gap:
-    'Pagamentos 0081 − receita MTD (ideal ≈ 0). Δ% some se um lado ≈ 0 (evita % absurda).',
+    'Pagamentos 0081 − receita nos mesmos dias (ideal ≈ 0). Δ some se um lado ≈ 0.',
   payment_reconcile: 'Status da conciliação 0081 vs receita.',
   top_payment: 'Forma de pagamento com maior volume no período.',
   stock_value: 'Valor em estoque (posição Avec).',
@@ -253,7 +253,8 @@ function formatDeltaCell(row: ComparisonRow): string {
       ? `${formatSignedPct(row.deltaPct)} p.p.`
       : formatSignedPct(row.deltaPct)
   }
-  // payment_gap sem Δ%: mostra diferença absoluta em R$ (legível).
+  // payment_gap: Δ absoluto só quando os dois lados são materiais.
+  // Com IG ≈ R$0, mostrar BR−IG (−R$58k) parece “dado do IG” — melhor —.
   if (
     row.key === 'payment_gap' &&
     row.brasil != null &&
@@ -261,6 +262,7 @@ function formatDeltaCell(row: ComparisonRow): string {
     Number.isFinite(row.brasil) &&
     Number.isFinite(row.iguatemi)
   ) {
+    if (Math.abs(row.brasil) < 500 || Math.abs(row.iguatemi) < 500) return '—'
     const abs = row.brasil - row.iguatemi
     const sign = abs > 0 ? '+' : abs < 0 ? '−' : ''
     return `${sign}${formatCurrency(Math.abs(abs))}`

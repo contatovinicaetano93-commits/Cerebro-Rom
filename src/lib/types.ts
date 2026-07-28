@@ -97,6 +97,11 @@ export interface OpsFinance {
   paymentsTotal: number
   /** true só quando há linhas P2/0081 no MTD. */
   paymentsKnown: boolean
+  /**
+   * Pagamentos 0081 − receita nos mesmos dias (pareado).
+   * null se sem 0081; 0 se |gap| < R$50 (ruído).
+   */
+  paymentGap: number | null
   paymentReconcile: PaymentReconcileStatus
   topPaymentMethod: string | null
   available: boolean
