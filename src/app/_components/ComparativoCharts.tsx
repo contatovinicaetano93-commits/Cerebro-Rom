@@ -85,10 +85,10 @@ function pendingReason(row: ComparisonRow): string {
   switch (row.key) {
     case 'goal_pct':
       return 'Aguardando faturamento/atendidos para % meta.'
+    case 'lost_revenue':
+      return 'Sem ticket (dia/MTD) para estimar receita perdida.'
     case 'ticket':
       return 'Ticket aparece após o 1º atendimento do dia.'
-    case 'lost_revenue':
-      return 'Há cancel/no-show, mas ticket do dia ainda indisponível.'
     case 'return':
       return 'Taxa de retorno ausente nesta base (P3).'
     case 'cmv':

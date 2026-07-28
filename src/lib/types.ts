@@ -51,6 +51,10 @@ export interface OpsWeek {
   returnRate: number | null
   /** null quando P3 ausente (não inventar “0 novos”). */
   newClientsPeriod: number | null
+  /** Dia do snapshot P1 usado (YYYY-MM-DD); null se vazio. */
+  asOfDay: string | null
+  /** Dia do snapshot P3 (retorno); pode diferir do P1. */
+  returnAsOfDay: string | null
 }
 
 /** Comercial leve — Avec 0056, 0061, 0104, 0001 (sem despesas manuais) */
@@ -65,6 +69,8 @@ export interface OpsCommerce {
   ratingsCount: number
   birthdayCount: number
   topBookingChannel: string | null
+  /** Dia do snapshot P2 usado. */
+  asOfDay: string | null
 }
 
 export type PaymentReconcileStatus =

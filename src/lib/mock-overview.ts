@@ -140,6 +140,8 @@ function buildUnit(
       reactivationCount: slug === 'rom-brasil' ? 17 : 12,
       returnRate: slug === 'rom-brasil' ? 0.62 : 0.55,
       newClientsPeriod: slug === 'rom-brasil' ? 48 : 36,
+      asOfDay: today.day,
+      returnAsOfDay: today.day,
     },
     opsCommerce: {
       bookingChannels,
@@ -151,6 +153,7 @@ function buildUnit(
       ratingsCount: slug === 'rom-brasil' ? 38 : 29,
       birthdayCount: slug === 'rom-brasil' ? 11 : 8,
       topBookingChannel: bookingChannels[0]?.channel ?? null,
+      asOfDay: today.day,
     },
     opsFinance: {
       ...EMPTY_OPS_FINANCE,

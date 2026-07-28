@@ -375,10 +375,10 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const capacityAppointments = capacityOps.reduce((a, u) => a + u.today.appointments, 0)
   const occupancyConfigured = capacityOps.length > 0 && capacity > 0
   const attendanceConfigured = appointments > 0
-  const newClients = dayOps.reduce((a, u) => a + u.today.newClients, 0)
-  const returningClients = dayOps.reduce((a, u) => a + u.today.returningClients, 0)
-  const leads = dayOps.reduce((a, u) => a + u.today.leads, 0)
-  const converted = dayOps.reduce((a, u) => a + u.today.converted, 0)
+  const newClients = moneyOps.reduce((a, u) => a + u.today.newClients, 0)
+  const returningClients = moneyOps.reduce((a, u) => a + u.today.returningClients, 0)
+  const leads = moneyOps.reduce((a, u) => a + u.today.leads, 0)
+  const converted = moneyOps.reduce((a, u) => a + u.today.converted, 0)
   const mixBase = newClients + returningClients
   const cmvKnownUnits = connected.filter((u) => u.opsFinance.cmvKnown)
   const cmv = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.cmv, 0)

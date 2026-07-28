@@ -145,7 +145,8 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   goal_pct: 'Receita do dia ÷ meta diária (Metas).',
   occupancy: 'Agendamentos ÷ capacidade (Metas).',
   noshow: 'No-shows ÷ agendamentos do dia.',
-  lost_revenue: '(Cancelamentos + no-shows) × ticket médio do dia.',
+  lost_revenue:
+    '(Cancelamentos + no-shows) × ticket do dia; se ainda sem atendimento, usa ticket MTD.',
   ticket: 'Receita ÷ atendidos (hoje).',
   return: 'Taxa de retorno (Avec / P3). — = P3 sem taxa nesta base (ex.: cutover).',
   packages: 'Receita de pacotes (Avec 0061).',
@@ -611,7 +612,7 @@ export function Dashboard({
                     ? dash
                     : `${u.today.cancelled} · ${u.today.noShows}`
                 const novosRec =
-                  !u || !readable || !active
+                  !u || !readable || !active || (u.today.attended <= 0 && u.today.revenue <= 0)
                     ? dash
                     : `${u.today.newClients} · ${u.today.returningClients}`
                 const borderAccent =
@@ -809,6 +810,17 @@ export function Dashboard({
                       <p className="mt-3 text-sm text-muted">{layerEmptyCopy('semana', hollow)}</p>
                     ) : (
                       <div className="mt-3 space-y-3 text-sm">
+                        {w.asOfDay || w.returnAsOfDay ? (
+                          <p className="text-[0.65rem] text-muted">
+                            {w.asOfDay ? `Ranking de ${w.asOfDay.slice(5).replace('-', '/')}` : null}
+                            {w.asOfDay && w.returnAsOfDay ? ' · ' : null}
+                            {w.returnAsOfDay
+                              ? `retorno de ${w.returnAsOfDay.slice(5).replace('-', '/')}`
+                              : w.returnRate == null
+                                ? 'retorno —'
+                                : null}
+                          </p>
+                        ) : null}
                         <ul className="space-y-1">
                           {w.professionals.slice(0, 10).map((p, i) => (
                             <li key={p.name} className="flex justify-between gap-2">
@@ -887,6 +899,11 @@ export function Dashboard({
                       <p className="mt-3 text-sm text-muted">{layerEmptyCopy('comercial', hollow)}</p>
                     ) : (
                       <div className="mt-3 space-y-3 text-sm">
+                        {co.asOfDay ? (
+                          <p className="text-[0.65rem] text-muted">
+                            Snapshot de {co.asOfDay.slice(5).replace('-', '/')}
+                          </p>
+                        ) : null}
                         <div className="grid grid-cols-2 gap-3">
                           <ul className="space-y-1">
                             {co.bookingChannels.slice(0, 3).map((ch) => (

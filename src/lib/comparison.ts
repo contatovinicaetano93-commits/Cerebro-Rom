@@ -106,9 +106,15 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     if (!isUnitReadable(u) || !isSalonActiveToday(u) || !hasTrustedAgenda(u)) return null
     const lost = u.today.noShows + u.today.cancelled
     if (lost <= 0) return 0
-    // Sem ticket do dia ainda: não inventa R$, mas também não deixa card oco — null só se perdido>0.
-    if (u.today.ticketAvg <= 0) return null
-    return Math.round(lost * u.today.ticketAvg)
+    // Ticket do dia; se ainda não houve atendimento, usa ticket MTD (proxy honesto).
+    const ticket =
+      u.today.ticketAvg > 0
+        ? u.today.ticketAvg
+        : u.opsFinance.mtdTicketAvg != null && u.opsFinance.mtdTicketAvg > 0
+          ? u.opsFinance.mtdTicketAvg
+          : null
+    if (ticket == null) return null
+    return Math.round(lost * ticket)
   }
 
   const ticketDay = (u: UnitSnapshot): number | null => {

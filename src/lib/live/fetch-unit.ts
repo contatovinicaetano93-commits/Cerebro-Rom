@@ -138,6 +138,8 @@ export function offlineUnitSnapshot(
       reactivationCount: null,
       returnRate: null,
       newClientsPeriod: null,
+      asOfDay: null,
+      returnAsOfDay: null,
     },
     opsCommerce: {
       bookingChannels: [],
@@ -149,6 +151,7 @@ export function offlineUnitSnapshot(
       ratingsCount: 0,
       birthdayCount: 0,
       topBookingChannel: null,
+      asOfDay: null,
     },
     opsFinance: { ...EMPTY_OPS_FINANCE },
     opsStock: { ...EMPTY_OPS_STOCK },
@@ -300,7 +303,7 @@ export async function fetchLiveUnit(
   let leadsToday = 0
   let convertedToday = 0
   try {
-    // Paridade ROM: ignora dump Avec (importado / backfill / lake).
+    // Só leads ROM reais — dump Avec (clients/appointments/backfill/lake) polui o card.
     const leadRows = (await sql`
       select
         count(*)::int as leads,
@@ -308,9 +311,7 @@ export async function fetchLiveUnit(
       from contacts
       where (created_at at time zone 'America/Sao_Paulo')::date = ${today}::date
         and status <> 'importado'
-        and coalesce(source, '') not like 'avec_sync_clients%'
-        and coalesce(source, '') not like 'avec_backfill%'
-        and coalesce(source, '') not like 'avec_lake%'
+        and coalesce(source, '') not like 'avec_%'
     `) as { leads: number; converted: number }[]
     leadsToday = n(leadRows[0]?.leads)
     convertedToday = n(leadRows[0]?.converted)
@@ -337,6 +338,15 @@ export async function fetchLiveUnit(
   }
 
   const todayMetrics = last30[last30.length - 1]!
+  // Avec às vezes grava agenda em new_clients sem atendimento/faturamento (ex.: 108 “novos”).
+  if (todayMetrics.attended <= 0 && todayMetrics.revenue <= 0) {
+    todayMetrics.newClients = 0
+    todayMetrics.returningClients = 0
+  }
+  // Leads ROM (não dump Avec) — sobrescreve o campo do dia.
+  todayMetrics.leads = leadsToday
+  todayMetrics.converted = convertedToday
+
   let appointmentsNext2h = 0
   /** Só confiar em CS 2h se a agenda do dia também veio do live CS (não de metrics). */
   let trustCsForNext2h = false
@@ -398,18 +408,22 @@ export async function fetchLiveUnit(
       const day = isoDaysBackFrom(today, i)
       if (day < monthStart) continue
       const isAsOf = day === today
-      mtdRows.push(
-        rowToDay(
-          byDay.get(day),
-          day,
-          capacity,
-          dailyGoal,
-          goalSet,
-          capacitySet,
-          isAsOf ? leadsToday : 0,
-          isAsOf ? convertedToday : 0,
-        ),
+      const row = rowToDay(
+        byDay.get(day),
+        day,
+        capacity,
+        dailyGoal,
+        goalSet,
+        capacitySet,
+        isAsOf ? leadsToday : 0,
+        isAsOf ? convertedToday : 0,
       )
+      // Mesma regra do snapshot do dia: sem atendimento/fat → não contar mix fantasma.
+      if (isAsOf && row.attended <= 0 && row.revenue <= 0) {
+        row.newClients = 0
+        row.returningClients = 0
+      }
+      mtdRows.push(row)
     }
   }
   const mtdRevenue = mtdRows.reduce((a, d) => a + d.revenue, 0)
