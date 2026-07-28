@@ -21,6 +21,29 @@ function n(v: unknown): number {
   return 0
 }
 
+/**
+ * Mix novos/recorrentes do Avec às vezes conta agenda como “novo”.
+ * Zera quando o dia ainda não tem dinheiro OU o mix é impossível/absurdo.
+ */
+function sanitizeDayMix(day: DayMetrics, capacity: number, capacitySet: boolean): void {
+  if (day.attended <= 0 && day.revenue <= 0) {
+    day.newClients = 0
+    day.returningClients = 0
+    return
+  }
+  const mix = day.newClients + day.returningClients
+  if (day.appointments > 0 && mix > day.appointments) {
+    day.newClients = 0
+    day.returningClients = 0
+    return
+  }
+  // Ex.: 838 “novos” com capacidade 110 — lixo de sync, não KPI.
+  if (capacitySet && capacity > 0 && day.newClients > capacity * 1.5) {
+    day.newClients = 0
+    day.returningClients = 0
+  }
+}
+
 function emptyDay(
   day: string,
   capacity: number,
@@ -338,11 +361,7 @@ export async function fetchLiveUnit(
   }
 
   const todayMetrics = last30[last30.length - 1]!
-  // Avec às vezes grava agenda em new_clients sem atendimento/faturamento (ex.: 108 “novos”).
-  if (todayMetrics.attended <= 0 && todayMetrics.revenue <= 0) {
-    todayMetrics.newClients = 0
-    todayMetrics.returningClients = 0
-  }
+  sanitizeDayMix(todayMetrics, capacity, capacitySet)
   // Leads ROM (não dump Avec) — sobrescreve o campo do dia.
   todayMetrics.leads = leadsToday
   todayMetrics.converted = convertedToday
@@ -418,11 +437,7 @@ export async function fetchLiveUnit(
         isAsOf ? leadsToday : 0,
         isAsOf ? convertedToday : 0,
       )
-      // Mesma regra do snapshot do dia: sem atendimento/fat → não contar mix fantasma.
-      if (isAsOf && row.attended <= 0 && row.revenue <= 0) {
-        row.newClients = 0
-        row.returningClients = 0
-      }
+      if (isAsOf) sanitizeDayMix(row, capacity, capacitySet)
       mtdRows.push(row)
     }
   }

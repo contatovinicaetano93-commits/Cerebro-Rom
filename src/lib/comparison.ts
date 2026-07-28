@@ -14,6 +14,12 @@ export function rate(num: number, den: number): number {
   return clamp01(num / den)
 }
 
+/** Razão sem teto — ocupação pode passar de 100% (overbook). */
+export function ratio(num: number, den: number): number {
+  if (den <= 0) return 0
+  return num / den
+}
+
 /** Δ relativo (moeda / contagens): (BR − IG) / |IG|. */
 function deltaRelative(brasil: number | null, iguatemi: number | null): number | null {
   if (brasil == null || iguatemi == null) return null
@@ -99,7 +105,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     !hasTrustedAgenda(u) ||
     !u.today.capacitySet
       ? null
-      : rate(u.today.appointments, u.today.capacity)
+      : ratio(u.today.appointments, u.today.capacity)
 
   const goalPct = (u: UnitSnapshot): number | null => {
     if (!isUnitReadable(u) || !isSalonActiveToday(u) || !u.today.goalSet) return null
@@ -358,11 +364,17 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Alertas estoque',
       group: 'estoque',
       brasil:
-        isUnitConnected(brasil) && trustsRollingKpis(brasil) && brasil.opsStock.available
+        isUnitConnected(brasil) &&
+        trustsRollingKpis(brasil) &&
+        brasil.opsStock.available &&
+        brasil.opsStock.alertsKnown
           ? brasil.opsStock.activeAlerts
           : null,
       iguatemi:
-        isUnitConnected(iguatemi) && trustsRollingKpis(iguatemi) && iguatemi.opsStock.available
+        isUnitConnected(iguatemi) &&
+        trustsRollingKpis(iguatemi) &&
+        iguatemi.opsStock.available &&
+        iguatemi.opsStock.alertsKnown
           ? iguatemi.opsStock.activeAlerts
           : null,
       format: 'number',

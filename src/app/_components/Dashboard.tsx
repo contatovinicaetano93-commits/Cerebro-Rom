@@ -69,7 +69,8 @@ const LEGEND = {
   mtd: 'Receita acumulada no mês (MTD). Ticket = receita ÷ atendidos.',
   cmv: 'Proxy: custo das saídas de estoque no mês (Avec 0044) — não é CMV fiscal.',
   estoqueValor: 'Valor da posição de estoque sincronizada da Avec.',
-  estoqueAlertas: 'Produtos abaixo do mínimo (alertas ativos no ROM Estoque).',
+  estoqueAlertas:
+    'Alertas ativos Avec. — no comparativo se sync de alertas estiver vazio com muitos zerados.',
   vagasHoje: 'Capacidade do dia (Metas) − agendamentos do dia.',
   vagas2h: 'Estimativa de encaixes nas próximas 2h: (capacidade ÷ 8) × 2 − agenda nesse intervalo.',
   cancelNoshow: 'Cancelamentos e faltas do dia (Avec).',
@@ -143,7 +144,7 @@ function syncSourceLabel(status: string | undefined): 'incompleto' | 'desatualiz
 const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   revenue_today: 'Receita Avec do dia.',
   goal_pct: 'Receita do dia ÷ meta diária (Metas).',
-  occupancy: 'Agendamentos ÷ capacidade (Metas).',
+  occupancy: 'Agendamentos ÷ capacidade (Metas). Pode passar de 100% se overbook.',
   noshow: 'No-shows ÷ agendamentos do dia.',
   lost_revenue:
     '(Cancelamentos + no-shows) × ticket do dia; se ainda sem atendimento, usa ticket MTD.',
@@ -160,7 +161,8 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   payment_reconcile: 'Status da conciliação 0081 vs receita.',
   top_payment: 'Forma de pagamento com maior volume no período.',
   stock_value: 'Valor em estoque (posição Avec).',
-  stock_alerts: 'Alertas ativos de estoque baixo.',
+  stock_alerts:
+    'Alertas ativos Avec. — = sync de alertas ausente (zerados altos + tabela vazia).',
   stock_zero: 'SKUs com saldo zero.',
 }
 

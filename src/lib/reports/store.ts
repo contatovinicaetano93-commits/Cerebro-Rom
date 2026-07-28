@@ -151,7 +151,8 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
       blankMoney || !u.opsCommerce.packagesKnown ? 0 : u.opsCommerce.packagesRevenue,
     return_rate: blankMoney ? null : u.opsWeek.returnRate,
     stock_value: blankMoney || !u.opsStock.valueKnown ? 0 : u.opsStock.totalValue,
-    stock_alerts: blankMoney || !u.opsStock.available ? 0 : u.opsStock.activeAlerts,
+    stock_alerts:
+      blankMoney || !u.opsStock.available || !u.opsStock.alertsKnown ? 0 : u.opsStock.activeAlerts,
     stock_zero: blankMoney || !u.opsStock.available ? 0 : u.opsStock.zeroProducts,
     sync_status: u.sync.status,
     sync_label: u.sync.label,

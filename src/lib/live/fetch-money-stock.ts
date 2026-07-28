@@ -105,6 +105,7 @@ export const EMPTY_OPS_STOCK: OpsStock = {
   totalValue: 0,
   productCount: 0,
   activeAlerts: 0,
+  alertsKnown: false,
   zeroProducts: 0,
   drift: null,
 }
@@ -232,10 +233,15 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
     `) as { product_count: number; zero_products: number; total_value: number }[]
 
     let activeAlerts = 0
+    let alertsTableRows = 0
     if (await tableExists(sql, 'stock_alerts')) {
       const alerts = (await sql`
-        select count(*)::int as n from stock_alerts where status = 'ativo'
-      `) as { n: number }[]
+        select
+          count(*)::int as total,
+          count(*) filter (where status = 'ativo')::int as n
+        from stock_alerts
+      `) as { total: number; n: number }[]
+      alertsTableRows = n(alerts[0]?.total)
       activeAlerts = n(alerts[0]?.n)
     }
 
@@ -255,12 +261,16 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
         ? Math.round((localTotal - official) * 100) / 100
         : null
 
+    // 0 alertas + milhares de zerados + tabela vazia → sync de alertas faltando (não “estoque ok”).
+    const alertsKnown = !(alertsTableRows === 0 && zeroProducts >= 100 && activeAlerts === 0)
+
     return {
       available: true,
       valueKnown,
       totalValue: valueKnown ? localTotal : 0,
       productCount,
-      activeAlerts,
+      activeAlerts: alertsKnown ? activeAlerts : 0,
+      alertsKnown,
       zeroProducts,
       drift,
     }

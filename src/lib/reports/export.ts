@@ -485,7 +485,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.opsWeek?.newClientsPeriod != null ? num(u.opsWeek.newClientsPeriod) : '—',
       u.opsWeek?.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
       u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
-      u.opsStock.available ? num(u.opsStock.activeAlerts) : '—',
+      u.opsStock.available ? (u.opsStock.alertsKnown ? num(u.opsStock.activeAlerts) : '—') : '—',
       u.opsStock.available ? num(u.opsStock.zeroProducts) : '—',
       u.sync.label || u.sync.status,
     ]

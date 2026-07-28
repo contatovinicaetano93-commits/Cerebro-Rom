@@ -176,6 +176,7 @@ function buildUnit(
       totalValue: slug === 'rom-brasil' ? 28500 : 19200,
       productCount: slug === 'rom-brasil' ? 86 : 64,
       activeAlerts: slug === 'rom-brasil' ? 4 : 2,
+      alertsKnown: true,
       zeroProducts: slug === 'rom-brasil' ? 3 : 1,
       drift: slug === 'rom-brasil' ? -120 : 40,
     },

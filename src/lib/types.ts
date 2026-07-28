@@ -110,6 +110,11 @@ export interface OpsStock {
   totalValue: number
   productCount: number
   activeAlerts: number
+  /**
+   * false quando a tabela de alertas está vazia mas há muitos SKUs zerados
+   * (sync de alertas ausente) — UI deve mostrar —, não “0 ok”.
+   */
+  alertsKnown: boolean
   zeroProducts: number
   drift: number | null
 }

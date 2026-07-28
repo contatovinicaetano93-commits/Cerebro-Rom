@@ -1,7 +1,7 @@
 import { buildMockOverview } from '@/lib/mock-overview'
 import { fetchLiveUnit, offlineUnitSnapshot } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo, UNIT_META } from '@/lib/unit-config'
-import { rate, buildComparison } from '@/lib/comparison'
+import { rate, ratio, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
 import { evictSql } from '@/lib/db'
 import {
@@ -278,7 +278,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
     }
 
     // Centenas/milhares de alertas = higiene de catálogo, não crise operacional.
-    if (rolling && u.opsStock.available && u.opsStock.activeAlerts >= 50) {
+    if (rolling && u.opsStock.available && u.opsStock.alertsKnown && u.opsStock.activeAlerts >= 50) {
       actions.push({
         id: `stock-alert-${u.unit.slug}`,
         severity: 'info',
@@ -293,19 +293,14 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
             ? 'Revisar critérios de alerta no ROM Estoque'
             : 'Fila de compra no ROM Estoque',
       })
-    } else if (
-      rolling &&
-      u.opsStock.available &&
-      u.opsStock.activeAlerts === 0 &&
-      u.opsStock.zeroProducts >= 100
-    ) {
+    } else if (rolling && u.opsStock.available && !u.opsStock.alertsKnown) {
       // IG: stock_alerts vazia mas milhares de SKUs zerados — gap de sync, não “estoque ok”.
       actions.push({
         id: `stock-alerts-missing-${u.unit.slug}`,
         severity: 'warning',
         unit: u.unit.slug,
         title: `Alertas estoque ausentes — ${u.unit.short}`,
-        detail: `${u.opsStock.zeroProducts} SKUs zerados · 0 alertas Avec (tabela vazia)`,
+        detail: `${u.opsStock.zeroProducts} SKUs zerados · sync de alertas Avec vazio`,
         action: 'ROM Estoque → sync alertas / 0149',
       })
     }
@@ -414,7 +409,8 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     0,
   )
   const stockAlerts = connected.reduce(
-    (a, u) => a + (u.opsStock.available ? u.opsStock.activeAlerts : 0),
+    (a, u) =>
+      a + (u.opsStock.available && u.opsStock.alertsKnown ? u.opsStock.activeAlerts : 0),
     0,
   )
   const stockKnown = connected.some((u) => u.opsStock.available)
@@ -455,7 +451,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : null,
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
-    occupancyRate: occupancyConfigured ? rate(capacityAppointments, capacity) : 0,
+    occupancyRate: occupancyConfigured ? ratio(capacityAppointments, capacity) : 0,
     occupancyConfigured,
     attendanceConfigured,
     // Ticket do dia: só unidades com agenda confiável (não misturar receita órfã).
