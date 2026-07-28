@@ -87,10 +87,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
 
   const goalPct = (u: UnitSnapshot): number | null => {
     if (!isUnitReadable(u) || !isSalonActiveToday(u) || !u.today.goalSet) return null
-    // Sem faturamento/atendido ainda → 0% só com agenda confiável (não sync partial).
-    if (u.today.revenue <= 0 && u.today.attended <= 0) {
-      return hasTrustedAgenda(u) ? 0 : null
-    }
+    // Sem faturamento/atendido ainda → 0% (gráfico/card preenchido).
+    if (u.today.revenue <= 0 && u.today.attended <= 0) return 0
     return rate(u.today.revenue, u.today.dailyGoal)
   }
 
