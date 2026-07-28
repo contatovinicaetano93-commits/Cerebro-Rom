@@ -206,21 +206,50 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
     label: 'Sem registro de sync Avec',
   }
   try {
-    const runs = (await sql`
-      select status, created_at, error, kind
-      from avec_sync_runs
-      where kind in ('fast', 'full')
-      order by created_at desc
-      limit 1
-    `) as { status: string; created_at: string; error: string | null; kind: string }[]
-    let last = runs[0]
-    if (!last) {
-      const any = (await sql`
+    type SyncRow = { status: string; created_at: string; error: string | null; kind: string }
+
+    // Prefer finished runs — skip in-flight syncs (partial + stats->>'running'='true').
+    // The stats column may not exist on older schemas; fall back to unfiltered if it throws.
+    let runs: SyncRow[] = []
+    try {
+      runs = (await sql`
         select status, created_at, error, kind
         from avec_sync_runs
+        where kind in ('fast', 'full')
+          and (stats->>'running') IS DISTINCT FROM 'true'
         order by created_at desc
         limit 1
-      `) as { status: string; created_at: string; error: string | null; kind: string }[]
+      `) as SyncRow[]
+    } catch {
+      // stats column absent — fall back to unfiltered query
+      runs = (await sql`
+        select status, created_at, error, kind
+        from avec_sync_runs
+        where kind in ('fast', 'full')
+        order by created_at desc
+        limit 1
+      `) as SyncRow[]
+    }
+    let last = runs[0]
+    if (!last) {
+      // No fast/full run found — try any kind (also preferring finished).
+      let any: SyncRow[] = []
+      try {
+        any = (await sql`
+          select status, created_at, error, kind
+          from avec_sync_runs
+          where (stats->>'running') IS DISTINCT FROM 'true'
+          order by created_at desc
+          limit 1
+        `) as SyncRow[]
+      } catch {
+        any = (await sql`
+          select status, created_at, error, kind
+          from avec_sync_runs
+          order by created_at desc
+          limit 1
+        `) as SyncRow[]
+      }
       last = any[0]
     }
     if (last) {

@@ -36,12 +36,9 @@ async function fetchUnitBounded(
   try {
     return await Promise.race([fetchLiveUnit(config, day), timeout])
   } catch (err) {
-    // Timeout: não evict — a query órfã ainda pode estar no client max:1;
-    // matar o client no meio piora a corrida com o próximo poll.
-    const msg = String(err instanceof Error ? err.message : err)
-    if (!/Timeout \d+s/i.test(msg)) {
-      evictSql(url)
-    }
+    // Always evict: with max:1 a timed-out query holds the single connection permanently.
+    // The next poll will get a fresh client rather than inheriting the orphaned one.
+    evictSql(url)
     throw err
   } finally {
     if (timer) clearTimeout(timer)
@@ -624,7 +621,29 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
 
   const liveUnits = units.filter((u) => !u.sync.offline)
   if (liveUnits.length === 0) {
-    throw new Error('Nenhuma unidade live respondeu')
+    // Both units offline — return degraded overview WITH offline unit placeholders so
+    // the UI still renders unit cards (errors visible). Do NOT throw: that would cause
+    // buildOverview's catch to call degradedOverview({ units: [] }), discarding the cards.
+    return {
+      generatedAt: new Date().toISOString(),
+      mode: 'degraded',
+      partial: true,
+      periodLabel: `Degradado · ${day}`,
+      consolidated: emptyConsolidated(),
+      units,
+      trend30: [],
+      nextActions: sortNextActions([
+        ...fetchErrors,
+        {
+          id: 'all-units-offline',
+          severity: 'critical',
+          unit: 'both' as const,
+          title: 'Todas as unidades offline',
+          detail: 'Nenhuma unidade respondeu — verifique connection strings',
+          action: 'Validar NEON_BRASIL_DATABASE_URL e NEON_IGUATEMI_DATABASE_URL (pooler Supabase)',
+        },
+      ]),
+    }
   }
 
   const consolidated = consolidate(liveUnits)

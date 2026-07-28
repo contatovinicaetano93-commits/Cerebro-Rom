@@ -20,7 +20,14 @@ export interface ReportRunDetail extends ReportRunMeta {
   payload: CerebroOverview
 }
 
+/**
+ * DDL once-flag: runs CREATE TABLE IF NOT EXISTS once per isolate.
+ * Reset to false on error so the next healthy call re-checks if needed.
+ */
+let _tablesEnsured = false
+
 export async function ensureReportTables(sql?: Sql): Promise<void> {
+  if (_tablesEnsured) return
   const db = sql ?? getCerebroSql()
   await db`
     create table if not exists report_runs (
@@ -93,6 +100,7 @@ export async function ensureReportTables(sql?: Sql): Promise<void> {
     create index if not exists report_unit_metrics_day_idx
       on report_unit_metrics (day desc, unit_slug)
   `
+  _tablesEnsured = true
 }
 
 function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
