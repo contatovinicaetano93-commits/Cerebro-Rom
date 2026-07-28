@@ -950,7 +950,9 @@ export function Dashboard({
                   !blocked &&
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
+                  w.acquisition.length === 0 &&
                   (w.returnRate == null || w.returnRate === 0) &&
+                  w.newClientsPeriod == null &&
                   (w.reactivationCount == null || w.reactivationCount === 0)
                 // Avec 0107 pagina até ~5000 linhas — 5000 é teto, não o total real.
                 const semRetornoLabel =

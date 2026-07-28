@@ -90,7 +90,7 @@ function pendingReason(row: ComparisonRow): string {
     case 'ticket':
       return 'Ticket aparece após o 1º atendimento do dia.'
     case 'return':
-      return 'Taxa de retorno ausente nesta base (P3).'
+      return 'Taxa de retorno ausente nesta base (P3 ou mix MTD).'
     case 'cmv':
     case 'cmv_share':
       return 'CMV ausente nesta base (sem saídas/0044).'

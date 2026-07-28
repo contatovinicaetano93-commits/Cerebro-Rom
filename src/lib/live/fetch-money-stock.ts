@@ -28,7 +28,8 @@ function reconcile(revenue: number, paymentsTotal: number): PaymentReconcileStat
   if (revenue <= 0 && paymentsTotal > 0) return 'missing_revenue'
   if (paymentsTotal <= 0 && revenue <= 0) return 'unknown'
   const delta = Math.abs(paymentsTotal - revenue)
-  const tolerance = Math.max(1, Math.round(revenue * 0.01 * 100) / 100)
+  // Mesmo piso de R$50 do paymentGap — evita “gap 0” com status divergent.
+  const tolerance = Math.max(50, Math.round(revenue * 0.01 * 100) / 100)
   return delta > tolerance ? 'divergent' : 'aligned'
 }
 
