@@ -259,6 +259,12 @@ export function Dashboard({
 
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
+    const hollowOnly =
+      data.partial &&
+      data.units.some((u) => isMetricsHollow(u)) &&
+      !statuses.some((s) => s === 'error' || s === 'partial') &&
+      !data.units.some((u) => u.sync.offline)
+    if (hollowOnly) return 'incompleto' as const
     // Prioridade: error/partial (incompleto) > stale (desatualizado) — não suavizar token morto.
     if (statuses.some((s) => s === 'error' || s === 'partial') || data.partial) {
       return 'incompleto' as const
@@ -331,7 +337,14 @@ export function Dashboard({
                     ? 'Totais refletem só unidades ao vivo.'
                     : data.units.some((u) => u.sync.status === 'error')
                       ? 'Sync com erro em alguma unidade — KPIs do dia podem estar incompletos.'
-                      : 'Sync incompleto em alguma unidade — agenda/vagas só com sync ok.'}
+                      : data.units.some((u) => isMetricsHollow(u)) &&
+                          !data.units.some(
+                            (u) =>
+                              !u.sync.offline &&
+                              (u.sync.status === 'partial' || u.sync.status === 'error'),
+                          )
+                        ? 'Alguma unidade sem histórico de métricas — totais não misturam R$0 fantasma.'
+                        : 'Sync incompleto em alguma unidade — agenda/vagas só com sync ok.'}
               </p>
             )}
           </div>

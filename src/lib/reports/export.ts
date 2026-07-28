@@ -1,5 +1,11 @@
 import ExcelJS from 'exceljs'
-import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail, isUnitReadable } from '@/lib/salon-day'
+import {
+  hasTrustedAgenda,
+  isMetricsHollow,
+  isSalonActiveToday,
+  isSyncHardFail,
+  isUnitReadable,
+} from '@/lib/salon-day'
 import type { CerebroOverview, ComparisonRow, UnitSnapshot } from '@/lib/types'
 import type { ReportRunDetail } from '@/lib/reports/store'
 
@@ -59,9 +65,11 @@ function modeLabel(mode: CerebroOverview['mode'], partial?: boolean, overview?: 
     const syncBad = overview?.units.some(
       (u) => !u.sync.offline && (u.sync.status === 'partial' || u.sync.status === 'error'),
     )
+    const hollow = overview?.units.some((u) => isMetricsHollow(u))
     const unreadable = overview?.units.some((u) => !isUnitReadable(u))
     if (offline) return 'Live parcial (unidade offline)'
     if (syncBad) return 'Live parcial (sync incompleto)'
+    if (hollow) return 'Live parcial (base sem métricas)'
     if (unreadable) return 'Live parcial (unidade ilegível)'
     return 'Live parcial'
   }
@@ -168,6 +176,8 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
   if (o.partial) {
     if (o.units.some((u) => u.sync.offline)) {
       notes.push('Totais parciais: alguma unidade offline.')
+    } else if (o.units.some((u) => isMetricsHollow(u))) {
+      notes.push('Totais parciais: alguma unidade sem histórico de métricas (base oca).')
     } else {
       notes.push('Totais parciais: sync incompleto/com erro em alguma unidade.')
     }

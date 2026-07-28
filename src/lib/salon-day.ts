@@ -27,11 +27,13 @@ export function isSyncHardFail(u: UnitSnapshot): boolean {
 
 /**
  * Unidade legível para totais de rede / painel / export.
- * Offline, token morto ou jamais sincronizado → não soma zeros como dinheiro real.
+ * Offline, token morto, never-sync ou base oca (sem histórico) → não soma zeros como real.
  */
 export function isUnitReadable(u: UnitSnapshot): boolean {
   if (u.sync.offline || isSyncHardFail(u)) return false
   if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return false
+  // Base conectada mas vazia (pós-cutover) — não misturar R$0 no consolidado/Δ%.
+  if (isMetricsHollow(u)) return false
   return true
 }
 
@@ -52,7 +54,7 @@ export function hasTrustedAgenda(u: UnitSnapshot): boolean {
 
 /** KPIs semanais/financeiros ainda legíveis com sync parcial ou stale. */
 export function trustsRollingKpis(u: UnitSnapshot): boolean {
-  if (u.sync.offline) return false
+  if (u.sync.offline || isMetricsHollow(u)) return false
   return u.sync.status === 'ok' || u.sync.status === 'partial' || u.sync.status === 'stale'
 }
 

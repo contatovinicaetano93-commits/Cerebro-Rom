@@ -352,7 +352,8 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
 
   const todayRevenue = readable.reduce((a, u) => a + u.today.revenue, 0)
   const todayGoal = moneyOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
-  const goalsConfigured = units.every((u) => u.today.goalSet && u.today.capacitySet)
+  const goalsConfigured =
+    readable.length > 0 && readable.every((u) => u.today.goalSet && u.today.capacitySet)
   const mtdRevenue = readable.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdAttended = readable.reduce((a, u) => a + u.mtd.attended, 0)
   const mtdGoal = readable.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)

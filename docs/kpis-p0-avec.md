@@ -37,7 +37,7 @@ Faturamento continua via `AVEC_REPORT_REVENUE` (env) quando configurado.
 
 - `0052` é o **default** de cancelamentos (override: `AVEC_REPORT_CANCELLATIONS`)
 - Snapshot falho não derruba o sync
-- Cérebro só **lê** o Neon
+- Cérebro só **lê** o pooler Supabase da unidade
 
 ## Env opcional (Vercel de cada ROM)
 

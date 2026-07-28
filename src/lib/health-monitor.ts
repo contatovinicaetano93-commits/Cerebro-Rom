@@ -41,13 +41,14 @@ export class HealthMonitor {
     }
   }
 
-  /** Default 15 min — não usar em serverless loop; só utilitário opcional. */
-  static async startContinuousMonitoring(intervalSeconds: number = 900): Promise<void> {
-    // Check immediately
-    await this.checkHealth()
-
-    // Then check periodically
-    setInterval(() => this.checkHealth().catch(console.error), intervalSeconds * 1000)
+  /**
+   * NÃO usar em Vercel/serverless — setInterval eterno + probes de DB.
+   * Preferir cron externo espaçado ou checagem sob demanda.
+   */
+  static async startContinuousMonitoring(_intervalSeconds: number = 900): Promise<void> {
+    throw new Error(
+      'HealthMonitor.startContinuousMonitoring desabilitado (evita loop no DB). Use GET /api/health.',
+    )
   }
 
   private static async alertIfNew(

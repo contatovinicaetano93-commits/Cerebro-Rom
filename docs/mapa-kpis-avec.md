@@ -4,9 +4,9 @@ Fonte de verdade. UI: **Comando → Metas → Comparativo → Hoje → Semana �
 
 ```
 Avec (por unidade)
-  → ROM sync (fast = A · full = A+B+C + estoque)
-  → Neon da unidade
-  → Cérebro Promise.allSettled (read-only KPIs)
+  → ROM sync (fast = A · full = A+B+C + estoque) — crons espaçados (~5 / ~30 min)
+  → Supabase pooler da unidade
+  → Cérebro Promise.allSettled (read-only KPIs; cache overview ~45s)
     · escrita: cerebro_goals (metas nas unidades)
     · escrita: report_runs no Neon Cérebro (snapshots sob demanda)
 ```
@@ -27,7 +27,7 @@ Comparativo inclui também **receita perdida** (cancel + no-show × ticket) e **
 
 ## Metas
 
-- Preenchidas no painel (`PUT /api/goals`) → tabela `cerebro_goals` em cada Neon.
+- Preenchidas no painel (`PUT /api/goals`) → tabela `cerebro_goals` em cada unidade (Supabase).
 - Sem meta salva: progresso fica vazio (sem fallback inventado de R$ 5.000).
 - Env `BRASIL_DAILY_GOAL` / `IGUATEMI_DAILY_*` só como bootstrap opcional.
 
@@ -40,9 +40,10 @@ Scorecard **Brasil | Iguatemi | Δ%** por grupo: ops · comercial · financeiro 
 - Unidade offline → outra segue (`allSettled`); badge *Live parcial*.
 - Outage total → `mode: degraded` (zeros + alerta), **nunca mock falso**.
 - Tabela/KPI ausente → bloco vazio / `null` no scorecard, página não quebra.
-- Sync `partial` / atrasado → `stale` na UI.
+- Sync `partial` → badge Parcial (não vira stale).
+- Base oca (sem MTD/30d) → ilegível para totais / Δ% (não R$0 fantasma).
 
-## Neon
+## DB da unidade (Supabase)
 
 | Tabela | Camada |
 |--------|--------|
