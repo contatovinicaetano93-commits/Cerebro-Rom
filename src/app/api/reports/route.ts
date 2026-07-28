@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
     const overview =
       !asOf || asOf === todayIsoSaoPaulo()
-        ? await getCachedLiveOverview()
+        ? await getCachedLiveOverview({ fresh: true })
         : await buildOverview(asOf)
     if (overview.mode === 'mock') {
       return NextResponse.json(

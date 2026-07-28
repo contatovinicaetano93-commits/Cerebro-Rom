@@ -7,12 +7,16 @@ import type { CerebroOverview } from '@/lib/types'
 /** TTL curto — painel pode pollar; não martelar Supabase a cada request. */
 const OVERVIEW_CACHE_TTL_S = 45
 
+/** Bumped on invalidate — slow in-flight :cache builds must not overwrite :fresh. */
+let overviewCacheGeneration = 0
+
 export function overviewCacheKey(day = todayIsoSaoPaulo()): string {
   return `overview:live:${day}`
 }
 
 export function invalidateOverviewCache(): void {
   MemoryCache.delete(overviewCacheKey())
+  overviewCacheGeneration += 1
 }
 
 /**
@@ -25,6 +29,7 @@ export async function getCachedLiveOverview(opts?: {
 }): Promise<CerebroOverview> {
   const key = overviewCacheKey()
   if (opts?.fresh) invalidateOverviewCache()
+  const generation = overviewCacheGeneration
 
   return RequestDeduplicator.deduplicate(`${key}:${opts?.fresh ? 'fresh' : 'cache'}`, async () => {
     if (!opts?.fresh) {
@@ -33,7 +38,8 @@ export async function getCachedLiveOverview(opts?: {
     }
 
     const next = await buildOverview()
-    if (next.mode === 'live') {
+    // Só grava se ninguém invalidou / rebuildou fresh enquanto buildíamos.
+    if (next.mode === 'live' && generation === overviewCacheGeneration) {
       MemoryCache.set(key, next, OVERVIEW_CACHE_TTL_S)
     }
     return next

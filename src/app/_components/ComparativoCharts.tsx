@@ -229,6 +229,9 @@ function KpiBar({ row }: { row: ComparisonRow }) {
   const maxAbs = Math.max(...data.map((d) => Math.abs(d.value)), 0)
   // Garante eixo legível quando um lado é ~0 e o outro é grande, ou um missing.
   const domainMax = maxAbs > 0 ? maxAbs * 1.08 : 1
+  // Gap 0081 e afins podem ser negativos — domínio [0, max] clipa a barra.
+  const hasNegative = data.some((d) => d.value < 0)
+  const domainMin = hasNegative ? -domainMax : 0
 
   return (
     <div className="rounded-xl border border-border/60 bg-panel-2/50 px-3 py-3">
@@ -242,7 +245,7 @@ function KpiBar({ row }: { row: ComparisonRow }) {
           <BarChart data={data} layout="vertical" margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
             <XAxis
               type="number"
-              domain={[0, domainMax]}
+              domain={[domainMin, domainMax]}
               tick={{ fill: '#9a9488', fontSize: 10 }}
               axisLine={false}
               tickLine={false}

@@ -51,11 +51,21 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   if (!brasil || !iguatemi) return undefined
 
   /**
-   * Rolling (MTD / comercial / CMV / estoque): unidade conectada + sync usável.
-   * Dia quieto ou métricas ocas não zeram estas camadas.
+   * Rolling (semana / comercial / CMV / estoque): unidade conectada + sync usável.
+   * Dia quieto não zera estas camadas; base oca ainda pode ter P/estoque real.
    */
   const rolling = (u: UnitSnapshot, v: number | null | undefined): number | null => {
     if (!isUnitConnected(u) || !trustsRollingKpis(u)) return null
+    if (v == null || !Number.isFinite(v)) return null
+    return v
+  }
+
+  /**
+   * MTD diário (receita/ticket): exige métricas legíveis.
+   * Base oca → null (não R$0 fantasma / Δ% inventado).
+   */
+  const mtdLive = (u: UnitSnapshot, v: number | null | undefined): number | null => {
+    if (!isUnitReadable(u) || !trustsRollingKpis(u)) return null
     if (v == null || !Number.isFinite(v)) return null
     return v
   }
@@ -77,8 +87,10 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
 
   const goalPct = (u: UnitSnapshot): number | null => {
     if (!isUnitReadable(u) || !isSalonActiveToday(u) || !u.today.goalSet) return null
-    // Sem faturamento/atendido ainda → 0% (gráfico preenchido), não “sem dado”.
-    if (u.today.revenue <= 0 && u.today.attended <= 0) return 0
+    // Sem faturamento/atendido ainda → 0% só com agenda confiável (não sync partial).
+    if (u.today.revenue <= 0 && u.today.attended <= 0) {
+      return hasTrustedAgenda(u) ? 0 : null
+    }
     return rate(u.today.revenue, u.today.dailyGoal)
   }
 
@@ -217,8 +229,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_revenue',
       label: 'Receita MTD',
       group: 'financeiro',
-      brasil: rolling(brasil, brasil.opsFinance.mtdRevenue),
-      iguatemi: rolling(iguatemi, iguatemi.opsFinance.mtdRevenue),
+      brasil: mtdLive(brasil, brasil.opsFinance.mtdRevenue),
+      iguatemi: mtdLive(iguatemi, iguatemi.opsFinance.mtdRevenue),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -226,8 +238,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_ticket',
       label: 'Ticket MTD',
       group: 'financeiro',
-      brasil: rolling(brasil, brasil.opsFinance.mtdTicketAvg),
-      iguatemi: rolling(iguatemi, iguatemi.opsFinance.mtdTicketAvg),
+      brasil: mtdLive(brasil, brasil.opsFinance.mtdTicketAvg),
+      iguatemi: mtdLive(iguatemi, iguatemi.opsFinance.mtdTicketAvg),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -348,11 +360,9 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
   ]
 
+  // Δ% MTD: base oca ilegível (não R$0 fantasma) — docs/mapa-kpis-avec.md.
   const deltaRevenuePct =
-    !isUnitConnected(brasil) ||
-    !isUnitConnected(iguatemi) ||
-    !trustsRollingKpis(brasil) ||
-    !trustsRollingKpis(iguatemi)
+    !isUnitReadable(brasil) || !isUnitReadable(iguatemi)
       ? null
       : deltaRelative(brasil.mtd.revenue, iguatemi.mtd.revenue)
 

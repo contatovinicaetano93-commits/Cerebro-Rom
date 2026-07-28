@@ -72,10 +72,12 @@ export function isDayOperable(u: UnitSnapshot): boolean {
 
 /**
  * Agenda confiável para ocupação/vagas.
- * Exige sync ok|stale — partial não inventa capacity/encaixe.
+ * Exige sync ok|stale — partial não inventa capacity/encaixe
+ * (isSalonActiveToday ainda aceita partial para não zerar o dia).
  */
 export function hasTrustedAgenda(u: UnitSnapshot): boolean {
   if (!isSalonActiveToday(u) || !syncUsableForAgenda(u)) return false
+  if (u.sync.status === 'partial') return false
   if (u.today.attended > 0 || u.today.appointments >= 3) return true
   return u.today.appointments > 0
 }
