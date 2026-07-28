@@ -1,7 +1,7 @@
 import { getCerebroSql, isCerebroDbConfigured, type Sql } from '@/lib/db'
 import type { CerebroOverview, UnitSlug, UnitSnapshot } from '@/lib/types'
 import { rate } from '@/lib/comparison'
-import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail, isUnitReadable } from '@/lib/salon-day'
+import { hasTrustedAgenda, isSalonActiveToday, isUnitReadable } from '@/lib/salon-day'
 
 export interface ReportRunMeta {
   id: string
@@ -96,10 +96,8 @@ export async function ensureReportTables(sql?: Sql): Promise<void> {
 }
 
 function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
-  const offline = Boolean(u.sync.offline)
-  const hardFail = !offline && isSyncHardFail(u)
-  /** Offline, token morto ou never-sync: não persistir dinheiro como real. */
-  const blankMoney = offline || hardFail || !isUnitReadable(u)
+  /** Offline, token morto, never-sync ou base oca: não persistir dinheiro como real. */
+  const blankMoney = !isUnitReadable(u)
   const active = !blankMoney && isSalonActiveToday(u)
   const trusted = active && hasTrustedAgenda(u)
 
@@ -153,7 +151,8 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
       blankMoney || !u.opsCommerce.packagesKnown ? 0 : u.opsCommerce.packagesRevenue,
     return_rate: blankMoney ? null : u.opsWeek.returnRate,
     stock_value: blankMoney || !u.opsStock.valueKnown ? 0 : u.opsStock.totalValue,
-    stock_alerts: blankMoney || !u.opsStock.available ? 0 : u.opsStock.activeAlerts,
+    stock_alerts:
+      blankMoney || !u.opsStock.available || !u.opsStock.alertsKnown ? 0 : u.opsStock.activeAlerts,
     stock_zero: blankMoney || !u.opsStock.available ? 0 : u.opsStock.zeroProducts,
     sync_status: u.sync.status,
     sync_label: u.sync.label,

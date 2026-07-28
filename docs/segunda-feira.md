@@ -58,7 +58,7 @@ Mesmo teste curl com URL Iguatemi.
 2. Avec → Testar conexão (vai falhar sem token — OK)
 3. Se possível, confirmar que `avec_sync_runs` incrementa após tentativa
 
-Hoje: **0 sync runs** no Neon Iguatemi — segunda validamos que o botão/cron funciona.
+Hoje: validar sync runs no Supabase Iguatemi — botão/cron com ritmo espaçado (~5 min fast).
 
 ---
 

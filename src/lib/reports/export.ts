@@ -1,5 +1,11 @@
 import ExcelJS from 'exceljs'
-import { hasTrustedAgenda, isSalonActiveToday, isSyncHardFail, isUnitReadable } from '@/lib/salon-day'
+import {
+  hasTrustedAgenda,
+  isMetricsHollow,
+  isSalonActiveToday,
+  isSyncHardFail,
+  isUnitReadable,
+} from '@/lib/salon-day'
 import type { CerebroOverview, ComparisonRow, UnitSnapshot } from '@/lib/types'
 import type { ReportRunDetail } from '@/lib/reports/store'
 
@@ -54,13 +60,17 @@ function joinCsv(rows: (string | number | null | undefined)[][]): string {
 
 function modeLabel(mode: CerebroOverview['mode'], partial?: boolean, overview?: CerebroOverview): string {
   if (mode === 'live') {
-    if (!partial) return 'Live (Brasil Supabase + Iguatemi Neon)'
+    if (!partial) return 'Live (Brasil + Iguatemi Supabase)'
     const offline = overview?.units.some((u) => u.sync.offline)
     const syncBad = overview?.units.some(
       (u) => !u.sync.offline && (u.sync.status === 'partial' || u.sync.status === 'error'),
     )
+    const hollow = overview?.units.some((u) => isMetricsHollow(u))
+    const unreadable = overview?.units.some((u) => !isUnitReadable(u))
     if (offline) return 'Live parcial (unidade offline)'
     if (syncBad) return 'Live parcial (sync incompleto)'
+    if (hollow) return 'Live parcial (base sem métricas)'
+    if (unreadable) return 'Live parcial (unidade ilegível)'
     return 'Live parcial'
   }
   if (mode === 'degraded') return 'Degradado — live indisponível (sem inventar número)'
@@ -166,6 +176,8 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
   if (o.partial) {
     if (o.units.some((u) => u.sync.offline)) {
       notes.push('Totais parciais: alguma unidade offline.')
+    } else if (o.units.some((u) => isMetricsHollow(u))) {
+      notes.push('Totais parciais: alguma unidade sem histórico de métricas (base oca).')
     } else {
       notes.push('Totais parciais: sync incompleto/com erro em alguma unidade.')
     }
@@ -395,10 +407,17 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
   ]
   const rows = o.units.map((u) => {
     const offline = Boolean(u.sync.offline)
-    const hardFail = !offline && isSyncHardFail(u)
-    const unreadable = offline || hardFail || !isUnitReadable(u)
-    const active = !offline && isSalonActiveToday(u)
+    const hardFail = isSyncHardFail(u)
+    const unreadable = !isUnitReadable(u)
+    const active = isSalonActiveToday(u)
     if (unreadable) {
+      const syncCell = offline
+        ? u.sync.label || 'offline'
+        : isMetricsHollow(u)
+          ? `Base sem métricas · ${u.sync.label || 'conectado'}`
+          : hardFail
+            ? u.sync.label || 'sync com erro'
+            : u.sync.label || 'sync indisponível'
       return [
         u.unit.short,
         u.today.day,
@@ -428,7 +447,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
         '—',
         '—',
         '—',
-        u.sync.label || (offline ? 'offline' : 'sync indisponível'),
+        syncCell,
       ]
     }
     return [
@@ -466,7 +485,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.opsWeek?.newClientsPeriod != null ? num(u.opsWeek.newClientsPeriod) : '—',
       u.opsWeek?.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
       u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
-      u.opsStock.available ? num(u.opsStock.activeAlerts) : '—',
+      u.opsStock.available ? (u.opsStock.alertsKnown ? num(u.opsStock.activeAlerts) : '—') : '—',
       u.opsStock.available ? num(u.opsStock.zeroProducts) : '—',
       u.sync.label || u.sync.status,
     ]
@@ -510,7 +529,7 @@ function weekTable(o: CerebroOverview): (string | number | null)[][] {
   ]
   const rows: (string | number | null)[][] = []
   for (const u of o.units ?? []) {
-    if (u.sync.offline || isSyncHardFail(u) || !isUnitReadable(u)) continue
+    if (!isUnitReadable(u)) continue
     const pros = u.opsWeek?.professionals ?? []
     const services = u.opsWeek?.services ?? []
     const acquisition = u.opsWeek?.acquisition ?? []
@@ -558,7 +577,7 @@ function commerceTable(o: CerebroOverview): (string | number | null)[][] {
   ]
   const rows: (string | number | null)[][] = []
   for (const u of o.units ?? []) {
-    if (u.sync.offline || isSyncHardFail(u) || !isUnitReadable(u)) continue
+    if (!isUnitReadable(u)) continue
     const co = u.opsCommerce
     if (!co) continue
     const packList = Array.isArray(co.packages) ? co.packages : []

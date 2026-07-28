@@ -4,13 +4,15 @@ import { useCallback, useEffect, useState } from 'react'
 import type { CerebroOverview } from '@/lib/types'
 import { ComparativoCharts } from '../_components/ComparativoCharts'
 
-const OVERVIEW_POLL_MS = 60_000
+/** Ritmo leve: alinhado ao home (cache API ~45s). */
+const OVERVIEW_POLL_MS = 180_000
 const OVERVIEW_FETCH_TIMEOUT_MS = 25_000
 
-async function fetchOverview(): Promise<CerebroOverview> {
+async function fetchOverview(opts?: { fresh?: boolean }): Promise<CerebroOverview> {
   let res: Response
+  const qs = opts?.fresh ? '?fresh=1' : ''
   try {
-    res = await fetch('/api/overview', {
+    res = await fetch(`/api/overview${qs}`, {
       cache: 'no-store',
       signal: AbortSignal.timeout(OVERVIEW_FETCH_TIMEOUT_MS),
     })
@@ -41,9 +43,9 @@ export default function ComparativoPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
+  const load = useCallback(async (opts?: { silent?: boolean; fresh?: boolean }) => {
     try {
-      const next = await fetchOverview()
+      const next = await fetchOverview({ fresh: opts?.fresh })
       setData(next)
       setError(null)
     } catch (e) {

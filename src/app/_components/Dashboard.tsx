@@ -27,7 +27,15 @@ import {
   formatPct,
   formatSignedPct,
 } from '@/lib/format'
-import { hasTrustedAgenda, isDayOperable, isSalonActiveToday, isSyncHardFail, isUnitReadable } from '@/lib/salon-day'
+import {
+  hasTrustedAgenda,
+  isDayOperable,
+  isMetricsHollow,
+  isSalonActiveToday,
+  isSyncHardFail,
+  isUnitConnected,
+  isUnitReadable,
+} from '@/lib/salon-day'
 import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
@@ -61,7 +69,8 @@ const LEGEND = {
   mtd: 'Receita acumulada no mês (MTD). Ticket = receita ÷ atendidos.',
   cmv: 'Proxy: custo das saídas de estoque no mês (Avec 0044) — não é CMV fiscal.',
   estoqueValor: 'Valor da posição de estoque sincronizada da Avec.',
-  estoqueAlertas: 'Produtos abaixo do mínimo (alertas ativos no ROM Estoque).',
+  estoqueAlertas:
+    'Alertas ativos Avec. — no comparativo se sync de alertas estiver vazio com muitos zerados.',
   vagasHoje: 'Capacidade do dia (Metas) − agendamentos do dia.',
   vagas2h: 'Estimativa de encaixes nas próximas 2h: (capacidade ÷ 8) × 2 − agenda nesse intervalo.',
   cancelNoshow: 'Cancelamentos e faltas do dia (Avec).',
@@ -81,6 +90,35 @@ const HOJE_UNIT_LABEL: Record<UnitSlug, string> = {
 
 function unitForHoje(units: UnitSnapshot[], slug: UnitSlug): UnitSnapshot | null {
   return units.find((u) => u.unit.slug === slug) ?? null
+}
+
+function unreadableBlockCopy(
+  u: UnitSnapshot,
+  scope: 'semana' | 'comercial',
+): string {
+  const offline = Boolean(u.sync.offline)
+  const hardFail = !offline && isSyncHardFail(u)
+  if (scope === 'semana') {
+    if (offline) return 'Unidade offline — sem ranking/retorno desta base.'
+    if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return u.sync.label
+    if (hardFail) return 'Sync quebrado — sem ranking/retorno desta base.'
+    return 'Dados indisponíveis desta base.'
+  }
+  if (offline) return 'Unidade offline — sem canais/pacotes desta base.'
+  if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return u.sync.label
+  if (hardFail) return 'Sync quebrado — sem canais/pacotes desta base.'
+  return 'Dados indisponíveis desta base.'
+}
+
+function layerEmptyCopy(scope: 'semana' | 'comercial', hollow: boolean): string {
+  if (scope === 'semana') {
+    return hollow
+      ? 'Ranking/retorno ainda vazios nesta base (sync full + P1/P3).'
+      : 'Sem ranking/retorno no último sync full Avec.'
+  }
+  return hollow
+    ? 'Canais/pacotes ainda vazios nesta base (sync full + 0056/0061).'
+    : 'Sem canais/pacotes no último sync full Avec (0056/0061).'
 }
 
 /** Rótulo curto de fonte (Avec / proxy / incompleto / desatualizado). */
@@ -106,22 +144,25 @@ function syncSourceLabel(status: string | undefined): 'incompleto' | 'desatualiz
 const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   revenue_today: 'Receita Avec do dia.',
   goal_pct: 'Receita do dia ÷ meta diária (Metas).',
-  occupancy: 'Agendamentos ÷ capacidade (Metas).',
+  occupancy: 'Agendamentos ÷ capacidade (Metas). Pode passar de 100% se overbook.',
   noshow: 'No-shows ÷ agendamentos do dia.',
-  lost_revenue: '(Cancelamentos + no-shows) × ticket médio do dia.',
+  lost_revenue:
+    '(Cancelamentos + no-shows) × ticket do dia; se ainda sem atendimento, usa ticket MTD.',
   ticket: 'Receita ÷ atendidos (hoje).',
-  return: 'Taxa de retorno (Avec / P3).',
+  return: 'Taxa de retorno (Avec / P3). — = P3 sem taxa nesta base (ex.: cutover).',
   packages: 'Receita de pacotes (Avec 0061).',
   mtd_revenue: 'Receita acumulada no mês.',
   mtd_ticket: 'Receita MTD ÷ atendidos MTD.',
-  cmv: 'Proxy: custo das saídas de estoque no mês (0044).',
+  cmv: 'Proxy: custo das saídas de estoque no mês. — = sem saídas/0044 nesta base.',
   cmv_share: 'CMV proxy ÷ receita MTD.',
   payments_total: 'Soma das formas de pagamento (Avec 0081).',
-  payment_gap: 'Pagamentos 0081 − receita MTD (ideal ≈ 0).',
+  payment_gap:
+    'Pagamentos 0081 − receita nos mesmos dias (ideal ≈ 0). Δ some se um lado ≈ 0.',
   payment_reconcile: 'Status da conciliação 0081 vs receita.',
   top_payment: 'Forma de pagamento com maior volume no período.',
   stock_value: 'Valor em estoque (posição Avec).',
-  stock_alerts: 'Alertas ativos de estoque baixo.',
+  stock_alerts:
+    'Alertas ativos Avec. — = sync de alertas ausente (zerados altos + tabela vazia).',
   stock_zero: 'SKUs com saldo zero.',
 }
 
@@ -180,7 +221,22 @@ function formatRowValue(
 }
 
 function deltaTone(row: ComparisonRow): string {
-  if (row.deltaPct == null) return 'text-muted'
+  if (row.deltaPct == null) {
+    // Gap 0081: sem Δ% — tom pelo sinal do valor absoluto BR−IG.
+    if (
+      row.key === 'payment_gap' &&
+      row.brasil != null &&
+      row.iguatemi != null &&
+      Number.isFinite(row.brasil) &&
+      Number.isFinite(row.iguatemi)
+    ) {
+      const abs = row.brasil - row.iguatemi
+      if (abs === 0) return 'text-muted'
+      // higherIsBetter false: gap mais negativo (BR pior) → danger se BR < IG (mais negativo)
+      return abs < 0 ? 'text-danger' : 'text-success'
+    }
+    return 'text-muted'
+  }
   const good =
     (row.higherIsBetter && row.deltaPct > 0) || (!row.higherIsBetter && row.deltaPct < 0)
   const bad =
@@ -188,6 +244,30 @@ function deltaTone(row: ComparisonRow): string {
   if (good) return 'text-success'
   if (bad) return 'text-danger'
   return 'text-muted'
+}
+
+function formatDeltaCell(row: ComparisonRow): string {
+  if (row.format === 'text') return '—'
+  if (row.deltaPct != null) {
+    return row.format === 'pct'
+      ? `${formatSignedPct(row.deltaPct)} p.p.`
+      : formatSignedPct(row.deltaPct)
+  }
+  // payment_gap: Δ absoluto só quando os dois lados são materiais.
+  // Com IG ≈ R$0, mostrar BR−IG (−R$58k) parece “dado do IG” — melhor —.
+  if (
+    row.key === 'payment_gap' &&
+    row.brasil != null &&
+    row.iguatemi != null &&
+    Number.isFinite(row.brasil) &&
+    Number.isFinite(row.iguatemi)
+  ) {
+    if (Math.abs(row.brasil) < 500 || Math.abs(row.iguatemi) < 500) return '—'
+    const abs = row.brasil - row.iguatemi
+    const sign = abs > 0 ? '+' : abs < 0 ? '−' : ''
+    return `${sign}${formatCurrency(Math.abs(abs))}`
+  }
+  return '—'
 }
 
 export function Dashboard({
@@ -241,17 +321,62 @@ export function Dashboard({
       .filter((g) => g.rows.length > 0)
   }, [data.comparison])
 
+  const actionsBoard = useMemo(() => {
+    const all = data.nextActions
+    const score = (a: AlertItem): number => {
+      const sev = a.severity === 'critical' ? 0 : a.severity === 'warning' ? 1 : 2
+      const family = a.id.replace(/-(rom-brasil|rom-iguatemi|both)$/i, '')
+      const familyRank: Record<string, number> = {
+        'sync-error': 0,
+        'sync-partial': 1,
+        'sync-stale': 2,
+        noshow: 3,
+        cancel: 4,
+        pay: 5,
+        'return-missing': 6,
+        return: 7,
+        'stock-alerts-missing': 8,
+        'goal-gap': 9,
+        slots: 10,
+        'stock-alert': 11,
+        'react-cap': 12,
+        react: 13,
+      }
+      return sev * 100 + (familyRank[family] ?? 50)
+    }
+    const ranked = [...all].sort((a, b) => score(a) - score(b))
+    // Top 3: só critical/warning — o que Waltter resolve agora.
+    const topNow = ranked
+      .filter((a) => a.severity === 'critical' || a.severity === 'warning')
+      .slice(0, 3)
+    const topIds = new Set(topNow.map((a) => a.id))
+    const rest = ranked.filter((a) => !topIds.has(a.id))
+    return {
+      topNow,
+      brasil: rest.filter((a) => a.unit === 'rom-brasil'),
+      iguatemi: rest.filter((a) => a.unit === 'rom-iguatemi'),
+      rede: rest.filter((a) => a.unit === 'both'),
+    }
+  }, [data.nextActions])
+
   const actionsSummary = useMemo(() => {
     const n = data.nextActions.length
     if (n === 0) return ''
+    const top = actionsBoard.topNow.length
     const critical = data.nextActions.filter((a) => a.severity === 'critical').length
-    const base = `${n} item${n === 1 ? '' : 's'}`
-    if (critical === 0) return base
-    return `${base} · ${critical} crítico${critical === 1 ? '' : 's'}`
-  }, [data.nextActions])
+    if (critical > 0) return `${n} · ${critical} crítico${critical === 1 ? '' : 's'}`
+    if (top > 0) return `${n} · ${top} agora`
+    return `${n} item${n === 1 ? '' : 's'}`
+  }, [data.nextActions, actionsBoard])
 
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
+    const hollowOnly =
+      data.partial &&
+      data.units.some((u) => isMetricsHollow(u)) &&
+      !statuses.some((s) => s === 'error' || s === 'partial') &&
+      !data.units.some((u) => u.sync.offline)
+    if (hollowOnly) return 'incompleto' as const
     // Prioridade: error/partial (incompleto) > stale (desatualizado) — não suavizar token morto.
     if (statuses.some((s) => s === 'error' || s === 'partial') || data.partial) {
       return 'incompleto' as const
@@ -324,7 +449,14 @@ export function Dashboard({
                     ? 'Totais refletem só unidades ao vivo.'
                     : data.units.some((u) => u.sync.status === 'error')
                       ? 'Sync com erro em alguma unidade — KPIs do dia podem estar incompletos.'
-                      : 'Sync incompleto em alguma unidade — agenda/vagas só com sync ok.'}
+                      : data.units.some((u) => isMetricsHollow(u)) &&
+                          !data.units.some(
+                            (u) =>
+                              !u.sync.offline &&
+                              (u.sync.status === 'partial' || u.sync.status === 'error'),
+                          )
+                        ? 'Alguma unidade sem histórico de métricas — totais não misturam R$0 fantasma.'
+                        : 'Sync incompleto em alguma unidade — agenda/vagas só com sync ok.'}
               </p>
             )}
           </div>
@@ -486,27 +618,121 @@ export function Dashboard({
               open={openMap.acoes}
               onOpenChange={(v) => setSection('acoes', v)}
             >
-              <ul className="space-y-2">
-                {data.nextActions.map((a) => (
-                  <li
-                    key={a.id}
-                    className={`flex items-start gap-2 rounded-xl border px-4 py-3 ${severityStyles(a.severity)}`}
+              {/* Modelo: Top 3 numerados → BR | IG → Rede */}
+              {actionsBoard.topNow.length > 0 ? (
+                <div className="mb-5">
+                  <p className="mb-2 text-[0.65rem] uppercase tracking-[0.18em] text-brass">
+                    Fazer agora
+                  </p>
+                  <ol className="space-y-2">
+                    {actionsBoard.topNow.map((a, idx) => (
+                      <li
+                        key={a.id}
+                        className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${severityStyles(a.severity)}`}
+                      >
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-current/25 bg-surface/40 font-display text-sm tabular-nums">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-foreground">{a.title}</p>
+                            {unitChip(a.unit)}
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
+                          <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/85">
+                            <ArrowRight size={11} />
+                            {a.action}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(
+                  [
+                    {
+                      key: 'brasil' as const,
+                      label: 'Brasil',
+                      accent: 'text-brass border-brass/30',
+                      items: actionsBoard.brasil,
+                    },
+                    {
+                      key: 'iguatemi' as const,
+                      label: 'Iguatemi',
+                      accent: 'text-teal border-teal/30',
+                      items: actionsBoard.iguatemi,
+                    },
+                  ] as const
+                ).map((col) => (
+                  <div
+                    key={col.key}
+                    className={`rounded-xl border ${col.accent} bg-panel-2/30 p-3`}
                   >
-                    <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">{a.title}</p>
-                        {unitChip(a.unit)}
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
-                      <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/80">
-                        <ArrowRight size={11} />
-                        {a.action}
-                      </p>
-                    </div>
-                  </li>
+                    <p
+                      className={`text-[0.65rem] uppercase tracking-[0.16em] ${
+                        col.key === 'brasil' ? 'text-brass' : 'text-teal'
+                      }`}
+                    >
+                      {col.label}
+                      <span className="ml-2 text-muted">{col.items.length}</span>
+                    </p>
+                    {col.items.length === 0 ? (
+                      <p className="mt-3 text-xs text-muted">Nada pendente nesta coluna.</p>
+                    ) : (
+                      <ul className="mt-2 divide-y divide-border/40">
+                        {col.items.map((a) => (
+                          <li key={a.id} className="py-2.5 first:pt-1 last:pb-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm text-foreground">{a.title.replace(/ — (Brasil|Iguatemi)$/, '')}</p>
+                              <span
+                                className={`shrink-0 text-[0.6rem] uppercase tracking-wide ${
+                                  a.severity === 'critical'
+                                    ? 'text-danger'
+                                    : a.severity === 'warning'
+                                      ? 'text-warning'
+                                      : 'text-muted'
+                                }`}
+                              >
+                                {a.severity === 'critical'
+                                  ? 'crítico'
+                                  : a.severity === 'warning'
+                                    ? 'atenção'
+                                    : 'info'}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
+                            <p className="mt-1 text-[0.7rem] text-foreground/70">→ {a.action}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
+
+              {actionsBoard.rede.length > 0 ? (
+                <div className="mt-4 rounded-xl border border-border/50 bg-panel/40 px-3 py-3">
+                  <p className="mb-2 text-[0.65rem] uppercase tracking-[0.16em] text-muted">
+                    Rede
+                  </p>
+                  <ul className="space-y-2">
+                    {actionsBoard.rede.map((a) => (
+                      <li key={a.id} className="flex items-start gap-2">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-info" />
+                        <div className="min-w-0">
+                          <p className="text-sm text-foreground">{a.title}</p>
+                          <p className="text-xs text-muted">
+                            {a.detail} · → {a.action}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </CollapsibleSection>
           </section>
         ) : null}
@@ -524,12 +750,12 @@ export function Dashboard({
                 const u = unitForHoje(data.units, slug)
                 const label = u?.unit.short ?? HOJE_UNIT_LABEL[slug]
                 const offline = !u || Boolean(u.sync.offline)
-                const syncBad = Boolean(
+                const syncHard = Boolean(u && !offline && isSyncHardFail(u))
+                const syncSoft = Boolean(
                   u &&
                     !offline &&
-                    (u.sync.status === 'error' ||
-                      u.sync.status === 'partial' ||
-                      u.sync.status === 'stale'),
+                    !syncHard &&
+                    (u.sync.status === 'partial' || u.sync.status === 'stale'),
                 )
                 const src = !u || offline
                   ? 'offline'
@@ -539,7 +765,9 @@ export function Dashboard({
                 const active = Boolean(u && readable && isSalonActiveToday(u))
                 const operable = Boolean(u && readable && isDayOperable(u))
                 const trustedAgenda = Boolean(u && readable && hasTrustedAgenda(u))
-                const quiet = readable && !syncBad && !active
+                const hollow = Boolean(u && isMetricsHollow(u))
+                // Quieto mesmo com sync parcial — não confundir dia sem agenda com falha.
+                const quiet = readable && !syncHard && !hollow && !active
                 // Never-sync / token morto: todos os KPIs do chip → — (não misturar ops com fat —).
                 const revenue = !u || !readable ? dash : formatCurrency(u.today.revenue)
                 const vagasHoje =
@@ -559,7 +787,7 @@ export function Dashboard({
                     ? dash
                     : `${u.today.cancelled} · ${u.today.noShows}`
                 const novosRec =
-                  !u || !readable || !active
+                  !u || !readable || !active || (u.today.attended <= 0 && u.today.revenue <= 0)
                     ? dash
                     : `${u.today.newClients} · ${u.today.returningClients}`
                 const borderAccent =
@@ -580,28 +808,36 @@ export function Dashboard({
                         <p className="mt-0.5 text-[0.65rem] text-muted">
                           {offline
                             ? 'Sem dados ao vivo'
-                            : syncBad
-                              ? (u?.sync.label ?? 'Sync')
-                              : quiet
-                                ? 'Sem movimento hoje · salão quieto/fechado'
-                                : (u?.sync.label ?? '')}
+                            : hollow
+                              ? 'Sem histórico de métricas · sync/schema'
+                              : syncHard
+                                ? (u?.sync.label ?? 'Sync')
+                                : quiet
+                                  ? syncSoft
+                                    ? `Sem movimento hoje · ${u?.sync.label ?? 'sync parcial'}`
+                                    : 'Sem movimento hoje · salão quieto/fechado'
+                                  : (u?.sync.label ?? '')}
                         </p>
                       </div>
                       {offline ? (
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
                           Offline
                         </span>
-                      ) : u?.sync.status === 'error' ? (
+                      ) : syncHard ? (
                         <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
                           Sync
                         </span>
-                      ) : u?.sync.status === 'partial' ? (
+                      ) : hollow ? (
                         <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Parcial
+                          Vazio
                         </span>
                       ) : quiet ? (
                         <span className="rounded-md border border-border/60 bg-panel px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted">
                           Quieto
+                        </span>
+                      ) : u?.sync.status === 'partial' ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Parcial
                         </span>
                       ) : null}
                     </div>
@@ -703,10 +939,12 @@ export function Dashboard({
               {data.units.map((u) => {
                 const w = u.opsWeek
                 const offline = Boolean(u.sync.offline)
-                const hardFail = !offline && isSyncHardFail(u)
-                const unreadable = offline || hardFail || !isUnitReadable(u)
+                const hardFail = isSyncHardFail(u)
+                const hollow = isMetricsHollow(u)
+                // Semana/comercial: conectado basta — hollow não esconde P1/P3 se existirem.
+                const blocked = !isUnitConnected(u)
                 const empty =
-                  !unreadable &&
+                  !blocked &&
                   w.professionals.length === 0 &&
                   w.services.length === 0 &&
                   (w.returnRate == null || w.returnRate === 0) &&
@@ -735,18 +973,29 @@ export function Dashboard({
                         <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
                           Sync
                         </span>
+                      ) : hollow ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Vazio
+                        </span>
                       ) : null}
                     </div>
-                    {unreadable ? (
-                      <p className="mt-3 text-sm text-muted">
-                        {offline
-                          ? 'Unidade offline — sem ranking/retorno desta base.'
-                          : 'Sync quebrado — sem ranking/retorno desta base.'}
-                      </p>
+                    {blocked ? (
+                      <p className="mt-3 text-sm text-muted">{unreadableBlockCopy(u, 'semana')}</p>
                     ) : empty ? (
-                      <p className="mt-3 text-sm text-muted">Sem dados — sync full + token Avec.</p>
+                      <p className="mt-3 text-sm text-muted">{layerEmptyCopy('semana', hollow)}</p>
                     ) : (
                       <div className="mt-3 space-y-3 text-sm">
+                        {w.asOfDay || w.returnAsOfDay ? (
+                          <p className="text-[0.65rem] text-muted">
+                            {w.asOfDay ? `Ranking de ${w.asOfDay.slice(5).replace('-', '/')}` : null}
+                            {w.asOfDay && w.returnAsOfDay ? ' · ' : null}
+                            {w.returnAsOfDay
+                              ? `retorno de ${w.returnAsOfDay.slice(5).replace('-', '/')}`
+                              : w.returnRate == null
+                                ? 'retorno —'
+                                : null}
+                          </p>
+                        ) : null}
                         <ul className="space-y-1">
                           {w.professionals.slice(0, 10).map((p, i) => (
                             <li key={p.name} className="flex justify-between gap-2">
@@ -787,13 +1036,15 @@ export function Dashboard({
               {data.units.map((u) => {
                 const co = u.opsCommerce
                 const offline = Boolean(u.sync.offline)
-                const hardFail = !offline && isSyncHardFail(u)
-                const unreadable = offline || hardFail || !isUnitReadable(u)
+                const hardFail = isSyncHardFail(u)
+                const hollow = isMetricsHollow(u)
+                const blocked = !isUnitConnected(u)
                 const empty =
-                  !unreadable &&
+                  !blocked &&
                   co.bookingChannels.length === 0 &&
                   co.packages.length === 0 &&
-                  co.ratingsCount === 0
+                  co.ratingsCount === 0 &&
+                  !co.packagesKnown
                 return (
                   <div
                     key={u.unit.slug}
@@ -811,20 +1062,23 @@ export function Dashboard({
                         <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
                           Sync
                         </span>
+                      ) : hollow ? (
+                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                          Vazio
+                        </span>
                       ) : null}
                     </div>
-                    {unreadable ? (
-                      <p className="mt-3 text-sm text-muted">
-                        {offline
-                          ? 'Unidade offline — sem canais/pacotes desta base.'
-                          : 'Sync quebrado — sem canais/pacotes desta base.'}
-                      </p>
+                    {blocked ? (
+                      <p className="mt-3 text-sm text-muted">{unreadableBlockCopy(u, 'comercial')}</p>
                     ) : empty ? (
-                      <p className="mt-3 text-sm text-muted">
-                        Sem canais/pacotes no último sync full Avec (0056/0061).
-                      </p>
+                      <p className="mt-3 text-sm text-muted">{layerEmptyCopy('comercial', hollow)}</p>
                     ) : (
                       <div className="mt-3 space-y-3 text-sm">
+                        {co.asOfDay ? (
+                          <p className="text-[0.65rem] text-muted">
+                            Snapshot de {co.asOfDay.slice(5).replace('-', '/')}
+                          </p>
+                        ) : null}
                         <div className="grid grid-cols-2 gap-3">
                           <ul className="space-y-1">
                             {co.bookingChannels.slice(0, 3).map((ch) => (
@@ -897,6 +1151,11 @@ export function Dashboard({
                 {' · '}
                 export Comparativo em Relatórios
               </p>
+              <p className="mb-3 text-xs text-muted">
+                Em Operação, <span className="tabular-nums">—</span> no dia = salão quieto (sem
+                movimento), não falha de sync. CMV/retorno <span className="tabular-nums">—</span>{' '}
+                = dado ausente naquela base (saídas/P3).
+              </p>
               <div className="space-y-5">
                 {comparisonGroups.map(({ group, rows }) => (
                   <div key={group}>
@@ -938,16 +1197,12 @@ export function Dashboard({
                             title={
                               row.format === 'pct'
                                 ? 'Diferença em pontos percentuais (não Δ relativa)'
-                                : undefined
+                                : row.key === 'payment_gap' && row.deltaPct == null
+                                  ? 'Diferença absoluta BR − IG (Δ% omitida quando explode)'
+                                  : undefined
                             }
                           >
-                            {row.format === 'text'
-                              ? '—'
-                              : row.deltaPct == null
-                                ? '—'
-                                : row.format === 'pct'
-                                  ? `${formatSignedPct(row.deltaPct)} p.p.`
-                                  : formatSignedPct(row.deltaPct)}
+                            {formatDeltaCell(row)}
                           </span>
                         </li>
                       ))}
@@ -968,7 +1223,14 @@ export function Dashboard({
             <CollapsibleSection
               eyebrow="Tendência"
               title="Receita 30 dias"
-              summary="Brasil vs Iguatemi"
+              summary={(() => {
+                const hasBr = data.trend30.some((d) => d.brasil != null)
+                const hasIg = data.trend30.some((d) => d.iguatemi != null)
+                if (hasBr && hasIg) return 'Brasil vs Iguatemi'
+                if (hasBr) return 'só Brasil (Iguatemi sem série)'
+                if (hasIg) return 'só Iguatemi (Brasil sem série)'
+                return 'sem séries'
+              })()}
               open={openMap.trend}
               onOpenChange={(v) => setSection('trend', v)}
             >
@@ -1047,7 +1309,7 @@ export function Dashboard({
           <p>
             Atualizado {formatDateTime(data.generatedAt)} ·{' '}
             {data.mode === 'live'
-              ? 'Brasil (Supabase) + Iguatemi (Neon) · KPIs Avec'
+              ? 'Brasil + Iguatemi (Supabase) · KPIs Avec'
               : data.mode === 'degraded'
                 ? 'Sem fallback fictício'
                 : 'Mock'}

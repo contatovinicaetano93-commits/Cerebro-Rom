@@ -21,6 +21,29 @@ function n(v: unknown): number {
   return 0
 }
 
+/**
+ * Mix novos/recorrentes do Avec às vezes conta agenda como “novo”.
+ * Zera quando o dia ainda não tem dinheiro OU o mix é impossível/absurdo.
+ */
+function sanitizeDayMix(day: DayMetrics, capacity: number, capacitySet: boolean): void {
+  if (day.attended <= 0 && day.revenue <= 0) {
+    day.newClients = 0
+    day.returningClients = 0
+    return
+  }
+  const mix = day.newClients + day.returningClients
+  if (day.appointments > 0 && mix > day.appointments) {
+    day.newClients = 0
+    day.returningClients = 0
+    return
+  }
+  // Ex.: 838 “novos” com capacidade 110 — lixo de sync, não KPI.
+  if (capacitySet && capacity > 0 && day.newClients > capacity * 1.5) {
+    day.newClients = 0
+    day.returningClients = 0
+  }
+}
+
 function emptyDay(
   day: string,
   capacity: number,
@@ -138,6 +161,8 @@ export function offlineUnitSnapshot(
       reactivationCount: null,
       returnRate: null,
       newClientsPeriod: null,
+      asOfDay: null,
+      returnAsOfDay: null,
     },
     opsCommerce: {
       bookingChannels: [],
@@ -149,6 +174,7 @@ export function offlineUnitSnapshot(
       ratingsCount: 0,
       birthdayCount: 0,
       topBookingChannel: null,
+      asOfDay: null,
     },
     opsFinance: { ...EMPTY_OPS_FINANCE },
     opsStock: { ...EMPTY_OPS_STOCK },
@@ -173,6 +199,79 @@ export function offlineUnitSnapshot(
   }
 }
 
+async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitSnapshot['sync']> {
+  let sync: UnitSnapshot['sync'] = {
+    status: 'stale',
+    lastSyncAt: new Date(0).toISOString(),
+    label: 'Sem registro de sync Avec',
+  }
+  try {
+    const runs = (await sql`
+      select status, created_at, error, kind
+      from avec_sync_runs
+      where kind in ('fast', 'full')
+      order by created_at desc
+      limit 1
+    `) as { status: string; created_at: string; error: string | null; kind: string }[]
+    let last = runs[0]
+    if (!last) {
+      const any = (await sql`
+        select status, created_at, error, kind
+        from avec_sync_runs
+        order by created_at desc
+        limit 1
+      `) as { status: string; created_at: string; error: string | null; kind: string }[]
+      last = any[0]
+    }
+    if (last) {
+      const lastSyncAt = new Date(last.created_at).toISOString()
+      const ageMs = Date.now() - new Date(last.created_at).getTime()
+      const ageH = ageMs / 3_600_000
+      const ageLabel =
+        ageH < 1
+          ? `${Math.max(1, Math.round(ageH * 60))} min`
+          : `${ageH.toFixed(1)}h`
+
+      if (last.status === 'error') {
+        sync = {
+          status: 'error',
+          lastSyncAt,
+          label: last.error
+            ? `Sync erro (~${ageLabel}): ${last.error.slice(0, 80)}`
+            : `Último sync com erro (~${ageLabel})`,
+        }
+      } else if (last.status === 'partial') {
+        sync = {
+          status: 'partial',
+          lastSyncAt,
+          label: last.error
+            ? `Sync parcial (${last.kind}, ~${ageLabel}): ${last.error.slice(0, 80)}`
+            : `Sync parcial (${last.kind}, ~${ageLabel}) · dados usáveis`,
+        }
+      } else if (ageH > 6) {
+        sync = {
+          status: 'stale',
+          lastSyncAt,
+          label: `Sync atrasado (~${ageLabel})`,
+        }
+      } else {
+        const mins = Math.max(1, Math.round(ageMs / 60_000))
+        sync = {
+          status: 'ok',
+          lastSyncAt,
+          label:
+            mins < 60
+              ? `Avec sync há ${mins} min`
+              : `Avec sync há ${(mins / 60).toFixed(1)}h`,
+        }
+      }
+    }
+  } catch {
+    // ok
+  }
+  return sync
+}
+
 export async function fetchLiveUnit(
   config: UnitRuntimeConfig,
   asOf?: string,
@@ -193,6 +292,17 @@ export async function fetchLiveUnit(
   const dbGoals = await readGoalsFromDb(sql)
   const goals = resolveGoals(dbGoals, config.envGoals)
   const { dailyGoal, capacity, goalSet, capacitySet } = goals
+
+  {
+    const core = (await sql`
+      select to_regclass('public.salon_daily_metrics') is not null as ok
+    `) as { ok: boolean }[]
+    if (!core[0]?.ok) {
+      throw new Error(
+        `Schema incompleto — falta salon_daily_metrics em ${config.meta.name}. Rodar migrations na unidade.`,
+      )
+    }
+  }
 
   const metricRows = (await sql`
     select
@@ -216,7 +326,7 @@ export async function fetchLiveUnit(
   let leadsToday = 0
   let convertedToday = 0
   try {
-    // Paridade ROM: ignora dump Avec (importado / backfill / lake).
+    // Só leads ROM reais — dump Avec (clients/appointments/backfill/lake) polui o card.
     const leadRows = (await sql`
       select
         count(*)::int as leads,
@@ -224,9 +334,7 @@ export async function fetchLiveUnit(
       from contacts
       where (created_at at time zone 'America/Sao_Paulo')::date = ${today}::date
         and status <> 'importado'
-        and coalesce(source, '') not like 'avec_sync_clients%'
-        and coalesce(source, '') not like 'avec_backfill%'
-        and coalesce(source, '') not like 'avec_lake%'
+        and coalesce(source, '') not like 'avec_%'
     `) as { leads: number; converted: number }[]
     leadsToday = n(leadRows[0]?.leads)
     convertedToday = n(leadRows[0]?.converted)
@@ -253,6 +361,11 @@ export async function fetchLiveUnit(
   }
 
   const todayMetrics = last30[last30.length - 1]!
+  sanitizeDayMix(todayMetrics, capacity, capacitySet)
+  // Leads ROM (não dump Avec) — sobrescreve o campo do dia.
+  todayMetrics.leads = leadsToday
+  todayMetrics.converted = convertedToday
+
   let appointmentsNext2h = 0
   /** Só confiar em CS 2h se a agenda do dia também veio do live CS (não de metrics). */
   let trustCsForNext2h = false
@@ -314,18 +427,18 @@ export async function fetchLiveUnit(
       const day = isoDaysBackFrom(today, i)
       if (day < monthStart) continue
       const isAsOf = day === today
-      mtdRows.push(
-        rowToDay(
-          byDay.get(day),
-          day,
-          capacity,
-          dailyGoal,
-          goalSet,
-          capacitySet,
-          isAsOf ? leadsToday : 0,
-          isAsOf ? convertedToday : 0,
-        ),
+      const row = rowToDay(
+        byDay.get(day),
+        day,
+        capacity,
+        dailyGoal,
+        goalSet,
+        capacitySet,
+        isAsOf ? leadsToday : 0,
+        isAsOf ? convertedToday : 0,
       )
+      if (isAsOf) sanitizeDayMix(row, capacity, capacitySet)
+      mtdRows.push(row)
     }
   }
   const mtdRevenue = mtdRows.reduce((a, d) => a + d.revenue, 0)
@@ -345,85 +458,13 @@ export async function fetchLiveUnit(
   const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, trustCsForNext2h)
 
   const [opsWeek, opsCommerce, opsFinance, opsStock] = await Promise.all([
-    fetchOpsWeek(sql, today),
+    fetchOpsWeek(sql, today, monthStart),
     fetchOpsCommerce(sql, today),
     fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended),
     fetchOpsStock(sql),
   ])
 
-  let sync: UnitSnapshot['sync'] = {
-    status: 'stale',
-    lastSyncAt: new Date(0).toISOString(),
-    label: 'Sem registro de sync Avec',
-  }
-  try {
-    // Preferir sync de salão (fast/full). stock_* não deve mascarar token morto.
-    const runs = (await sql`
-      select status, created_at, error, kind
-      from avec_sync_runs
-      where kind in ('fast', 'full')
-      order by created_at desc
-      limit 1
-    `) as { status: string; created_at: string; error: string | null; kind: string }[]
-    let last = runs[0]
-    if (!last) {
-      const any = (await sql`
-        select status, created_at, error, kind
-        from avec_sync_runs
-        order by created_at desc
-        limit 1
-      `) as { status: string; created_at: string; error: string | null; kind: string }[]
-      last = any[0]
-    }
-    if (last) {
-      const lastSyncAt = new Date(last.created_at).toISOString()
-      const ageMs = Date.now() - new Date(last.created_at).getTime()
-      const ageH = ageMs / 3_600_000
-      const ageLabel =
-        ageH < 1
-          ? `${Math.max(1, Math.round(ageH * 60))} min`
-          : `${ageH.toFixed(1)}h`
-
-      if (last.status === 'error') {
-        // Nunca rebaixar error→stale: token morto deve continuar hard-fail no painel.
-        sync = {
-          status: 'error',
-          lastSyncAt,
-          label: last.error
-            ? `Sync erro (~${ageLabel}): ${last.error.slice(0, 80)}`
-            : `Último sync com erro (~${ageLabel})`,
-        }
-      } else if (last.status === 'partial') {
-        // Nunca rebaixar partial→stale: incompleto continua incompleto no chip Live.
-        sync = {
-          status: 'partial',
-          lastSyncAt,
-          label: last.error
-            ? `Sync parcial (${last.kind}, ~${ageLabel}): ${last.error.slice(0, 80)}`
-            : `Sync parcial (${last.kind}, ~${ageLabel}) · dados usáveis`,
-        }
-      } else if (ageH > 6) {
-        // Sync full Avec pode levar 30–90+ min; janela saudável mais larga após sucesso.
-        sync = {
-          status: 'stale',
-          lastSyncAt,
-          label: `Sync atrasado (~${ageLabel})`,
-        }
-      } else {
-        const mins = Math.max(1, Math.round(ageMs / 60_000))
-        sync = {
-          status: 'ok',
-          lastSyncAt,
-          label:
-            mins < 60
-              ? `Avec sync há ${mins} min`
-              : `Avec sync há ${(mins / 60).toFixed(1)}h`,
-        }
-      }
-    }
-  } catch {
-    // ok
-  }
+  let sync = await readUnitSyncStatus(sql)
 
   if (isHistorical && sync.status !== 'error') {
     sync = {

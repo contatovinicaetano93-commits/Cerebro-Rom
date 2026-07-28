@@ -7,18 +7,18 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 | Sistema | Sem Avec | Comportamento |
 |---------|----------|---------------|
 | ROM Brasil / Iguatemi | ✅ | Agenda/contatos via WhatsApp/Telegram; sync Avec aguarda token |
-| Cérebro | ✅ | Live parcial (Brasil=Supabase / Iguatemi=Neon); Camada A fraca; B/C vazios até full sync |
+| Cérebro | ✅ | Live (Brasil+Iguatemi=Supabase); Camada A fraca; B/C vazios até full sync |
 | Webhooks + cron | ✅ | Infra pronta; dispara sync quando token existir |
 
 ## Sábado — código e deploy
 
 - [x] Push `cerebro-rom` (leitura P1/P2/P3 + merge #10–14)
-- [x] Push `ROM` + `ROM-IGUATEMI` (sync realtime webhook + cron full 10 min)
+- [x] Push `ROM` + `ROM-IGUATEMI` (webhook + crons espaçados: fast ~5 min, full ~30 min)
 - [ ] Confirmar deploys: cerebro-rom.vercel.app, rom-club, rom-iguatemi
 - [ ] Login Waltter no Cérebro OK
 - [ ] Smoke test: `npm run smoke` e `npm run smoke:full` no cerebro-rom
 
-### Verificação DB (Brasil = Supabase pooler; Iguatemi = Neon)
+### Verificação DB (Brasil + Iguatemi = Supabase pooler)
 
 | | Brasil (rom-club) | Iguatemi |
 |--|-------------------|----------|
@@ -31,7 +31,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 ## Domingo — banco e simulação
 
 - [ ] Brasil (Supabase): `schema.sql` + deltas P1/P2/P3
-- [ ] Neon Iguatemi: mesmos deltas (banco **separado**)
+- [ ] Supabase Iguatemi: mesmos deltas (banco **separado**)
 - [ ] Local com mock (opcional): `AVEC_MOCK=1` → POST `/api/avec/sync?mode=full` → conferir Cérebro Semana/Comercial
 
 ```bash
@@ -39,8 +39,9 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 # Brasil: npm run check:brasil-db-host
 AVEC_MOCK=1 npm run dev
 # Admin → Rodar sync full
-# Cérebro local: NEON_*_DATABASE_URL apontando pro mesmo Neon
+# Cérebro local: NEON_*_DATABASE_URL = mesmos poolers Supabase das unidades
 ```
+
 
 ## Segunda — webhooks (antes do token)
 
@@ -52,7 +53,7 @@ Conferir readiness (admin logado):
 
 - ROM Brasil: `GET /api/health` → `readiness.cron_ready`, `webhook_ready`, `avec.kpi_layers`
 - ROM Iguatemi: idem — hoje `last_full` provavelmente null
-- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. Com sessão: unidades Neon conectadas
+- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. Com sessão: BR+IG Supabase `connected`
 
 | Unidade | URL webhook | Header |
 |---------|-------------|--------|
@@ -84,7 +85,7 @@ Variáveis já devem estar na Vercel **antes** de terça:
 
 ### Cérebro
 
-1. Já lê os dois Neons — só validar badge **Live** + KPIs > 0
+1. Já lê BR+IG no Supabase — validar badge **Live** + KPIs > 0 (IG pode ficar “Vazio” até sync full)
 2. Comparativo Brasil vs Iguatemi preenchido
 3. Seções Semana e Comercial com dados após full sync
 

@@ -51,6 +51,10 @@ export interface OpsWeek {
   returnRate: number | null
   /** null quando P3 ausente (não inventar “0 novos”). */
   newClientsPeriod: number | null
+  /** Dia do snapshot P1 usado (YYYY-MM-DD); null se vazio. */
+  asOfDay: string | null
+  /** Dia do snapshot P3 (retorno); pode diferir do P1. */
+  returnAsOfDay: string | null
 }
 
 /** Comercial leve — Avec 0056, 0061, 0104, 0001 (sem despesas manuais) */
@@ -65,6 +69,8 @@ export interface OpsCommerce {
   ratingsCount: number
   birthdayCount: number
   topBookingChannel: string | null
+  /** Dia do snapshot P2 usado. */
+  asOfDay: string | null
 }
 
 export type PaymentReconcileStatus =
@@ -91,6 +97,11 @@ export interface OpsFinance {
   paymentsTotal: number
   /** true só quando há linhas P2/0081 no MTD. */
   paymentsKnown: boolean
+  /**
+   * Pagamentos 0081 − receita nos mesmos dias (pareado).
+   * null se sem 0081; 0 se |gap| < R$50 (ruído).
+   */
+  paymentGap: number | null
   paymentReconcile: PaymentReconcileStatus
   topPaymentMethod: string | null
   available: boolean
@@ -104,6 +115,11 @@ export interface OpsStock {
   totalValue: number
   productCount: number
   activeAlerts: number
+  /**
+   * false quando a tabela de alertas está vazia mas há muitos SKUs zerados
+   * (sync de alertas ausente) — UI deve mostrar —, não “0 ok”.
+   */
+  alertsKnown: boolean
   zeroProducts: number
   drift: number | null
 }

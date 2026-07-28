@@ -1,5 +1,11 @@
 import { clamp01 } from './format'
-import { hasTrustedAgenda, isSalonActiveToday, isUnitReadable } from './salon-day'
+import {
+  hasTrustedAgenda,
+  isSalonActiveToday,
+  isUnitConnected,
+  isUnitReadable,
+  trustsRollingKpis,
+} from './salon-day'
 import type { ComparisonRow, UnitComparison, UnitSnapshot } from './types'
 
 /** Compartilhado entre live (overview.ts) e mock (mock-overview.ts). */
@@ -8,11 +14,33 @@ export function rate(num: number, den: number): number {
   return clamp01(num / den)
 }
 
+/** Razão sem teto — ocupação pode passar de 100% (overbook). */
+export function ratio(num: number, den: number): number {
+  if (den <= 0) return 0
+  return num / den
+}
+
 /** Δ relativo (moeda / contagens): (BR − IG) / |IG|. */
 function deltaRelative(brasil: number | null, iguatemi: number | null): number | null {
   if (brasil == null || iguatemi == null) return null
   if (iguatemi === 0) return brasil === 0 ? 0 : null
   return (brasil - iguatemi) / Math.abs(iguatemi)
+}
+
+/**
+ * Gaps assinados (ex.: 0081): Δ% explode quando |IG| ≈ 0 (−R$50k vs −R$29 → −170000%).
+ * Só mostra relativa se o denominador for material e o resultado for legível.
+ */
+function deltaRelativeSafe(
+  brasil: number | null,
+  iguatemi: number | null,
+  opts: { minAbsDen: number; maxAbsRatio: number },
+): number | null {
+  if (brasil == null || iguatemi == null) return null
+  if (Math.abs(iguatemi) < opts.minAbsDen) return null
+  const d = deltaRelative(brasil, iguatemi)
+  if (d == null || Math.abs(d) > opts.maxAbsRatio) return null
+  return d
 }
 
 /** Δ absoluto em pontos (taxas 0–1): 25% vs 24% → +0.01 (= +1 p.p.). */
@@ -44,14 +72,27 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   const iguatemi = units.find((u) => u.unit.slug === 'rom-iguatemi')
   if (!brasil || !iguatemi) return undefined
 
-  /** Offline ou sync error (token) → null (não R$ 0 / MTD fantasma no scorecard). */
-  const live = (u: UnitSnapshot, v: number | null | undefined): number | null => {
-    if (!isUnitReadable(u)) return null
+  /**
+   * Rolling (semana / comercial / CMV / estoque): unidade conectada + sync usável.
+   * Dia quieto não zera estas camadas; base oca ainda pode ter P/estoque real.
+   */
+  const rolling = (u: UnitSnapshot, v: number | null | undefined): number | null => {
+    if (!isUnitConnected(u) || !trustsRollingKpis(u)) return null
     if (v == null || !Number.isFinite(v)) return null
     return v
   }
 
-  /** KPIs do dia: exige unidade legível + salão ativo (não never-sync com métricas cache). */
+  /**
+   * MTD diário (receita/ticket): exige métricas legíveis.
+   * Base oca → null (não R$0 fantasma / Δ% inventado).
+   */
+  const mtdLive = (u: UnitSnapshot, v: number | null | undefined): number | null => {
+    if (!isUnitReadable(u) || !trustsRollingKpis(u)) return null
+    if (v == null || !Number.isFinite(v)) return null
+    return v
+  }
+
+  /** KPIs do dia: exige métricas legíveis + salão ativo (quiet → null, não R$0). */
   const dayLive = (u: UnitSnapshot, v: number | null | undefined): number | null => {
     if (!isUnitReadable(u) || !isSalonActiveToday(u)) return null
     if (v == null || !Number.isFinite(v)) return null
@@ -64,15 +105,14 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     !hasTrustedAgenda(u) ||
     !u.today.capacitySet
       ? null
-      : rate(u.today.appointments, u.today.capacity)
+      : ratio(u.today.appointments, u.today.capacity)
 
-  const goalPct = (u: UnitSnapshot): number | null =>
-    !isUnitReadable(u) ||
-    !isSalonActiveToday(u) ||
-    !u.today.goalSet ||
-    (u.today.revenue <= 0 && u.today.attended <= 0)
-      ? null
-      : rate(u.today.revenue, u.today.dailyGoal)
+  const goalPct = (u: UnitSnapshot): number | null => {
+    if (!isUnitReadable(u) || !isSalonActiveToday(u) || !u.today.goalSet) return null
+    // Sem faturamento/atendido ainda → 0% (gráfico/card preenchido).
+    if (u.today.revenue <= 0 && u.today.attended <= 0) return 0
+    return rate(u.today.revenue, u.today.dailyGoal)
+  }
 
   const noShow = (u: UnitSnapshot): number | null =>
     !isUnitReadable(u) ||
@@ -86,21 +126,36 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     if (!isUnitReadable(u) || !isSalonActiveToday(u) || !hasTrustedAgenda(u)) return null
     const lost = u.today.noShows + u.today.cancelled
     if (lost <= 0) return 0
-    if (u.today.ticketAvg <= 0) return null
-    return Math.round(lost * u.today.ticketAvg)
+    // Ticket do dia; se ainda não houve atendimento, usa ticket MTD (proxy honesto).
+    const ticket =
+      u.today.ticketAvg > 0
+        ? u.today.ticketAvg
+        : u.opsFinance.mtdTicketAvg != null && u.opsFinance.mtdTicketAvg > 0
+          ? u.opsFinance.mtdTicketAvg
+          : null
+    if (ticket == null) return null
+    return Math.round(lost * ticket)
+  }
+
+  const ticketDay = (u: UnitSnapshot): number | null => {
+    if (!isUnitReadable(u) || !isSalonActiveToday(u)) return null
+    // Sem atendidos → sem ticket (não forçar R$0).
+    if (u.today.attended <= 0) return null
+    return Number.isFinite(u.today.ticketAvg) ? u.today.ticketAvg : null
   }
 
   const paymentGap = (u: UnitSnapshot): number | null => {
-    if (!isUnitReadable(u) || !u.opsFinance.paymentsKnown) return null
+    if (!isUnitConnected(u) || !trustsRollingKpis(u) || !u.opsFinance.paymentsKnown) return null
     if (u.opsFinance.paymentReconcile === 'unknown') return null
     if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
       return null
     }
+    if (u.opsFinance.paymentGap != null) return u.opsFinance.paymentGap
     return Math.round((u.opsFinance.paymentsTotal - u.opsFinance.mtdRevenue) * 100) / 100
   }
 
   const reconcileLabel = (u: UnitSnapshot): string | null => {
-    if (!isUnitReadable(u) || !u.opsFinance.paymentsKnown) return null
+    if (!isUnitConnected(u) || !trustsRollingKpis(u) || !u.opsFinance.paymentsKnown) return null
     switch (u.opsFinance.paymentReconcile) {
       case 'aligned':
         return 'Ok'
@@ -170,8 +225,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'ticket',
       label: 'Ticket médio',
       group: 'ops',
-      brasil: dayLive(brasil, brasil.today.ticketAvg || null),
-      iguatemi: dayLive(iguatemi, iguatemi.today.ticketAvg || null),
+      brasil: ticketDay(brasil),
+      iguatemi: ticketDay(iguatemi),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -179,8 +234,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'return',
       label: 'Taxa de retorno',
       group: 'comercial',
-      brasil: live(brasil, brasil.opsWeek.returnRate),
-      iguatemi: live(iguatemi, iguatemi.opsWeek.returnRate),
+      brasil: rolling(brasil, brasil.opsWeek.returnRate),
+      iguatemi: rolling(iguatemi, iguatemi.opsWeek.returnRate),
       format: 'pct',
       higherIsBetter: true,
     }),
@@ -189,10 +244,10 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Pacotes (receita)',
       group: 'comercial',
       brasil: brasil.opsCommerce.packagesKnown
-        ? live(brasil, brasil.opsCommerce.packagesRevenue)
+        ? rolling(brasil, brasil.opsCommerce.packagesRevenue)
         : null,
       iguatemi: iguatemi.opsCommerce.packagesKnown
-        ? live(iguatemi, iguatemi.opsCommerce.packagesRevenue)
+        ? rolling(iguatemi, iguatemi.opsCommerce.packagesRevenue)
         : null,
       format: 'currency',
       higherIsBetter: true,
@@ -201,8 +256,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_revenue',
       label: 'Receita MTD',
       group: 'financeiro',
-      brasil: live(brasil, brasil.opsFinance.mtdRevenue),
-      iguatemi: live(iguatemi, iguatemi.opsFinance.mtdRevenue),
+      brasil: mtdLive(brasil, brasil.opsFinance.mtdRevenue),
+      iguatemi: mtdLive(iguatemi, iguatemi.opsFinance.mtdRevenue),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -210,8 +265,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'mtd_ticket',
       label: 'Ticket MTD',
       group: 'financeiro',
-      brasil: live(brasil, brasil.opsFinance.mtdTicketAvg),
-      iguatemi: live(iguatemi, iguatemi.opsFinance.mtdTicketAvg),
+      brasil: mtdLive(brasil, brasil.opsFinance.mtdTicketAvg),
+      iguatemi: mtdLive(iguatemi, iguatemi.opsFinance.mtdTicketAvg),
       format: 'currency',
       higherIsBetter: true,
     }),
@@ -219,8 +274,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'cmv',
       label: 'CMV proxy (saídas)',
       group: 'financeiro',
-      brasil: brasil.opsFinance.cmvKnown ? live(brasil, brasil.opsFinance.cmv) : null,
-      iguatemi: iguatemi.opsFinance.cmvKnown ? live(iguatemi, iguatemi.opsFinance.cmv) : null,
+      brasil: brasil.opsFinance.cmvKnown ? rolling(brasil, brasil.opsFinance.cmv) : null,
+      iguatemi: iguatemi.opsFinance.cmvKnown ? rolling(iguatemi, iguatemi.opsFinance.cmv) : null,
       format: 'currency',
       higherIsBetter: false,
     }),
@@ -228,8 +283,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'cmv_share',
       label: 'CMV / receita',
       group: 'financeiro',
-      brasil: live(brasil, brasil.opsFinance.cmvShare),
-      iguatemi: live(iguatemi, iguatemi.opsFinance.cmvShare),
+      brasil: rolling(brasil, brasil.opsFinance.cmvShare),
+      iguatemi: rolling(iguatemi, iguatemi.opsFinance.cmvShare),
       format: 'pct',
       higherIsBetter: false,
     }),
@@ -238,10 +293,10 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Pagamentos 0081',
       group: 'financeiro',
       brasil: brasil.opsFinance.paymentsKnown
-        ? live(brasil, brasil.opsFinance.paymentsTotal)
+        ? rolling(brasil, brasil.opsFinance.paymentsTotal)
         : null,
       iguatemi: iguatemi.opsFinance.paymentsKnown
-        ? live(iguatemi, iguatemi.opsFinance.paymentsTotal)
+        ? rolling(iguatemi, iguatemi.opsFinance.paymentsTotal)
         : null,
       format: 'currency',
       higherIsBetter: true,
@@ -254,6 +309,11 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       iguatemi: paymentGap(iguatemi),
       format: 'currency',
       higherIsBetter: false,
+      // Evita Δ tipo −177860% quando um gap ≈ 0.
+      deltaPct: deltaRelativeSafe(paymentGap(brasil), paymentGap(iguatemi), {
+        minAbsDen: 500,
+        maxAbsRatio: 10,
+      }),
     }),
     row({
       key: 'payment_reconcile',
@@ -273,8 +333,14 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       group: 'financeiro',
       brasil: null,
       iguatemi: null,
-      brasilText: isUnitReadable(brasil) ? brasil.opsFinance.topPaymentMethod : null,
-      iguatemiText: isUnitReadable(iguatemi) ? iguatemi.opsFinance.topPaymentMethod : null,
+      brasilText:
+        isUnitConnected(brasil) && trustsRollingKpis(brasil)
+          ? brasil.opsFinance.topPaymentMethod
+          : null,
+      iguatemiText:
+        isUnitConnected(iguatemi) && trustsRollingKpis(iguatemi)
+          ? iguatemi.opsFinance.topPaymentMethod
+          : null,
       format: 'text',
       higherIsBetter: true,
       deltaPct: null,
@@ -284,11 +350,11 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Valor em estoque',
       group: 'estoque',
       brasil:
-        isUnitReadable(brasil) && brasil.opsStock.valueKnown
+        isUnitConnected(brasil) && trustsRollingKpis(brasil) && brasil.opsStock.valueKnown
           ? brasil.opsStock.totalValue
           : null,
       iguatemi:
-        isUnitReadable(iguatemi) && iguatemi.opsStock.valueKnown
+        isUnitConnected(iguatemi) && trustsRollingKpis(iguatemi) && iguatemi.opsStock.valueKnown
           ? iguatemi.opsStock.totalValue
           : null,
       format: 'currency',
@@ -299,9 +365,17 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'Alertas estoque',
       group: 'estoque',
       brasil:
-        isUnitReadable(brasil) && brasil.opsStock.available ? brasil.opsStock.activeAlerts : null,
+        isUnitConnected(brasil) &&
+        trustsRollingKpis(brasil) &&
+        brasil.opsStock.available &&
+        brasil.opsStock.alertsKnown
+          ? brasil.opsStock.activeAlerts
+          : null,
       iguatemi:
-        isUnitReadable(iguatemi) && iguatemi.opsStock.available
+        isUnitConnected(iguatemi) &&
+        trustsRollingKpis(iguatemi) &&
+        iguatemi.opsStock.available &&
+        iguatemi.opsStock.alertsKnown
           ? iguatemi.opsStock.activeAlerts
           : null,
       format: 'number',
@@ -312,9 +386,11 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       label: 'SKUs zerados',
       group: 'estoque',
       brasil:
-        isUnitReadable(brasil) && brasil.opsStock.available ? brasil.opsStock.zeroProducts : null,
+        isUnitConnected(brasil) && trustsRollingKpis(brasil) && brasil.opsStock.available
+          ? brasil.opsStock.zeroProducts
+          : null,
       iguatemi:
-        isUnitReadable(iguatemi) && iguatemi.opsStock.available
+        isUnitConnected(iguatemi) && trustsRollingKpis(iguatemi) && iguatemi.opsStock.available
           ? iguatemi.opsStock.zeroProducts
           : null,
       format: 'number',
@@ -322,6 +398,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
   ]
 
+  // Δ% MTD: base oca ilegível (não R$0 fantasma) — docs/mapa-kpis-avec.md.
   const deltaRevenuePct =
     !isUnitReadable(brasil) || !isUnitReadable(iguatemi)
       ? null

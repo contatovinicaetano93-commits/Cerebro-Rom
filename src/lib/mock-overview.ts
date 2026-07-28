@@ -140,6 +140,8 @@ function buildUnit(
       reactivationCount: slug === 'rom-brasil' ? 17 : 12,
       returnRate: slug === 'rom-brasil' ? 0.62 : 0.55,
       newClientsPeriod: slug === 'rom-brasil' ? 48 : 36,
+      asOfDay: today.day,
+      returnAsOfDay: today.day,
     },
     opsCommerce: {
       bookingChannels,
@@ -151,6 +153,7 @@ function buildUnit(
       ratingsCount: slug === 'rom-brasil' ? 38 : 29,
       birthdayCount: slug === 'rom-brasil' ? 11 : 8,
       topBookingChannel: bookingChannels[0]?.channel ?? null,
+      asOfDay: today.day,
     },
     opsFinance: {
       ...EMPTY_OPS_FINANCE,
@@ -162,6 +165,7 @@ function buildUnit(
       cmvShare: mtdRevenue > 0 ? cmv / mtdRevenue : null,
       paymentsTotal: Math.round(mtdRevenue * 0.98),
       paymentsKnown: true,
+      paymentGap: Math.round(mtdRevenue * 0.98) - mtdRevenue,
       paymentReconcile: 'aligned',
       topPaymentMethod: 'Cartão',
       available: true,
@@ -173,6 +177,7 @@ function buildUnit(
       totalValue: slug === 'rom-brasil' ? 28500 : 19200,
       productCount: slug === 'rom-brasil' ? 86 : 64,
       activeAlerts: slug === 'rom-brasil' ? 4 : 2,
+      alertsKnown: true,
       zeroProducts: slug === 'rom-brasil' ? 3 : 1,
       drift: slug === 'rom-brasil' ? -120 : 40,
     },

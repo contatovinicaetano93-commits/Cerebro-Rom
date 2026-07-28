@@ -1,20 +1,22 @@
 import { buildMockOverview } from '@/lib/mock-overview'
 import { fetchLiveUnit, offlineUnitSnapshot } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo, UNIT_META } from '@/lib/unit-config'
-import { rate, buildComparison } from '@/lib/comparison'
+import { rate, ratio, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
 import { evictSql } from '@/lib/db'
 import {
   hasTrustedAgenda,
   isDayOperable,
+  isMetricsHollow,
   isSalonActiveToday,
   isSyncHardFail,
+  isUnitConnected,
   isUnitReadable,
   trustsRollingKpis,
 } from '@/lib/salon-day'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
-/** Uma unidade lenta (Neon quota / rede) não pode travar o painel inteiro. */
+/** Uma unidade lenta (rede/pooler) não pode travar o painel inteiro. */
 const UNIT_FETCH_TIMEOUT_MS = 12_000
 
 async function fetchUnitBounded(
@@ -34,7 +36,12 @@ async function fetchUnitBounded(
   try {
     return await Promise.race([fetchLiveUnit(config, day), timeout])
   } catch (err) {
-    evictSql(url)
+    // Timeout: não evict — a query órfã ainda pode estar no client max:1;
+    // matar o client no meio piora a corrida com o próximo poll.
+    const msg = String(err instanceof Error ? err.message : err)
+    if (!/Timeout \d+s/i.test(msg)) {
+      evictSql(url)
+    }
     throw err
   } finally {
     if (timer) clearTimeout(timer)
@@ -56,12 +63,14 @@ const ACTION_FAMILY_RANK: Record<string, number> = {
   cancel: 4,
   slots: 5,
   'goal-gap': 5,
+  'return-missing': 6,
   return: 6,
   rate: 6,
   react: 7,
   'react-cap': 7,
   pay: 8,
   'stock-alert': 9,
+  'stock-alerts-missing': 9,
   'stock-drift': 9,
   'goals-unset': 10,
 }
@@ -144,21 +153,15 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
       })
     }
 
-    const sparse =
-      u.sync.status === 'ok' &&
-      u.today.revenue === 0 &&
-      u.mtd.revenue === 0 &&
-      u.today.attended === 0 &&
-      u.mtd.attended === 0
-    if (sparse) {
+    if (isMetricsHollow(u)) {
       actions.push({
         id: `sparse-${u.unit.slug}`,
-        severity: 'info',
+        severity: 'warning',
         unit: u.unit.slug,
-        title: `Dados financeiros fracos — ${u.unit.short}`,
+        title: `Base sem métricas — ${u.unit.short}`,
         detail:
-          'Sync ok, mas faturamento/atendidos estão zerados no mês. Verificar sync full Avec.',
-        action: 'Priorizar sync full diário na unidade',
+          'DB conectado, mas sem histórico de faturamento/atendidos (MTD + 30d). Típico pós-cutover ou sync sem popular salon_daily_metrics.',
+        action: 'Rodar sync full Avec na unidade e validar schema/migrations',
       })
     }
 
@@ -241,6 +244,15 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
         detail: `${Math.round(u.opsWeek.returnRate * 100)}%`,
         action: 'Reforçar pós-atendimento',
       })
+    } else if (rolling && u.opsWeek.returnRate == null) {
+      actions.push({
+        id: `return-missing-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Retorno ausente — ${u.unit.short}`,
+        detail: 'salon_p3_daily.return_rate vazio (sync P3/full)',
+        action: 'ROM → sync full / popular P3 retorno',
+      })
     }
 
     if (rolling && u.opsCommerce.ratingsCount > 0 && u.opsCommerce.ratingsAvg < 4.2) {
@@ -266,7 +278,7 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
     }
 
     // Centenas/milhares de alertas = higiene de catálogo, não crise operacional.
-    if (rolling && u.opsStock.available && u.opsStock.activeAlerts >= 50) {
+    if (rolling && u.opsStock.available && u.opsStock.alertsKnown && u.opsStock.activeAlerts >= 50) {
       actions.push({
         id: `stock-alert-${u.unit.slug}`,
         severity: 'info',
@@ -280,6 +292,16 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
           u.opsStock.activeAlerts >= 200
             ? 'Revisar critérios de alerta no ROM Estoque'
             : 'Fila de compra no ROM Estoque',
+      })
+    } else if (rolling && u.opsStock.available && !u.opsStock.alertsKnown) {
+      // IG: stock_alerts vazia mas milhares de SKUs zerados — gap de sync, não “estoque ok”.
+      actions.push({
+        id: `stock-alerts-missing-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Alertas estoque ausentes — ${u.unit.short}`,
+        detail: `${u.opsStock.zeroProducts} SKUs zerados · sync de alertas Avec vazio`,
+        action: 'ROM Estoque → sync alertas / 0149',
       })
     }
 
@@ -345,8 +367,10 @@ function sortNextActions(actions: AlertItem[]): AlertItem[] {
 }
 
 function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
-  /** Totais rede: exclui offline + token morto (alinha ao scorecard `live()`). */
+  /** Totais de caixa/MTD: só unidades com métricas diárias confiáveis. */
   const readable = units.filter(isUnitReadable)
+  /** CMV/estoque/metas config: unidade no ar basta (não exige MTD hollow-free). */
+  const connected = units.filter((u) => isUnitConnected(u) && trustsRollingKpis(u))
   const active = units.filter(isSalonActiveToday)
   /** Meta do dia: unidades com movimento. */
   const dayOps = active
@@ -357,7 +381,8 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
 
   const todayRevenue = readable.reduce((a, u) => a + u.today.revenue, 0)
   const todayGoal = moneyOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
-  const goalsConfigured = units.every((u) => u.today.goalSet && u.today.capacitySet)
+  const goalsConfigured =
+    connected.length > 0 && connected.every((u) => u.today.goalSet && u.today.capacitySet)
   const mtdRevenue = readable.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdAttended = readable.reduce((a, u) => a + u.mtd.attended, 0)
   const mtdGoal = readable.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
@@ -371,24 +396,25 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const capacityAppointments = capacityOps.reduce((a, u) => a + u.today.appointments, 0)
   const occupancyConfigured = capacityOps.length > 0 && capacity > 0
   const attendanceConfigured = appointments > 0
-  const newClients = dayOps.reduce((a, u) => a + u.today.newClients, 0)
-  const returningClients = dayOps.reduce((a, u) => a + u.today.returningClients, 0)
-  const leads = dayOps.reduce((a, u) => a + u.today.leads, 0)
-  const converted = dayOps.reduce((a, u) => a + u.today.converted, 0)
+  const newClients = moneyOps.reduce((a, u) => a + u.today.newClients, 0)
+  const returningClients = moneyOps.reduce((a, u) => a + u.today.returningClients, 0)
+  const leads = moneyOps.reduce((a, u) => a + u.today.leads, 0)
+  const converted = moneyOps.reduce((a, u) => a + u.today.converted, 0)
   const mixBase = newClients + returningClients
-  const cmvKnownUnits = readable.filter((u) => u.opsFinance.cmvKnown)
+  const cmvKnownUnits = connected.filter((u) => u.opsFinance.cmvKnown)
   const cmv = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.cmv, 0)
   const cmvMtd = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.mtdRevenue, 0)
-  const stockValue = readable.reduce(
+  const stockValue = connected.reduce(
     (a, u) => a + (u.opsStock.valueKnown ? u.opsStock.totalValue : 0),
     0,
   )
-  const stockAlerts = readable.reduce(
-    (a, u) => a + (u.opsStock.available ? u.opsStock.activeAlerts : 0),
+  const stockAlerts = connected.reduce(
+    (a, u) =>
+      a + (u.opsStock.available && u.opsStock.alertsKnown ? u.opsStock.activeAlerts : 0),
     0,
   )
-  const stockKnown = readable.some((u) => u.opsStock.available)
-  const stockValueKnown = readable.some((u) => u.opsStock.valueKnown)
+  const stockKnown = connected.some((u) => u.opsStock.available)
+  const stockValueKnown = connected.some((u) => u.opsStock.valueKnown)
   const dayRevenue = moneyOps.reduce((a, u) => a + u.today.revenue, 0)
   const agendaRevenue = agendaOps.reduce((a, u) => a + u.today.revenue, 0)
 
@@ -425,7 +451,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : null,
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
-    occupancyRate: occupancyConfigured ? rate(capacityAppointments, capacity) : 0,
+    occupancyRate: occupancyConfigured ? ratio(capacityAppointments, capacity) : 0,
     occupancyConfigured,
     attendanceConfigured,
     // Ticket do dia: só unidades com agenda confiável (não misturar receita órfã).
@@ -536,17 +562,28 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       liveBySlug.set(cfg.meta.slug, result.value)
     } else {
       const detail = String(result.reason?.message ?? result.reason)
+      const schemaGap = /schema incompleto|does not exist|undefined_table|salon_daily_metrics/i.test(
+        detail,
+      )
       fetchErrors.push({
         id: `fetch-${cfg.meta.slug}`,
         severity: 'critical',
         unit: cfg.meta.slug,
-        title: `DB offline — ${cfg.meta.name}`,
+        title: schemaGap
+          ? `Schema incompleto — ${cfg.meta.name}`
+          : `DB offline — ${cfg.meta.name}`,
         detail,
-        action: 'Validar connection string',
+        action: schemaGap
+          ? 'Rodar migrations / schema.sql na unidade (Supabase)'
+          : 'Validar connection string (pooler Supabase)',
       })
       liveBySlug.set(
         cfg.meta.slug,
-        offlineUnitSnapshot(cfg.meta, `Offline — ${detail.slice(0, 80)}`, day),
+        offlineUnitSnapshot(
+          cfg.meta,
+          `${schemaGap ? 'Schema' : 'Offline'} — ${detail.slice(0, 80)}`,
+          day,
+        ),
       )
     }
   })
@@ -558,7 +595,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       ? 'Sem resposta'
       : cfg.meta.slug === 'rom-brasil'
         ? 'URL Brasil ausente ou ainda aponta para Neon (use pooler Supabase)'
-        : 'NEON_IGUATEMI_DATABASE_URL ausente'
+        : 'URL Iguatemi ausente ou ainda aponta para Neon (use pooler Supabase)'
     fetchErrors.push({
       id: `missing-${cfg.meta.slug}`,
       severity: 'critical',
@@ -568,7 +605,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       action:
         cfg.meta.slug === 'rom-brasil'
           ? 'NEON_BRASIL_DATABASE_URL = pooler Supabase na Vercel'
-          : 'Completar NEON_IGUATEMI_DATABASE_URL na Vercel',
+          : 'NEON_IGUATEMI_DATABASE_URL = pooler Supabase na Vercel',
     })
     liveBySlug.set(cfg.meta.slug, offlineUnitSnapshot(cfg.meta, detail, day))
   }
@@ -597,14 +634,21 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       unit: 'both',
       title: 'Consolidado parcial',
       detail: `Só ${liveUnits[0]?.unit.short ?? 'uma unidade'} ao vivo — a outra está no painel como offline`,
-      action: 'Completar DATABASE_URL (Brasil=Supabase, Iguatemi=Neon)',
+      action: 'Completar DATABASE_URL (Brasil+Iguatemi = pooler Supabase)',
     })
   }
 
   const syncHardFail = units.some(isSyncHardFail)
   const syncPartial = units.some((u) => !u.sync.offline && u.sync.status === 'partial')
+  const unreadable = units.some((u) => !isUnitReadable(u))
+  // hollow já entra em unreadable; flag só para rótulo do período.
+  const hollowMetrics = units.some((u) => isMetricsHollow(u))
   const partial =
-    liveUnits.length < 2 || fetchErrors.length > 0 || syncHardFail || syncPartial
+    liveUnits.length < 2 ||
+    fetchErrors.length > 0 ||
+    syncHardFail ||
+    syncPartial ||
+    unreadable
 
   const histNote = isHistorical ? ' · MTD até a data' : ''
   return {
@@ -616,7 +660,11 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
         ? `Live parcial · sync com erro · ${day}${histNote}`
         : syncPartial
           ? `Live parcial · sync incompleto · ${day}${histNote}`
-          : `Live parcial · ${day}${histNote}`
+          : hollowMetrics
+            ? `Live parcial · base sem métricas · ${day}${histNote}`
+            : unreadable
+              ? `Live parcial · unidade ilegível · ${day}${histNote}`
+              : `Live parcial · ${day}${histNote}`
       : `Live · ${day}${histNote}`,
     consolidated,
     units,
@@ -639,8 +687,8 @@ export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
     if (isProd) {
       return {
         ...degradedOverview(
-          'DATABASE_URL das unidades ausente em produção (Brasil=Supabase, Iguatemi=Neon)',
-          'Configurar NEON_BRASIL_DATABASE_URL (Supabase) e NEON_IGUATEMI_DATABASE_URL na Vercel',
+          'DATABASE_URL das unidades ausente em produção (Brasil+Iguatemi = Supabase)',
+          'Configurar NEON_BRASIL_DATABASE_URL e NEON_IGUATEMI_DATABASE_URL (pooler Supabase) na Vercel',
           'no-unit-db',
         ),
         nextActions: [
@@ -649,8 +697,8 @@ export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
             severity: 'critical',
             unit: 'both',
             title: 'DBs das unidades não configurados',
-            detail: 'Connection strings ausentes ou Brasil ainda em Neon',
-            action: 'Configurar URLs na Vercel (Brasil=pooler Supabase)',
+            detail: 'Connection strings ausentes ou ainda em Neon (Brasil+Iguatemi)',
+            action: 'Configurar URLs na Vercel (Brasil+Iguatemi=pooler Supabase)',
           },
         ],
       }

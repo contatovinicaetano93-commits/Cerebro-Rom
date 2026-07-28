@@ -55,16 +55,17 @@ const STOCK_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 async function fetchOfficialStockTotal(sql: Sql): Promise<number | null> {
   if (!(await tableExists(sql, 'avec_report_snapshots'))) return null
   try {
+    // Schema real (BR/IG Supabase): fetched_at — não created_at.
     const rows = (await sql`
-      select payload, created_at
+      select payload, fetched_at
       from avec_report_snapshots
       where report_id = '0045'
-      order by created_at desc
+      order by fetched_at desc nulls last
       limit 1
-    `) as { payload: unknown; created_at: string | Date | null }[]
+    `) as { payload: unknown; fetched_at: string | Date | null }[]
     const row = rows[0]
     if (!row || !Array.isArray(row.payload) || row.payload.length === 0) return null
-    const captured = row.created_at ? new Date(row.created_at).getTime() : NaN
+    const captured = row.fetched_at ? new Date(row.fetched_at).getTime() : NaN
     if (Number.isFinite(captured) && Date.now() - captured > STOCK_SNAPSHOT_MAX_AGE_MS) {
       return null
     }
@@ -93,6 +94,7 @@ export const EMPTY_OPS_FINANCE: OpsFinance = {
   cmvShare: null,
   paymentsTotal: 0,
   paymentsKnown: false,
+  paymentGap: null,
   paymentReconcile: 'unknown',
   topPaymentMethod: null,
   available: false,
@@ -104,6 +106,7 @@ export const EMPTY_OPS_STOCK: OpsStock = {
   totalValue: 0,
   productCount: 0,
   activeAlerts: 0,
+  alertsKnown: false,
   zeroProducts: 0,
   drift: null,
 }
@@ -149,43 +152,61 @@ export async function fetchOpsFinance(
   }
 
   let paymentsTotal = 0
+  let pairedRevenue = 0
   let topPaymentMethod: string | null = null
   let mixOk = false
   if (await tableExists(sql, 'salon_p2_daily')) {
     try {
+      // Casa 0081 com receita do MESMO dia — somar mix do mês contra MTD
+      // inteiro inventa gap quando faltam dias de pagamento (BR) ou distorce IG.
       const rows = (await sql`
-        select payment_mix
-        from salon_p2_daily
-        where day >= ${monthStart}::date and day <= ${today}::date
-        order by day desc
-      `) as { payment_mix: unknown }[]
+        select
+          coalesce(d.revenue, 0)::float as revenue,
+          p.payment_mix
+        from salon_p2_daily p
+        inner join salon_daily_metrics d on d.day = p.day
+        where p.day >= ${monthStart}::date
+          and p.day <= ${today}::date
+      `) as { revenue: number; payment_mix: unknown }[]
 
       const byMethod = new Map<string, number>()
       for (const row of rows) {
         const mix = Array.isArray(row.payment_mix) ? row.payment_mix : []
+        let dayPay = 0
         for (const item of mix) {
           if (item == null || typeof item !== 'object') continue
           const rec = item as Record<string, unknown>
           const method = typeof rec.method === 'string' ? rec.method.trim() : ''
           if (!method) continue
-          byMethod.set(method, (byMethod.get(method) ?? 0) + n(rec.amount))
+          const amount = n(rec.amount)
+          if (amount === 0) continue
+          byMethod.set(method, (byMethod.get(method) ?? 0) + amount)
+          dayPay += amount
         }
+        if (dayPay <= 0) continue
+        paymentsTotal += dayPay
+        pairedRevenue += n(row.revenue)
       }
       for (const [method, amount] of byMethod) {
-        paymentsTotal += amount
         if (topPaymentMethod == null || amount > (byMethod.get(topPaymentMethod) ?? 0)) {
           topPaymentMethod = method
         }
       }
       paymentsTotal = Math.round(paymentsTotal * 100) / 100
-      // Linhas P2 sem payment_mix → unknown (não inventar Gap 0081 ≈ −MTD).
-      mixOk = byMethod.size > 0
+      pairedRevenue = Math.round(pairedRevenue * 100) / 100
+      mixOk = byMethod.size > 0 && paymentsTotal > 0
     } catch {
       // ok
     }
   }
 
+  // Conciliação e gap usam receita dos dias com 0081 (pareado), não o MTD cheio.
+  const reconcileBase = mixOk && pairedRevenue > 0 ? pairedRevenue : mtdRevenue
   const cmvShare = cmvOk && mtdRevenue > 0 ? cmv / mtdRevenue : null
+  const rawGap = mixOk ? Math.round((paymentsTotal - reconcileBase) * 100) / 100 : null
+  // Ruído de centavos/arredondamento — não pintar −R$28 como “dado”.
+  const paymentGap =
+    rawGap == null ? null : Math.abs(rawGap) < 50 ? 0 : rawGap
 
   return {
     mtdRevenue,
@@ -196,7 +217,8 @@ export async function fetchOpsFinance(
     cmvShare,
     paymentsTotal: mixOk ? paymentsTotal : 0,
     paymentsKnown: mixOk,
-    paymentReconcile: mixOk ? reconcile(mtdRevenue, paymentsTotal) : 'unknown',
+    paymentGap,
+    paymentReconcile: mixOk ? reconcile(reconcileBase, paymentsTotal) : 'unknown',
     topPaymentMethod: mixOk ? topPaymentMethod : null,
     // Disponível se há qualquer fonte Avec financeira — não inventa CMV/0081 via só MTD.
     available: cmvOk || mixOk || mtdRevenue > 0,
@@ -231,10 +253,15 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
     `) as { product_count: number; zero_products: number; total_value: number }[]
 
     let activeAlerts = 0
+    let alertsTableRows = 0
     if (await tableExists(sql, 'stock_alerts')) {
       const alerts = (await sql`
-        select count(*)::int as n from stock_alerts where status = 'ativo'
-      `) as { n: number }[]
+        select
+          count(*)::int as total,
+          count(*) filter (where status = 'ativo')::int as n
+        from stock_alerts
+      `) as { total: number; n: number }[]
+      alertsTableRows = n(alerts[0]?.total)
       activeAlerts = n(alerts[0]?.n)
     }
 
@@ -254,12 +281,16 @@ export async function fetchOpsStock(sql: Sql): Promise<OpsStock> {
         ? Math.round((localTotal - official) * 100) / 100
         : null
 
+    // 0 alertas + milhares de zerados + tabela vazia → sync de alertas faltando (não “estoque ok”).
+    const alertsKnown = !(alertsTableRows === 0 && zeroProducts >= 100 && activeAlerts === 0)
+
     return {
       available: true,
       valueKnown,
       totalValue: valueKnown ? localTotal : 0,
       productCount,
-      activeAlerts,
+      activeAlerts: alertsKnown ? activeAlerts : 0,
+      alertsKnown,
       zeroProducts,
       drift,
     }

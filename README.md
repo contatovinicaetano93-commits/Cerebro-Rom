@@ -10,8 +10,8 @@ Painel executivo para o **Waltter** conduzir **ROM Brasil** + **ROM Iguatemi** c
 | **Mock** | Sem URLs, `CEREBRO_FORCE_MOCK=1`, ou falha total do live (fallback) |
 
 Live lê os bancos das unidades via **postgres.js** (`ssl: require`, `prepare: false`):
-- **Brasil** → Supabase pooler (`*.pooler.supabase.com:5432` session ou `:6543` tx). O nome da env `NEON_BRASIL_*` é legado; o valor **não** deve ser Neon (`ep-long-sun` está morto).
-- **Iguatemi** → Neon (permanece Neon).
+- **Brasil** → Supabase pooler (`*.pooler.supabase.com:5432` session ou `:6543` tx). Nome `NEON_BRASIL_*` é legado; valor **não** deve ser Neon.
+- **Iguatemi** → Supabase pooler (mesmo padrão; nome `NEON_IGUATEMI_*` é legado).
 
 Escritas do Cérebro:
 - `cerebro_goals` em cada banco de unidade (metas no painel)
@@ -20,7 +20,7 @@ Escritas do Cérebro:
 ```
 ROM Brasil (Supabase pooler)     ──SELECT──┐
                                            ├──► GET /api/overview ──► Cérebro
-ROM Iguatemi (Neon)              ─SELECT──┘
+ROM Iguatemi (Supabase pooler)   ─SELECT──┘
                                            ├──► PUT /api/goals → cerebro_goals (por unidade)
                                            └──► POST /api/reports → Neon Cérebro (snapshots)
 ```
@@ -44,9 +44,9 @@ ROM Iguatemi (Neon)              ─SELECT──┘
 
 ```bash
 cp .env.example .env.local
-# preencher NEON_BRASIL_DATABASE_URL (Supabase pooler) + NEON_IGUATEMI_DATABASE_URL (Neon)
+# preencher NEON_BRASIL_DATABASE_URL + NEON_IGUATEMI_DATABASE_URL (ambos Supabase pooler)
 # + CEREBRO_ADMIN_PASSWORD
-# npm run check:brasil-db-host  # falha se BR ainda apontar para neon.tech
+# npm run check:brasil-db-host  # falha se BR/IG ainda apontarem para neon.tech
 npm install
 npm run dev
 ```
@@ -74,7 +74,7 @@ Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergê
 
 ## Stack
 
-Next.js (App Router) + TypeScript + Tailwind + Recharts + `@neondatabase/serverless`.
+Next.js (App Router) + TypeScript + Tailwind + Recharts + `postgres` (postgres.js).
 
 ## Pastas
 
@@ -86,6 +86,6 @@ Next.js (App Router) + TypeScript + Tailwind + Recharts + `@neondatabase/serverl
 
 ## Nota sobre dados atuais
 
-Enquanto o **AVEC_API_TOKEN** não chegar, o painel live mostra o que já existe no Neon
-(agenda/contatos) e alertas de “aguardando token”.  
+Unidades = Supabase pooler. Snapshots do Cérebro podem usar Neon próprio (`CEREBRO_DATABASE_URL`).
+Sem token Avec na unidade, o painel mostra sync incompleto / base sem métricas — não inventa KPI.
 Guia: [`docs/quando-token-avec.md`](docs/quando-token-avec.md).
