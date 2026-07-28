@@ -282,13 +282,15 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
     ],
     [
       'Novos · Recorrentes (hoje)',
-      c.todayOpsActive ? `${num(c.newClients)} · ${num(c.returningClients)}` : '—',
+      c.todayOpsActive && c.newClients + c.returningClients > 0
+        ? `${num(c.newClients)} · ${num(c.returningClients)}`
+        : '—',
       'qtd',
       'Clientes novos vs recorrentes no dia.',
     ],
     [
       'Mix novos',
-      c.todayOpsActive ? pct(c.newShare) : '—',
+      c.todayOpsActive && c.newClients + c.returningClients > 0 ? pct(c.newShare) : '—',
       '%',
       'Novos ÷ (novos + recorrentes).',
     ],
