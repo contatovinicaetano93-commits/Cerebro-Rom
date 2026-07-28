@@ -1,11 +1,11 @@
 import type { UnitSnapshot } from '@/lib/types'
 
-/** Sync legível para agenda do dia (ok ou atrasado após sucesso). Partial/error não. */
+/** Sync legível para agenda do dia (ok, atrasado ou parcial com dados usáveis). */
 function syncUsableForAgenda(u: UnitSnapshot): boolean {
   if (u.sync.offline) return false
-  if (u.sync.status === 'error' || u.sync.status === 'partial') return false
+  if (u.sync.status === 'error') return false
   if (/Aguardando AVEC_API_TOKEN|Sem registro/i.test(u.sync.label)) return false
-  return u.sync.status === 'ok' || u.sync.status === 'stale'
+  return u.sync.status === 'ok' || u.sync.status === 'stale' || u.sync.status === 'partial'
 }
 
 /** Offline, token morto ou never-sync — caminhos próprios de messaging. */
