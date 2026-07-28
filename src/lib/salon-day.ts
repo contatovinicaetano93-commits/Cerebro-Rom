@@ -53,9 +53,15 @@ export function isUnitReadable(u: UnitSnapshot): boolean {
   return true
 }
 
+/** KPIs semanais/financeiros ainda legíveis com sync parcial ou stale. */
+export function trustsRollingKpis(u: UnitSnapshot): boolean {
+  if (!isUnitReadable(u)) return false
+  return u.sync.status === 'ok' || u.sync.status === 'partial' || u.sync.status === 'stale'
+}
+
 /** Dados do dia usáveis para alertas operacionais (encaixe, cancel, vagas). */
 export function isDayOperable(u: UnitSnapshot): boolean {
-  return !u.sync.offline && !isSyncHardFail(u) && isSalonActiveToday(u)
+  return isSalonActiveToday(u)
 }
 
 /**
@@ -63,13 +69,7 @@ export function isDayOperable(u: UnitSnapshot): boolean {
  * Exige sync ok|stale — partial não inventa capacity/encaixe.
  */
 export function hasTrustedAgenda(u: UnitSnapshot): boolean {
-  if (u.sync.offline || !isSalonActiveToday(u) || !syncUsableForAgenda(u)) return false
+  if (!isSalonActiveToday(u) || !syncUsableForAgenda(u)) return false
   if (u.today.attended > 0 || u.today.appointments >= 3) return true
   return u.today.appointments > 0
-}
-
-/** KPIs semanais/financeiros ainda legíveis com sync parcial ou stale. */
-export function trustsRollingKpis(u: UnitSnapshot): boolean {
-  if (u.sync.offline || isMetricsHollow(u) || isDeadOrAwaiting(u)) return false
-  return u.sync.status === 'ok' || u.sync.status === 'partial' || u.sync.status === 'stale'
 }

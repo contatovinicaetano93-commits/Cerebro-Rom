@@ -13,7 +13,6 @@ export function overviewCacheKey(day = todayIsoSaoPaulo()): string {
 
 export function invalidateOverviewCache(): void {
   MemoryCache.delete(overviewCacheKey())
-  MemoryCache.delete('overview:live')
 }
 
 /**

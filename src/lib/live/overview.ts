@@ -616,14 +616,14 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
   const syncHardFail = units.some(isSyncHardFail)
   const syncPartial = units.some((u) => !u.sync.offline && u.sync.status === 'partial')
   const unreadable = units.some((u) => !isUnitReadable(u))
+  // hollow já entra em unreadable; flag só para rótulo do período.
   const hollowMetrics = units.some((u) => isMetricsHollow(u))
   const partial =
     liveUnits.length < 2 ||
     fetchErrors.length > 0 ||
     syncHardFail ||
     syncPartial ||
-    unreadable ||
-    hollowMetrics
+    unreadable
 
   const histNote = isHistorical ? ' · MTD até a data' : ''
   return {

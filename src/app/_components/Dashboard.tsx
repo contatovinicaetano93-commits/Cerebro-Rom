@@ -751,9 +751,9 @@ export function Dashboard({
               {data.units.map((u) => {
                 const w = u.opsWeek
                 const offline = Boolean(u.sync.offline)
-                const hardFail = !offline && isSyncHardFail(u)
-                const hollow = !offline && isMetricsHollow(u)
-                const unreadable = offline || hardFail || !isUnitReadable(u)
+                const hardFail = isSyncHardFail(u)
+                const hollow = isMetricsHollow(u)
+                const unreadable = !isUnitReadable(u)
                 const empty =
                   !unreadable &&
                   w.professionals.length === 0 &&
@@ -836,9 +836,9 @@ export function Dashboard({
               {data.units.map((u) => {
                 const co = u.opsCommerce
                 const offline = Boolean(u.sync.offline)
-                const hardFail = !offline && isSyncHardFail(u)
-                const hollow = !offline && isMetricsHollow(u)
-                const unreadable = offline || hardFail || !isUnitReadable(u)
+                const hardFail = isSyncHardFail(u)
+                const hollow = isMetricsHollow(u)
+                const unreadable = !isUnitReadable(u)
                 const empty =
                   !unreadable &&
                   co.bookingChannels.length === 0 &&

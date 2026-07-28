@@ -407,9 +407,9 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
   ]
   const rows = o.units.map((u) => {
     const offline = Boolean(u.sync.offline)
-    const hardFail = !offline && isSyncHardFail(u)
-    const unreadable = offline || hardFail || !isUnitReadable(u)
-    const active = !offline && isSalonActiveToday(u)
+    const hardFail = isSyncHardFail(u)
+    const unreadable = !isUnitReadable(u)
+    const active = isSalonActiveToday(u)
     if (unreadable) {
       const syncCell = offline
         ? u.sync.label || 'offline'
@@ -529,7 +529,7 @@ function weekTable(o: CerebroOverview): (string | number | null)[][] {
   ]
   const rows: (string | number | null)[][] = []
   for (const u of o.units ?? []) {
-    if (u.sync.offline || isSyncHardFail(u) || !isUnitReadable(u)) continue
+    if (!isUnitReadable(u)) continue
     const pros = u.opsWeek?.professionals ?? []
     const services = u.opsWeek?.services ?? []
     const acquisition = u.opsWeek?.acquisition ?? []
@@ -577,7 +577,7 @@ function commerceTable(o: CerebroOverview): (string | number | null)[][] {
   ]
   const rows: (string | number | null)[][] = []
   for (const u of o.units ?? []) {
-    if (u.sync.offline || isSyncHardFail(u) || !isUnitReadable(u)) continue
+    if (!isUnitReadable(u)) continue
     const co = u.opsCommerce
     if (!co) continue
     const packList = Array.isArray(co.packages) ? co.packages : []
