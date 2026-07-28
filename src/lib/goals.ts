@@ -20,7 +20,7 @@ export const EMPTY_GOALS: UnitGoals = {
   updatedAt: null,
 }
 
-/** Ensures the single-row goals table exists. Cerebro's only intentional write to unit Neons. */
+/** Ensures the single-row goals table exists. Cerebro's only intentional write to unit DBs. */
 export async function ensureGoalsTable(sql: Sql): Promise<void> {
   await sql`
     create table if not exists cerebro_goals (

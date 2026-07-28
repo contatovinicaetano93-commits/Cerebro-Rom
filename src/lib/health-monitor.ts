@@ -41,7 +41,8 @@ export class HealthMonitor {
     }
   }
 
-  static async startContinuousMonitoring(intervalSeconds: number = 300): Promise<void> {
+  /** Default 15 min — não usar em serverless loop; só utilitário opcional. */
+  static async startContinuousMonitoring(intervalSeconds: number = 900): Promise<void> {
     // Check immediately
     await this.checkHealth()
 

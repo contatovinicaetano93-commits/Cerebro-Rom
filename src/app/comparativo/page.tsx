@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { CerebroOverview } from '@/lib/types'
 import { ComparativoCharts } from '../_components/ComparativoCharts'
 
-const OVERVIEW_POLL_MS = 60_000
+/** Ritmo leve: alinhado ao home (cache API ~45s). */
+const OVERVIEW_POLL_MS = 180_000
 const OVERVIEW_FETCH_TIMEOUT_MS = 25_000
 
 async function fetchOverview(): Promise<CerebroOverview> {

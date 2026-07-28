@@ -1,7 +1,6 @@
-import { getSql } from '@/lib/db'
 import { getUnitConfigs } from '@/lib/unit-config'
 import { isAuthEnabled, isProduction } from '@/lib/auth'
-import { buildOverview } from '@/lib/live/overview'
+import { getSql } from '@/lib/db'
 
 async function probeUnitDb(url: string | null | undefined) {
   if (!url?.trim()) return { configured: false, connected: false, error: null as string | null }
@@ -29,7 +28,10 @@ export async function getPublicHealthStatus() {
   }
 }
 
-/** Admin logado — readiness completo pré-Avec. */
+/**
+ * Admin logado — readiness leve.
+ * Não chama buildOverview (dobraria leituras nos DBs das unidades).
+ */
 export async function getHealthStatus() {
   const configs = getUnitConfigs()
   const probes = await Promise.all(
@@ -40,14 +42,6 @@ export async function getHealthStatus() {
     })),
   )
 
-  let overview: Awaited<ReturnType<typeof buildOverview>> | null = null
-  let overviewError: string | null = null
-  try {
-    overview = await buildOverview()
-  } catch (e) {
-    overviewError = e instanceof Error ? e.message : String(e)
-  }
-
   const br = configs.find((c) => c.meta.slug === 'rom-brasil')
   const ig = configs.find((c) => c.meta.slug === 'rom-iguatemi')
 
@@ -55,26 +49,18 @@ export async function getHealthStatus() {
     ok: probes.some((p) => p.connected) && (!isProduction() || isAuthEnabled()),
     readiness: {
       auth: isAuthEnabled(),
-      // URLs já resolvidas (Neon / non-pooler → null).
       brasil_supabase: Boolean(br?.databaseUrl),
       iguatemi_supabase: Boolean(ig?.databaseUrl),
       // Aliases Neon: sempre false (unidades não usam mais Neon).
       iguatemi_neon: false,
       neon_brasil: false,
       neon_iguatemi: false,
-      // Cérebro não guarda AVEC_API_TOKEN — sync vive nas unidades.
       awaiting_avec_token: false,
-      note: 'Brasil+Iguatemi=Supabase pooler · sync Avec nas unidades ROM',
+      note: 'Brasil+Iguatemi=Supabase pooler · health só faz select 1 (overview em /api/overview)',
     },
     units: probes,
-    overview: overview
-      ? {
-          mode: overview.mode,
-          partial: overview.partial ?? false,
-          unit_count: overview.units.length,
-          next_actions: overview.nextActions.length,
-        }
-      : null,
-    overview_error: overviewError,
+    // Overview completo fica em GET /api/overview — evita 2× carga no DB.
+    overview: null,
+    overview_error: null,
   }
 }

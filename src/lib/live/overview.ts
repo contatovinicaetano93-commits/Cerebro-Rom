@@ -15,7 +15,7 @@ import {
 } from '@/lib/salon-day'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
-/** Uma unidade lenta (Neon quota / rede) não pode travar o painel inteiro. */
+/** Uma unidade lenta (rede/pooler) não pode travar o painel inteiro. */
 const UNIT_FETCH_TIMEOUT_MS = 12_000
 
 async function fetchUnitBounded(

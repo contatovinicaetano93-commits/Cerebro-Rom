@@ -85,7 +85,7 @@ Variáveis já devem estar na Vercel **antes** de terça:
 
 ### Cérebro
 
-1. Já lê os dois Neons — só validar badge **Live** + KPIs > 0
+1. Já lê BR+IG no Supabase — validar badge **Live** + KPIs > 0 (IG pode ficar “Vazio” até sync full)
 2. Comparativo Brasil vs Iguatemi preenchido
 3. Seções Semana e Comercial com dados após full sync
 
