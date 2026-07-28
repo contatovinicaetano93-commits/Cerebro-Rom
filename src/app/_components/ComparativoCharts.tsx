@@ -81,24 +81,136 @@ function formatAxis(row: ComparisonRow, value: number): string {
   return formatNumber(value)
 }
 
+function pendingReason(row: ComparisonRow): string {
+  switch (row.key) {
+    case 'goal_pct':
+      return 'Aguardando faturamento/atendidos para % meta.'
+    case 'ticket':
+      return 'Ticket aparece após o 1º atendimento do dia.'
+    case 'lost_revenue':
+      return 'Há cancel/no-show, mas ticket do dia ainda indisponível.'
+    case 'return':
+      return 'Taxa de retorno ausente nesta base (P3).'
+    case 'cmv':
+    case 'cmv_share':
+      return 'CMV ausente nesta base (sem saídas/0044).'
+    default:
+      return 'Sem dado numérico nas duas unidades agora.'
+  }
+}
+
+function DeltaBadge({ row }: { row: ComparisonRow }) {
+  return (
+    <p
+      className={`text-xs tabular-nums ${
+        row.deltaPct == null
+          ? 'text-muted'
+          : (row.higherIsBetter && row.deltaPct > 0) ||
+              (!row.higherIsBetter && row.deltaPct < 0)
+            ? 'text-success'
+            : (row.higherIsBetter && row.deltaPct < 0) ||
+                (!row.higherIsBetter && row.deltaPct > 0)
+              ? 'text-danger'
+              : 'text-muted'
+      }`}
+    >
+      {row.deltaPct == null
+        ? '—'
+        : row.format === 'pct'
+          ? `${formatSignedPct(row.deltaPct)} p.p.`
+          : formatSignedPct(row.deltaPct)}
+    </p>
+  )
+}
+
+function SideValues({ row }: { row: ComparisonRow }) {
+  return (
+    <div className="mt-1 flex gap-3 text-[0.65rem] text-muted">
+      <span className="text-brass">BR {formatRowValue(row, 'brasil')}</span>
+      <span className="text-teal">IG {formatRowValue(row, 'iguatemi')}</span>
+    </div>
+  )
+}
+
+/** KPIs texto (conciliação / forma #1) — card preenchido, sem gráfico oco. */
+function TextKpiCard({ row }: { row: ComparisonRow }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-panel-2/50 px-3 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-foreground">{row.label}</p>
+        <span className="text-[0.65rem] uppercase tracking-wide text-muted">rótulo</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-[0.65rem] uppercase tracking-wide text-brass">Brasil</p>
+          <p className="mt-1 text-sm text-foreground">{formatRowValue(row, 'brasil')}</p>
+        </div>
+        <div>
+          <p className="text-[0.65rem] uppercase tracking-wide text-teal">Iguatemi</p>
+          <p className="mt-1 text-sm text-foreground">{formatRowValue(row, 'iguatemi')}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Ambos null: estado honesto preenchido (não buraco de gráfico). */
+function PendingKpiCard({ row }: { row: ComparisonRow }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-panel-2/50 px-3 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-foreground">{row.label}</p>
+        <DeltaBadge row={row} />
+      </div>
+      <SideValues row={row} />
+      <div className="mt-3 rounded-lg border border-border/40 bg-panel/40 px-3 py-4 text-center">
+        <p className="text-xs text-muted">{pendingReason(row)}</p>
+      </div>
+    </div>
+  )
+}
+
+/** Ambos zero: valores grandes, sem barras invisíveis. */
+function ZeroKpiCard({ row }: { row: ComparisonRow }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-panel-2/50 px-3 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-foreground">{row.label}</p>
+        <DeltaBadge row={row} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-brass/25 bg-brass/5 px-3 py-3">
+          <p className="text-[0.65rem] uppercase tracking-wide text-brass">Brasil</p>
+          <p className="mt-1 font-display text-xl tracking-tight text-foreground">
+            {formatRowValue(row, 'brasil')}
+          </p>
+        </div>
+        <div className="rounded-lg border border-teal/25 bg-teal/5 px-3 py-3">
+          <p className="text-[0.65rem] uppercase tracking-wide text-teal">Iguatemi</p>
+          <p className="mt-1 font-display text-xl tracking-tight text-foreground">
+            {formatRowValue(row, 'iguatemi')}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function KpiBar({ row }: { row: ComparisonRow }) {
+  if (row.format === 'text') return <TextKpiCard row={row} />
+
   const brasil = chartValue(row, 'brasil')
   const iguatemi = chartValue(row, 'iguatemi')
+
   if (brasil == null && iguatemi == null) {
-    return (
-      <div className="rounded-xl border border-border/60 bg-panel-2/50 px-3 py-3">
-        <p className="text-sm text-muted">{row.label}</p>
-        <p className="mt-2 text-xs text-muted">Sem dado numérico para gráfico</p>
-        <p className="mt-1 text-xs">
-          <span className="text-brass">BR {formatRowValue(row, 'brasil')}</span>
-          {' · '}
-          <span className="text-teal">IG {formatRowValue(row, 'iguatemi')}</span>
-        </p>
-      </div>
-    )
+    return <PendingKpiCard row={row} />
   }
 
-  // Sempre BR + IG no eixo — null vira 0 com barra mutada (pareamento visual).
+  if (brasil === 0 && iguatemi === 0) {
+    return <ZeroKpiCard row={row} />
+  }
+
+  // Sempre BR + IG — null vira 0 mutado (pareamento visual).
   const data = [
     {
       unit: 'Brasil',
@@ -114,39 +226,23 @@ function KpiBar({ row }: { row: ComparisonRow }) {
     },
   ]
 
+  const maxAbs = Math.max(...data.map((d) => Math.abs(d.value)), 0)
+  // Garante eixo legível quando um lado é ~0 e o outro é grande, ou um missing.
+  const domainMax = maxAbs > 0 ? maxAbs * 1.08 : 1
+
   return (
     <div className="rounded-xl border border-border/60 bg-panel-2/50 px-3 py-3">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm text-foreground">{row.label}</p>
-        <p
-          className={`text-xs tabular-nums ${
-            row.deltaPct == null
-              ? 'text-muted'
-              : (row.higherIsBetter && row.deltaPct > 0) ||
-                  (!row.higherIsBetter && row.deltaPct < 0)
-                ? 'text-success'
-                : (row.higherIsBetter && row.deltaPct < 0) ||
-                    (!row.higherIsBetter && row.deltaPct > 0)
-                  ? 'text-danger'
-                  : 'text-muted'
-          }`}
-        >
-          {row.deltaPct == null
-            ? '—'
-            : row.format === 'pct'
-              ? `${formatSignedPct(row.deltaPct)} p.p.`
-              : formatSignedPct(row.deltaPct)}
-        </p>
+        <DeltaBadge row={row} />
       </div>
-      <div className="mt-1 flex gap-3 text-[0.65rem] text-muted">
-        <span className="text-brass">BR {formatRowValue(row, 'brasil')}</span>
-        <span className="text-teal">IG {formatRowValue(row, 'iguatemi')}</span>
-      </div>
+      <SideValues row={row} />
       <div className="mt-2 h-28 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
             <XAxis
               type="number"
+              domain={[0, domainMax]}
               tick={{ fill: '#9a9488', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
@@ -178,7 +274,7 @@ function KpiBar({ row }: { row: ComparisonRow }) {
                 return [formatNumber(n), '']
               }}
             />
-            <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18}>
+            <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18} background={{ fill: 'rgba(255,255,255,0.03)' }}>
               {data.map((d) => (
                 <Cell
                   key={d.unit}
@@ -190,6 +286,11 @@ function KpiBar({ row }: { row: ComparisonRow }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
+      {(brasil == null || iguatemi == null) && (
+        <p className="mt-1 text-[0.65rem] text-muted">
+          Barra clara = sem dado naquela base (não é zero).
+        </p>
+      )}
     </div>
   )
 }
@@ -291,7 +392,7 @@ export function ComparativoCharts({ data }: { data: CerebroOverview }) {
               {(() => {
                 const hasBr = data.trend30.some((d) => d.brasil != null)
                 const hasIg = data.trend30.some((d) => d.iguatemi != null)
-                if (hasBr && hasIg) return 'Brasil × Iguatemi'
+                if (hasBr && hasIg) return 'Brasil × Iguatemi · R$0 = dia sem faturamento'
                 if (hasBr) return 'Só Brasil com série legível'
                 if (hasIg) return 'Só Iguatemi com série legível'
                 return 'Sem séries legíveis'
@@ -392,7 +493,7 @@ export function ComparativoCharts({ data }: { data: CerebroOverview }) {
 
         <p className="mt-8 flex items-center gap-1.5 text-xs text-muted">
           <Activity size={12} />
-          Só KPIs Avec · despesas manuais ficam no ROM Financeiro · export em Relatórios
+          Só KPIs Avec · card sem barra = aguardando dado do dia ou rótulo texto · export em Relatórios
         </p>
       </main>
     </div>

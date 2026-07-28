@@ -75,13 +75,12 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       ? null
       : rate(u.today.appointments, u.today.capacity)
 
-  const goalPct = (u: UnitSnapshot): number | null =>
-    !isUnitReadable(u) ||
-    !isSalonActiveToday(u) ||
-    !u.today.goalSet ||
-    (u.today.revenue <= 0 && u.today.attended <= 0)
-      ? null
-      : rate(u.today.revenue, u.today.dailyGoal)
+  const goalPct = (u: UnitSnapshot): number | null => {
+    if (!isUnitReadable(u) || !isSalonActiveToday(u) || !u.today.goalSet) return null
+    // Sem faturamento/atendido ainda → 0% (gráfico preenchido), não “sem dado”.
+    if (u.today.revenue <= 0 && u.today.attended <= 0) return 0
+    return rate(u.today.revenue, u.today.dailyGoal)
+  }
 
   const noShow = (u: UnitSnapshot): number | null =>
     !isUnitReadable(u) ||
@@ -95,8 +94,16 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     if (!isUnitReadable(u) || !isSalonActiveToday(u) || !hasTrustedAgenda(u)) return null
     const lost = u.today.noShows + u.today.cancelled
     if (lost <= 0) return 0
+    // Sem ticket do dia ainda: não inventa R$, mas também não deixa card oco — null só se perdido>0.
     if (u.today.ticketAvg <= 0) return null
     return Math.round(lost * u.today.ticketAvg)
+  }
+
+  const ticketDay = (u: UnitSnapshot): number | null => {
+    if (!isUnitReadable(u) || !isSalonActiveToday(u)) return null
+    // Sem atendidos → sem ticket (não forçar R$0).
+    if (u.today.attended <= 0) return null
+    return Number.isFinite(u.today.ticketAvg) ? u.today.ticketAvg : null
   }
 
   const paymentGap = (u: UnitSnapshot): number | null => {
@@ -179,8 +186,8 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       key: 'ticket',
       label: 'Ticket médio',
       group: 'ops',
-      brasil: dayLive(brasil, brasil.today.ticketAvg || null),
-      iguatemi: dayLive(iguatemi, iguatemi.today.ticketAvg || null),
+      brasil: ticketDay(brasil),
+      iguatemi: ticketDay(iguatemi),
       format: 'currency',
       higherIsBetter: true,
     }),
