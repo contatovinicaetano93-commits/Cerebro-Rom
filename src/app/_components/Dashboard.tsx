@@ -155,7 +155,8 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   cmv: 'Proxy: custo das saídas de estoque no mês. — = sem saídas/0044 nesta base.',
   cmv_share: 'CMV proxy ÷ receita MTD.',
   payments_total: 'Soma das formas de pagamento (Avec 0081).',
-  payment_gap: 'Pagamentos 0081 − receita MTD (ideal ≈ 0).',
+  payment_gap:
+    'Pagamentos 0081 − receita MTD (ideal ≈ 0). Δ% some se um lado ≈ 0 (evita % absurda).',
   payment_reconcile: 'Status da conciliação 0081 vs receita.',
   top_payment: 'Forma de pagamento com maior volume no período.',
   stock_value: 'Valor em estoque (posição Avec).',
@@ -218,7 +219,22 @@ function formatRowValue(
 }
 
 function deltaTone(row: ComparisonRow): string {
-  if (row.deltaPct == null) return 'text-muted'
+  if (row.deltaPct == null) {
+    // Gap 0081: sem Δ% — tom pelo sinal do valor absoluto BR−IG.
+    if (
+      row.key === 'payment_gap' &&
+      row.brasil != null &&
+      row.iguatemi != null &&
+      Number.isFinite(row.brasil) &&
+      Number.isFinite(row.iguatemi)
+    ) {
+      const abs = row.brasil - row.iguatemi
+      if (abs === 0) return 'text-muted'
+      // higherIsBetter false: gap mais negativo (BR pior) → danger se BR < IG (mais negativo)
+      return abs < 0 ? 'text-danger' : 'text-success'
+    }
+    return 'text-muted'
+  }
   const good =
     (row.higherIsBetter && row.deltaPct > 0) || (!row.higherIsBetter && row.deltaPct < 0)
   const bad =
@@ -226,6 +242,28 @@ function deltaTone(row: ComparisonRow): string {
   if (good) return 'text-success'
   if (bad) return 'text-danger'
   return 'text-muted'
+}
+
+function formatDeltaCell(row: ComparisonRow): string {
+  if (row.format === 'text') return '—'
+  if (row.deltaPct != null) {
+    return row.format === 'pct'
+      ? `${formatSignedPct(row.deltaPct)} p.p.`
+      : formatSignedPct(row.deltaPct)
+  }
+  // payment_gap sem Δ%: mostra diferença absoluta em R$ (legível).
+  if (
+    row.key === 'payment_gap' &&
+    row.brasil != null &&
+    row.iguatemi != null &&
+    Number.isFinite(row.brasil) &&
+    Number.isFinite(row.iguatemi)
+  ) {
+    const abs = row.brasil - row.iguatemi
+    const sign = abs > 0 ? '+' : abs < 0 ? '−' : ''
+    return `${sign}${formatCurrency(Math.abs(abs))}`
+  }
+  return '—'
 }
 
 export function Dashboard({
@@ -279,14 +317,42 @@ export function Dashboard({
       .filter((g) => g.rows.length > 0)
   }, [data.comparison])
 
+  const actionsByBucket = useMemo(() => {
+    type Bucket = 'agora' | 'brasil' | 'iguatemi' | 'rede'
+    const buckets: Record<Bucket, AlertItem[]> = {
+      agora: [],
+      brasil: [],
+      iguatemi: [],
+      rede: [],
+    }
+    for (const a of data.nextActions) {
+      const family = a.id.replace(/-(rom-brasil|rom-iguatemi|both)$/i, '')
+      const isNow =
+        a.severity === 'critical' ||
+        /^(sync-|noshow|cancel|pay|return-missing|stock-alerts-missing)/.test(family) ||
+        family === 'return' ||
+        family.startsWith('sync')
+      if (isNow && (a.severity === 'critical' || a.severity === 'warning')) {
+        buckets.agora.push(a)
+        continue
+      }
+      if (a.unit === 'rom-brasil') buckets.brasil.push(a)
+      else if (a.unit === 'rom-iguatemi') buckets.iguatemi.push(a)
+      else buckets.rede.push(a)
+    }
+    return buckets
+  }, [data.nextActions])
+
   const actionsSummary = useMemo(() => {
     const n = data.nextActions.length
     if (n === 0) return ''
     const critical = data.nextActions.filter((a) => a.severity === 'critical').length
+    const agora = actionsByBucket.agora.length
     const base = `${n} item${n === 1 ? '' : 's'}`
-    if (critical === 0) return base
-    return `${base} · ${critical} crítico${critical === 1 ? '' : 's'}`
-  }, [data.nextActions])
+    if (critical > 0) return `${base} · ${critical} crítico${critical === 1 ? '' : 's'}`
+    if (agora > 0) return `${base} · ${agora} agora`
+    return base
+  }, [data.nextActions, actionsByBucket])
 
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
@@ -537,27 +603,62 @@ export function Dashboard({
               open={openMap.acoes}
               onOpenChange={(v) => setSection('acoes', v)}
             >
-              <ul className="space-y-2">
-                {data.nextActions.map((a) => (
-                  <li
-                    key={a.id}
-                    className={`flex items-start gap-2 rounded-xl border px-4 py-3 ${severityStyles(a.severity)}`}
-                  >
-                    <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">{a.title}</p>
-                        {unitChip(a.unit)}
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
-                      <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/80">
-                        <ArrowRight size={11} />
-                        {a.action}
+              <p className="mb-3 text-xs text-muted">
+                Agrupado: <span className="text-foreground/80">Agora</span> (sync/ops do dia) → por
+                unidade → rede.
+              </p>
+              {(
+                [
+                  { key: 'agora' as const, label: 'Agora', hint: 'Sync · cancel · retorno · 0081' },
+                  { key: 'brasil' as const, label: 'Brasil', hint: 'Só BR' },
+                  { key: 'iguatemi' as const, label: 'Iguatemi', hint: 'Só IG' },
+                  { key: 'rede' as const, label: 'Rede', hint: 'Meta / ambos' },
+                ] as const
+              ).map(({ key, label, hint }) => {
+                const items = actionsByBucket[key]
+                if (items.length === 0) return null
+                return (
+                  <div key={key} className="mb-4 last:mb-0">
+                    <div className="mb-2 flex items-baseline justify-between gap-2">
+                      <p
+                        className={`text-[0.65rem] uppercase tracking-[0.16em] ${
+                          key === 'brasil'
+                            ? 'text-brass'
+                            : key === 'iguatemi'
+                              ? 'text-teal'
+                              : 'text-muted'
+                        }`}
+                      >
+                        {label}
+                      </p>
+                      <p className="text-[0.65rem] text-muted">
+                        {hint} · {items.length}
                       </p>
                     </div>
-                  </li>
-                ))}
-              </ul>
+                    <ul className="space-y-2">
+                      {items.map((a) => (
+                        <li
+                          key={a.id}
+                          className={`flex items-start gap-2 rounded-xl border px-4 py-3 ${severityStyles(a.severity)}`}
+                        >
+                          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-medium text-foreground">{a.title}</p>
+                              {key === 'agora' ? unitChip(a.unit) : null}
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted">{a.detail}</p>
+                            <p className="mt-1.5 flex items-center gap-1 text-xs text-foreground/80">
+                              <ArrowRight size={11} />
+                              {a.action}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
             </CollapsibleSection>
           </section>
         ) : null}
@@ -1022,16 +1123,12 @@ export function Dashboard({
                             title={
                               row.format === 'pct'
                                 ? 'Diferença em pontos percentuais (não Δ relativa)'
-                                : undefined
+                                : row.key === 'payment_gap' && row.deltaPct == null
+                                  ? 'Diferença absoluta BR − IG (Δ% omitida quando explode)'
+                                  : undefined
                             }
                           >
-                            {row.format === 'text'
-                              ? '—'
-                              : row.deltaPct == null
-                                ? '—'
-                                : row.format === 'pct'
-                                  ? `${formatSignedPct(row.deltaPct)} p.p.`
-                                  : formatSignedPct(row.deltaPct)}
+                            {formatDeltaCell(row)}
                           </span>
                         </li>
                       ))}

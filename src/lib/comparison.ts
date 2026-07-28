@@ -21,6 +21,22 @@ function deltaRelative(brasil: number | null, iguatemi: number | null): number |
   return (brasil - iguatemi) / Math.abs(iguatemi)
 }
 
+/**
+ * Gaps assinados (ex.: 0081): Δ% explode quando |IG| ≈ 0 (−R$50k vs −R$29 → −170000%).
+ * Só mostra relativa se o denominador for material e o resultado for legível.
+ */
+function deltaRelativeSafe(
+  brasil: number | null,
+  iguatemi: number | null,
+  opts: { minAbsDen: number; maxAbsRatio: number },
+): number | null {
+  if (brasil == null || iguatemi == null) return null
+  if (Math.abs(iguatemi) < opts.minAbsDen) return null
+  const d = deltaRelative(brasil, iguatemi)
+  if (d == null || Math.abs(d) > opts.maxAbsRatio) return null
+  return d
+}
+
 /** Δ absoluto em pontos (taxas 0–1): 25% vs 24% → +0.01 (= +1 p.p.). */
 function deltaPoints(brasil: number | null, iguatemi: number | null): number | null {
   if (brasil == null || iguatemi == null) return null
@@ -286,6 +302,11 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
       iguatemi: paymentGap(iguatemi),
       format: 'currency',
       higherIsBetter: false,
+      // Evita Δ tipo −177860% quando um gap ≈ 0.
+      deltaPct: deltaRelativeSafe(paymentGap(brasil), paymentGap(iguatemi), {
+        minAbsDen: 500,
+        maxAbsRatio: 10,
+      }),
     }),
     row({
       key: 'payment_reconcile',

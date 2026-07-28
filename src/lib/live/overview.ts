@@ -63,12 +63,14 @@ const ACTION_FAMILY_RANK: Record<string, number> = {
   cancel: 4,
   slots: 5,
   'goal-gap': 5,
+  'return-missing': 6,
   return: 6,
   rate: 6,
   react: 7,
   'react-cap': 7,
   pay: 8,
   'stock-alert': 9,
+  'stock-alerts-missing': 9,
   'stock-drift': 9,
   'goals-unset': 10,
 }
@@ -242,6 +244,15 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
         detail: `${Math.round(u.opsWeek.returnRate * 100)}%`,
         action: 'Reforçar pós-atendimento',
       })
+    } else if (rolling && u.opsWeek.returnRate == null) {
+      actions.push({
+        id: `return-missing-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Retorno ausente — ${u.unit.short}`,
+        detail: 'salon_p3_daily.return_rate vazio (sync P3/full)',
+        action: 'ROM → sync full / popular P3 retorno',
+      })
     }
 
     if (rolling && u.opsCommerce.ratingsCount > 0 && u.opsCommerce.ratingsAvg < 4.2) {
@@ -281,6 +292,21 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
           u.opsStock.activeAlerts >= 200
             ? 'Revisar critérios de alerta no ROM Estoque'
             : 'Fila de compra no ROM Estoque',
+      })
+    } else if (
+      rolling &&
+      u.opsStock.available &&
+      u.opsStock.activeAlerts === 0 &&
+      u.opsStock.zeroProducts >= 100
+    ) {
+      // IG: stock_alerts vazia mas milhares de SKUs zerados — gap de sync, não “estoque ok”.
+      actions.push({
+        id: `stock-alerts-missing-${u.unit.slug}`,
+        severity: 'warning',
+        unit: u.unit.slug,
+        title: `Alertas estoque ausentes — ${u.unit.short}`,
+        detail: `${u.opsStock.zeroProducts} SKUs zerados · 0 alertas Avec (tabela vazia)`,
+        action: 'ROM Estoque → sync alertas / 0149',
       })
     }
 
