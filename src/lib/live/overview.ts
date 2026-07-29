@@ -16,8 +16,12 @@ import {
 } from '@/lib/salon-day'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
-/** Uma unidade lenta (rede/pooler) não pode travar o painel inteiro. */
-const UNIT_FETCH_TIMEOUT_MS = 12_000
+/**
+ * Uma unidade lenta não pode travar o painel inteiro.
+ * Pooler Supabase em transaction (:6543) + cold start costuma precisar >12s.
+ * Mantém margem sob maxDuration=30 do /api/overview.
+ */
+const UNIT_FETCH_TIMEOUT_MS = 22_000
 
 async function fetchUnitBounded(
   config: ReturnType<typeof getUnitConfigs>[number],
@@ -36,12 +40,8 @@ async function fetchUnitBounded(
   try {
     return await Promise.race([fetchLiveUnit(config, day), timeout])
   } catch (err) {
-    // Timeout: não evict — a query órfã ainda pode estar no client max:1;
-    // matar o client no meio piora a corrida com o próximo poll.
-    const msg = String(err instanceof Error ? err.message : err)
-    if (!/Timeout \d+s/i.test(msg)) {
-      evictSql(url)
-    }
+    // Sempre evict: com max:1, query órfã/timeout prende o único client.
+    evictSql(url)
     throw err
   } finally {
     if (timer) clearTimeout(timer)
