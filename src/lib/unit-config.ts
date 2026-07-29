@@ -31,14 +31,28 @@ export const UNIT_META: Record<UnitSlug, UnitMeta> = {
 }
 
 /**
- * Unidades migraram para Supabase pooler.
- * Neon / host direto (db.*.supabase.co) → ausente (placeholder offline), não KPI falso.
+ * Unidades (BR/IG) usam Supabase pooler.
+ * Host Neon / db.*.supabase.co direto → ausente (placeholder offline), não KPI falso.
+ * Env preferida: UNIT_*_DATABASE_URL; legado: NEON_*_DATABASE_URL (mesmo valor Supabase).
  */
-function resolveUnitDatabaseUrl(slug: UnitSlug, raw: string | null | undefined): string | null {
+function unitDatabaseEnvNames(slug: UnitSlug): string[] {
+  if (slug === 'rom-brasil') {
+    return ['UNIT_BRASIL_DATABASE_URL', 'BRASIL_DATABASE_URL', 'NEON_BRASIL_DATABASE_URL']
+  }
+  return ['UNIT_IGUATEMI_DATABASE_URL', 'IGUATEMI_DATABASE_URL', 'NEON_IGUATEMI_DATABASE_URL']
+}
+
+function readUnitDatabaseRaw(slug: UnitSlug): { envName: string; raw: string | null } {
+  for (const envName of unitDatabaseEnvNames(slug)) {
+    const raw = process.env[envName]?.trim() || null
+    if (raw) return { envName, raw }
+  }
+  return { envName: unitDatabaseEnvNames(slug)[0]!, raw: null }
+}
+
+function resolveUnitDatabaseUrl(slug: UnitSlug, raw: string | null | undefined, envName: string): string | null {
   const url = raw?.trim() || null
   if (!url) return null
-  const envName =
-    slug === 'rom-brasil' ? 'NEON_BRASIL_DATABASE_URL' : 'NEON_IGUATEMI_DATABASE_URL'
   if (/\.neon\.tech\b/i.test(url)) {
     console.error(
       `[cerebro] ${envName} aponta para Neon — use pooler Supabase (aws-*.pooler.supabase.com)`,
@@ -56,21 +70,17 @@ function resolveUnitDatabaseUrl(slug: UnitSlug, raw: string | null | undefined):
 }
 
 export function getUnitConfigs(): UnitRuntimeConfig[] {
+  const br = readUnitDatabaseRaw('rom-brasil')
+  const ig = readUnitDatabaseRaw('rom-iguatemi')
   return [
     {
       meta: UNIT_META['rom-brasil'],
-      databaseUrl: resolveUnitDatabaseUrl(
-        'rom-brasil',
-        process.env.NEON_BRASIL_DATABASE_URL,
-      ),
+      databaseUrl: resolveUnitDatabaseUrl('rom-brasil', br.raw, br.envName),
       envGoals: goalsFromEnv(numEnv('BRASIL_DAILY_GOAL'), numEnv('BRASIL_DAILY_CAPACITY')),
     },
     {
       meta: UNIT_META['rom-iguatemi'],
-      databaseUrl: resolveUnitDatabaseUrl(
-        'rom-iguatemi',
-        process.env.NEON_IGUATEMI_DATABASE_URL,
-      ),
+      databaseUrl: resolveUnitDatabaseUrl('rom-iguatemi', ig.raw, ig.envName),
       envGoals: goalsFromEnv(numEnv('IGUATEMI_DAILY_GOAL'), numEnv('IGUATEMI_DAILY_CAPACITY')),
     },
   ]

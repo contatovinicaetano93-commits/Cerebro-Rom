@@ -554,7 +554,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
   const configs = getUnitConfigs()
   const configured = configs.filter((c) => c.databaseUrl)
   if (configured.length === 0) {
-    throw new Error('Nenhuma DATABASE_URL de unidade configurada (ou Brasil ainda em Neon)')
+    throw new Error('Nenhuma DATABASE_URL de unidade configurada (BR/IG = pooler Supabase)')
   }
 
   const day = asOf ?? todayIsoSaoPaulo()
@@ -602,8 +602,8 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
     const detail = cfg.databaseUrl
       ? 'Sem resposta'
       : cfg.meta.slug === 'rom-brasil'
-        ? 'URL Brasil ausente ou ainda aponta para Neon (use pooler Supabase)'
-        : 'URL Iguatemi ausente ou ainda aponta para Neon (use pooler Supabase)'
+        ? 'URL Brasil ausente ou inválida (use pooler Supabase)'
+        : 'URL Iguatemi ausente ou inválida (use pooler Supabase)'
     fetchErrors.push({
       id: `missing-${cfg.meta.slug}`,
       severity: 'critical',
@@ -612,8 +612,8 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       detail,
       action:
         cfg.meta.slug === 'rom-brasil'
-          ? 'NEON_BRASIL_DATABASE_URL = pooler Supabase na Vercel'
-          : 'NEON_IGUATEMI_DATABASE_URL = pooler Supabase na Vercel',
+          ? 'UNIT_BRASIL_DATABASE_URL (ou NEON_BRASIL_DATABASE_URL legado) = pooler Supabase'
+          : 'UNIT_IGUATEMI_DATABASE_URL (ou NEON_IGUATEMI_DATABASE_URL legado) = pooler Supabase',
     })
     liveBySlug.set(cfg.meta.slug, offlineUnitSnapshot(cfg.meta, detail, day))
   }
@@ -696,7 +696,7 @@ export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
       return {
         ...degradedOverview(
           'DATABASE_URL das unidades ausente em produção (Brasil+Iguatemi = Supabase)',
-          'Configurar NEON_BRASIL_DATABASE_URL e NEON_IGUATEMI_DATABASE_URL (pooler Supabase) na Vercel',
+          'Configurar UNIT_BRASIL/IGUATEMI_DATABASE_URL (ou NEON_* legado) = pooler Supabase na Vercel',
           'no-unit-db',
         ),
         nextActions: [
@@ -705,7 +705,7 @@ export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
             severity: 'critical',
             unit: 'both',
             title: 'DBs das unidades não configurados',
-            detail: 'Connection strings ausentes ou ainda em Neon (Brasil+Iguatemi)',
+            detail: 'Connection strings ausentes ou inválidas (Brasil+Iguatemi = Supabase)',
             action: 'Configurar URLs na Vercel (Brasil+Iguatemi=pooler Supabase)',
           },
         ],
