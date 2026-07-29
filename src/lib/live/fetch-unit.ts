@@ -200,76 +200,122 @@ export function offlineUnitSnapshot(
 }
 
 async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitSnapshot['sync']> {
-  let sync: UnitSnapshot['sync'] = {
+  // Paridade com salon loadAvecSyncMeta (sync-meta v2):
+  // - só runs finished (stats.running ≠ true)
+  // - stale se nunca syncou OU full >24h OU fast >1h
+  const empty: UnitSnapshot['sync'] = {
     status: 'stale',
     lastSyncAt: new Date(0).toISOString(),
     label: 'Sem registro de sync Avec',
   }
+
   try {
-    const runs = (await sql`
-      select status, created_at, error, kind
-      from avec_sync_runs
-      where kind in ('fast', 'full')
-      order by created_at desc
-      limit 1
-    `) as { status: string; created_at: string; error: string | null; kind: string }[]
-    let last = runs[0]
-    if (!last) {
-      const any = (await sql`
+    const [fullRows, fastRows] = await Promise.all([
+      sql`
         select status, created_at, error, kind
         from avec_sync_runs
+        where kind = 'full'
+          and coalesce(stats->>'running', 'false') <> 'true'
         order by created_at desc
         limit 1
-      `) as { status: string; created_at: string; error: string | null; kind: string }[]
-      last = any[0]
-    }
-    if (last) {
-      const lastSyncAt = new Date(last.created_at).toISOString()
-      const ageMs = Date.now() - new Date(last.created_at).getTime()
-      const ageH = ageMs / 3_600_000
-      const ageLabel =
-        ageH < 1
-          ? `${Math.max(1, Math.round(ageH * 60))} min`
-          : `${ageH.toFixed(1)}h`
+      `,
+      sql`
+        select status, created_at, error, kind
+        from avec_sync_runs
+        where kind = 'fast'
+          and coalesce(stats->>'running', 'false') <> 'true'
+        order by created_at desc
+        limit 1
+      `,
+    ])
 
-      if (last.status === 'error') {
-        sync = {
-          status: 'error',
-          lastSyncAt,
-          label: last.error
-            ? `Sync erro (~${ageLabel}): ${last.error.slice(0, 80)}`
-            : `Último sync com erro (~${ageLabel})`,
-        }
-      } else if (last.status === 'partial') {
-        sync = {
-          status: 'partial',
-          lastSyncAt,
-          label: last.error
-            ? `Sync parcial (${last.kind}, ~${ageLabel}): ${last.error.slice(0, 80)}`
-            : `Sync parcial (${last.kind}, ~${ageLabel}) · dados usáveis`,
-        }
-      } else if (ageH > 6) {
-        sync = {
-          status: 'stale',
-          lastSyncAt,
-          label: `Sync atrasado (~${ageLabel})`,
-        }
-      } else {
-        const mins = Math.max(1, Math.round(ageMs / 60_000))
-        sync = {
-          status: 'ok',
-          lastSyncAt,
-          label:
-            mins < 60
-              ? `Avec sync há ${mins} min`
-              : `Avec sync há ${(mins / 60).toFixed(1)}h`,
-        }
+    const full = (fullRows as { status: string; created_at: string; error: string | null; kind: string }[])[0] ?? null
+    const fast = (fastRows as { status: string; created_at: string; error: string | null; kind: string }[])[0] ?? null
+    if (!full && !fast) return empty
+
+    const fullAgeHours =
+      full != null ? (Date.now() - new Date(full.created_at).getTime()) / 3_600_000 : null
+    const fastAgeHours =
+      fast != null ? (Date.now() - new Date(fast.created_at).getTime()) / 3_600_000 : null
+    const fullStale = fullAgeHours != null && fullAgeHours > 24
+    // Sem fast finished = caixa/Hoje sem rede de segurança recente.
+    const fastStale = fast == null || (fastAgeHours != null && fastAgeHours > 1)
+    const ageStale = fullStale || fastStale
+
+    const latest =
+      full && fast
+        ? new Date(fast.created_at).getTime() >= new Date(full.created_at).getTime()
+          ? fast
+          : full
+        : (full ?? fast)!
+
+    const lastSyncAt = new Date(latest.created_at).toISOString()
+    const ageMs = Date.now() - new Date(latest.created_at).getTime()
+    const ageH = ageMs / 3_600_000
+    const ageLabel =
+      ageH < 1 ? `${Math.max(1, Math.round(ageH * 60))} min` : `${ageH.toFixed(1)}h`
+
+    if (latest.status === 'error') {
+      return {
+        status: 'error',
+        lastSyncAt,
+        label: latest.error
+          ? `Sync erro (~${ageLabel}): ${latest.error.slice(0, 80)}`
+          : `Último sync com erro (~${ageLabel})`,
       }
     }
+
+    if (ageStale) {
+      if (fast == null) {
+        return {
+          status: 'stale',
+          lastSyncAt,
+          label: 'Sem sync fast recente — caixa/Hoje pode estar velho',
+        }
+      }
+      if (fastStale && fastAgeHours != null) {
+        return {
+          status: 'stale',
+          lastSyncAt,
+          label: `Sync fast atrasado (~${Math.max(1, Math.round(fastAgeHours * 60))} min) — caixa/Hoje pode estar velho`,
+        }
+      }
+      if (fullStale && fullAgeHours != null) {
+        return {
+          status: 'stale',
+          lastSyncAt,
+          label: `Sync full atrasado (~${fullAgeHours.toFixed(1)}h) — analytics desatualizados`,
+        }
+      }
+      return {
+        status: 'stale',
+        lastSyncAt,
+        label: `Sync atrasado (~${ageLabel})`,
+      }
+    }
+
+    if (latest.status === 'partial') {
+      return {
+        status: 'partial',
+        lastSyncAt,
+        label: latest.error
+          ? `Sync parcial (${latest.kind}, ~${ageLabel}): ${latest.error.slice(0, 80)}`
+          : `Sync parcial (${latest.kind}, ~${ageLabel}) · dados usáveis`,
+      }
+    }
+
+    const mins = Math.max(1, Math.round(ageMs / 60_000))
+    return {
+      status: 'ok',
+      lastSyncAt,
+      label:
+        mins < 60
+          ? `Avec sync há ${mins} min`
+          : `Avec sync há ${(mins / 60).toFixed(1)}h`,
+    }
   } catch {
-    // ok
+    return empty
   }
-  return sync
 }
 
 export async function fetchLiveUnit(

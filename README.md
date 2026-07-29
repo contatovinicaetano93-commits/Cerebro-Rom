@@ -7,7 +7,7 @@ Painel executivo para o **Waltter** conduzir **ROM Brasil** + **ROM Iguatemi** c
 | Modo | Quando |
 |------|--------|
 | **Live** | `NEON_BRASIL_DATABASE_URL` e/ou `NEON_IGUATEMI_DATABASE_URL` no `.env.local` |
-| **Mock** | Sem URLs, `CEREBRO_FORCE_MOCK=1`, ou falha total do live (fallback) |
+| **Mock** | Sem URLs de unidade (só fora de produção) ou `CEREBRO_FORCE_MOCK=1` (não-prod). Em produção, falha total → modo `degraded` (zeros + alerta), **nunca** mock. |
 
 Live lê os bancos das unidades via **postgres.js** (`ssl: require`, `prepare: false`):
 - **Brasil** → Supabase pooler (`*.pooler.supabase.com:5432` session ou `:6543` tx). Nome `NEON_BRASIL_*` é legado; valor **não** deve ser Neon.
