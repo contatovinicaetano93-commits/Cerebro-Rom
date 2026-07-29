@@ -22,7 +22,9 @@ function getClient(databaseUrl: string): PostgresSql {
   if (!client) {
     client = postgres(databaseUrl, {
       ssl: 'require',
-      max: 1,
+      // fetchLiveUnit faz Promise.all de 4 leituras — max:1 serializa/trava sob
+      // pooler Supabase. 3 cobre o fan-out sem estourar session/tx limits.
+      max: 3,
       prepare: false,
       idle_timeout: 20,
       max_lifetime: 60 * 5,
