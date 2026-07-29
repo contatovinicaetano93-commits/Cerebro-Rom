@@ -232,18 +232,14 @@ function deltaTone(row: ComparisonRow): string {
     ) {
       const abs = row.brasil - row.iguatemi
       if (abs === 0) return 'text-muted'
-      // higherIsBetter false: gap mais negativo (BR pior) → danger se BR < IG (mais negativo)
-      return abs < 0 ? 'text-danger' : 'text-success'
+      // BR maior → brass; IG maior → teal (cor da unidade, sem vermelho).
+      return abs < 0 ? 'text-teal' : 'text-brass'
     }
     return 'text-muted'
   }
-  const good =
-    (row.higherIsBetter && row.deltaPct > 0) || (!row.higherIsBetter && row.deltaPct < 0)
-  const bad =
-    (row.higherIsBetter && row.deltaPct < 0) || (!row.higherIsBetter && row.deltaPct > 0)
-  if (good) return 'text-success'
-  if (bad) return 'text-danger'
-  return 'text-muted'
+  if (row.deltaPct === 0) return 'text-muted'
+  // Δ = BR − IG: positivo = Brasil à frente (laranja); negativo = Iguatemi à frente (verde).
+  return row.deltaPct > 0 ? 'text-brass' : 'text-teal'
 }
 
 function formatDeltaCell(row: ComparisonRow): string {

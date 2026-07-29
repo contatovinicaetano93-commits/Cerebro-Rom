@@ -105,13 +105,11 @@ function DeltaBadge({ row }: { row: ComparisonRow }) {
       className={`text-xs tabular-nums ${
         row.deltaPct == null
           ? 'text-muted'
-          : (row.higherIsBetter && row.deltaPct > 0) ||
-              (!row.higherIsBetter && row.deltaPct < 0)
-            ? 'text-success'
-            : (row.higherIsBetter && row.deltaPct < 0) ||
-                (!row.higherIsBetter && row.deltaPct > 0)
-              ? 'text-danger'
-              : 'text-muted'
+          : row.deltaPct === 0
+            ? 'text-muted'
+            : row.deltaPct > 0
+              ? 'text-brass'
+              : 'text-teal'
       }`}
     >
       {row.deltaPct == null
