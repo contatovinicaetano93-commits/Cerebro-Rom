@@ -22,13 +22,12 @@ function getClient(databaseUrl: string): PostgresSql {
   if (!client) {
     client = postgres(databaseUrl, {
       ssl: 'require',
-      // fetchLiveUnit faz Promise.all de 4 leituras — max:1 serializa/trava sob
-      // pooler Supabase. 3 cobre o fan-out sem estourar session/tx limits.
-      max: 3,
+      // Fan-out do overview é sequencial — 1 conexão por URL evita EMAXCONNSESSION
+      // no pooler session (:5432) e deadlocks do Promise.all com max>1.
+      max: 1,
       prepare: false,
-      idle_timeout: 20,
-      max_lifetime: 60 * 5,
-      // Neon morto/quota pode aceitar TCP e não responder — não ficar preso.
+      idle_timeout: 15,
+      max_lifetime: 60 * 3,
       connect_timeout: 8,
     })
     clients.set(databaseUrl, client)

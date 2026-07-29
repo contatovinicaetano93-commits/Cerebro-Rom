@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { getCachedLiveOverview } from '@/lib/overview-cache'
 
 export const dynamic = 'force-dynamic'
-/** Evita função serverless infinita quando um DB de unidade trava. */
-export const maxDuration = 30
+/** Margem para BR+IG sequenciais (25s cada) + cold start. */
+export const maxDuration = 60
 
 export async function GET(req: Request) {
   try {

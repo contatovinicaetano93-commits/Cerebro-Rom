@@ -18,10 +18,9 @@ import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
 /**
  * Uma unidade lenta não pode travar o painel inteiro.
- * Pooler Supabase em transaction (:6543) + cold start costuma precisar >12s.
- * Mantém margem sob maxDuration=30 do /api/overview.
+ * maxDuration overview=60s; busca sequencial BR→IG.
  */
-const UNIT_FETCH_TIMEOUT_MS = 22_000
+const UNIT_FETCH_TIMEOUT_MS = 25_000
 
 async function fetchUnitBounded(
   config: ReturnType<typeof getUnitConfigs>[number],
@@ -40,7 +39,6 @@ async function fetchUnitBounded(
   try {
     return await Promise.race([fetchLiveUnit(config, day), timeout])
   } catch (err) {
-    // Sempre evict: com max:1, query órfã/timeout prende o único client.
     evictSql(url)
     throw err
   } finally {
@@ -560,7 +558,15 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
   const day = asOf ?? todayIsoSaoPaulo()
   const isHistorical = day < todayIsoSaoPaulo()
 
-  const settled = await Promise.allSettled(configured.map((c) => fetchUnitBounded(c, day)))
+  // Sequencial: evita 2× fan-out simultâneo no pooler (EMAXCONN / hang).
+  const settled: PromiseSettledResult<UnitSnapshot>[] = []
+  for (const c of configured) {
+    try {
+      settled.push({ status: 'fulfilled', value: await fetchUnitBounded(c, day) })
+    } catch (reason) {
+      settled.push({ status: 'rejected', reason })
+    }
+  }
   const liveBySlug = new Map<string, UnitSnapshot>()
   const fetchErrors: AlertItem[] = []
 
@@ -569,7 +575,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
     if (result.status === 'fulfilled') {
       liveBySlug.set(cfg.meta.slug, result.value)
     } else {
-      const detail = String(result.reason?.message ?? result.reason)
+      const detail = String(result.reason instanceof Error ? result.reason.message : result.reason)
       const schemaGap = /schema incompleto|does not exist|undefined_table|salon_daily_metrics/i.test(
         detail,
       )
@@ -623,8 +629,30 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
   )
 
   const liveUnits = units.filter((u) => !u.sync.offline)
+  // Nunca throw aqui — painel precisa mostrar slots offline (não "Degradado" vazio).
   if (liveUnits.length === 0) {
-    throw new Error('Nenhuma unidade live respondeu')
+    const consolidated = emptyConsolidated()
+    return {
+      generatedAt: new Date().toISOString(),
+      mode: 'live',
+      partial: true,
+      periodLabel: `Live parcial · unidades offline · ${day}`,
+      consolidated,
+      units,
+      trend30: [],
+      nextActions: sortNextActions([
+        ...fetchErrors,
+        {
+          id: 'all-units-offline',
+          severity: 'critical',
+          unit: 'both',
+          title: 'Nenhuma unidade respondeu a tempo',
+          detail: fetchErrors.map((e) => e.detail).join(' · ') || 'Timeout/pooler',
+          action: 'Checar pooler Supabase (:5432 session) e reiniciar overview?fresh=1',
+        },
+      ]),
+      comparison: buildComparison(units),
+    }
   }
 
   const consolidated = consolidate(liveUnits)
