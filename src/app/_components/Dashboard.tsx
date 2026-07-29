@@ -274,17 +274,13 @@ export function Dashboard({
   onRefresh?: () => void
 }) {
   const c = data.consolidated
-  const goalTone = !c.networkReadable
-    ? 'warn'
-    : !c.goalsConfigured
-      ? 'warn'
-      : !c.todayMoneyActive
-        ? 'default'
-        : c.todayGoalProgress >= 1
-          ? 'good'
-          : c.todayGoalProgress >= 0.7
-            ? 'default'
-            : 'warn'
+  // Meta do dia ainda alimenta a barra; o valor do KPI fica neutro
+  // (somatória BR+IG — não é sinal de unidade).
+  const goalProgressColor = !c.networkReadable || !c.goalsConfigured || !c.todayMoneyActive
+    ? 'brass'
+    : c.todayGoalProgress >= 1
+      ? 'success'
+      : 'brass'
 
   const [openMap, setOpenMap] = useState(DEFAULT_OPEN)
   const allOpen = useMemo(
@@ -505,13 +501,13 @@ export function Dashboard({
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.faturamento}
-              tone={goalTone}
+              tone="default"
             />
             {c.networkReadable && c.goalsConfigured && c.todayMoneyActive ? (
               <div className="mt-3">
                 <ProgressBar
                   value={c.todayGoalProgress}
-                  color={c.todayGoalProgress >= 1 ? 'success' : 'brass'}
+                  color={goalProgressColor}
                 />
               </div>
             ) : null}
