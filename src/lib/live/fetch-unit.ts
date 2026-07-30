@@ -375,22 +375,21 @@ export async function fetchLiveUnit(
   for (let i = 29; i >= 0; i--) {
     const day = isoDaysBackFrom(today, i)
     const isAsOf = day === today
-    last30.push(
-      rowToDay(
-        byDay.get(day),
-        day,
-        capacity,
-        dailyGoal,
-        goalSet,
-        capacitySet,
-        isAsOf ? leadsToday : 0,
-        isAsOf ? convertedToday : 0,
-      ),
+    const row = rowToDay(
+      byDay.get(day),
+      day,
+      capacity,
+      dailyGoal,
+      goalSet,
+      capacitySet,
+      isAsOf ? leadsToday : 0,
+      isAsOf ? convertedToday : 0,
     )
+    sanitizeDayMix(row, capacity, capacitySet)
+    last30.push(row)
   }
 
   const todayMetrics = last30[last30.length - 1]!
-  sanitizeDayMix(todayMetrics, capacity, capacitySet)
   // Leads ROM (não dump Avec) — sobrescreve o campo do dia.
   todayMetrics.leads = leadsToday
   todayMetrics.converted = convertedToday
@@ -478,7 +477,8 @@ export async function fetchLiveUnit(
         isAsOf ? leadsToday : 0,
         isAsOf ? convertedToday : 0,
       )
-      if (isAsOf) sanitizeDayMix(row, capacity, capacitySet)
+      // Sanitiza todos os dias do MTD — dump de novos num dia antigo inflava o mês.
+      sanitizeDayMix(row, capacity, capacitySet)
       mtdRows.push(row)
     }
   }
