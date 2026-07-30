@@ -3,16 +3,71 @@ import { isAuthEnabled, isProduction } from '@/lib/auth'
 import { getSql } from '@/lib/db'
 
 async function probeUnitDb(url: string | null | undefined) {
-  if (!url?.trim()) return { configured: false, connected: false, error: null as string | null }
+  if (!url?.trim()) {
+    return {
+      configured: false,
+      connected: false,
+      error: null as string | null,
+      sync: null as null | {
+        fast_status: string | null
+        fast_age_min: number | null
+        full_status: string | null
+        full_age_min: number | null
+        running: boolean
+      },
+    }
+  }
   try {
     const sql = getSql(url)
     await sql`select 1 as ok`
-    return { configured: true, connected: true, error: null }
+    let sync: {
+      fast_status: string | null
+      fast_age_min: number | null
+      full_status: string | null
+      full_age_min: number | null
+      running: boolean
+    } | null = null
+    try {
+      const [fastRows, fullRows, runningRows] = await Promise.all([
+        sql`
+          select status, created_at
+          from avec_sync_runs
+          where kind = 'fast' and coalesce(stats->>'running', 'false') <> 'true'
+          order by created_at desc limit 1
+        `,
+        sql`
+          select status, created_at
+          from avec_sync_runs
+          where kind = 'full' and coalesce(stats->>'running', 'false') <> 'true'
+          order by created_at desc limit 1
+        `,
+        sql`
+          select 1 as n from avec_sync_runs
+          where kind in ('fast', 'full') and coalesce(stats->>'running', 'false') = 'true'
+          limit 1
+        `,
+      ])
+      const fast = (fastRows as { status: string; created_at: string }[])[0]
+      const full = (fullRows as { status: string; created_at: string }[])[0]
+      const ageMin = (at: string | undefined) =>
+        at != null ? Math.round((Date.now() - new Date(at).getTime()) / 60_000) : null
+      sync = {
+        fast_status: fast?.status ?? null,
+        fast_age_min: ageMin(fast?.created_at),
+        full_status: full?.status ?? null,
+        full_age_min: ageMin(full?.created_at),
+        running: (runningRows as { n: number }[]).length > 0,
+      }
+    } catch {
+      sync = null
+    }
+    return { configured: true, connected: true, error: null, sync }
   } catch (e) {
     return {
       configured: true,
       connected: false,
       error: e instanceof Error ? e.message : String(e),
+      sync: null,
     }
   }
 }
