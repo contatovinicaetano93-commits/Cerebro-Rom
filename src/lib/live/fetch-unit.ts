@@ -10,7 +10,10 @@ import {
 import { fetchOpsCommerce, fetchOpsWeek } from '@/lib/live/parse-kpi-layers'
 import { EMPTY_OPS_FINANCE, EMPTY_OPS_STOCK, fetchOpsFinance, fetchOpsStock } from '@/lib/live/fetch-money-stock'
 import { readGoalsFromDb, resolveGoals } from '@/lib/goals'
+import { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
 import type { DayMetrics, OpsToday, UnitMeta, UnitSnapshot } from '@/lib/types'
+
+export { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
 
 function n(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -19,29 +22,6 @@ function n(v: unknown): number {
     return Number.isFinite(x) ? x : 0
   }
   return 0
-}
-
-/**
- * Mix novos/recorrentes do Avec às vezes conta agenda como “novo”.
- * Zera quando o dia ainda não tem dinheiro OU o mix é impossível/absurdo.
- */
-function sanitizeDayMix(day: DayMetrics, capacity: number, capacitySet: boolean): void {
-  if (day.attended <= 0 && day.revenue <= 0) {
-    day.newClients = 0
-    day.returningClients = 0
-    return
-  }
-  const mix = day.newClients + day.returningClients
-  if (day.appointments > 0 && mix > day.appointments) {
-    day.newClients = 0
-    day.returningClients = 0
-    return
-  }
-  // Ex.: 838 “novos” com capacidade 110 — lixo de sync, não KPI.
-  if (capacitySet && capacity > 0 && day.newClients > capacity * 1.5) {
-    day.newClients = 0
-    day.returningClients = 0
-  }
 }
 
 function emptyDay(
@@ -367,8 +347,11 @@ export async function fetchLiveUnit(
   todayMetrics.converted = convertedToday
 
   let appointmentsNext2h = 0
-  /** Só confiar em CS 2h se a agenda do dia também veio do live CS (não de metrics). */
-  let trustCsForNext2h = false
+  /**
+   * Janela 2h só olha `scheduled_at` futuro — independente de a agenda do dia
+   * ter vindo de metrics (CS cai quando serviços são concluídos e limpam horário).
+   */
+  let slotsNext2hKnown = false
   try {
     const appt = (await sql`
       select count(*)::int as n
@@ -384,24 +367,20 @@ export async function fetchLiveUnit(
     // Nunca deixar appointments < attended (quebra comparecimento/vagas).
     if (scheduled >= attended && scheduled > 0) {
       // Live coerente: usa CS. Se metrics Avec tem mais agenda (mesmo lag leve), prefer metrics
-      // — no-shows/cancel vêm de metrics; CS incompleto distorce comparecimento/vagas/2h.
+      // — no-shows/cancel vêm de metrics; CS incompleto distorce comparecimento/vagas.
       if (metricAppt >= attended && metricAppt > scheduled) {
         todayMetrics.appointments = metricAppt
-        trustCsForNext2h = false
       } else {
         todayMetrics.appointments = scheduled
-        trustCsForNext2h = true
       }
     } else if (metricAppt >= attended && metricAppt > 0) {
       todayMetrics.appointments = metricAppt
-      trustCsForNext2h = false
     } else {
       todayMetrics.appointments = Math.max(scheduled, metricAppt, attended)
-      trustCsForNext2h = scheduled > 0 && scheduled === todayMetrics.appointments
     }
 
-    // Vagas 2h só fazem sentido no dia corrente (janela wall-clock).
-    if (trustCsForNext2h && !isHistorical) {
+    // Vagas 2h só no dia corrente (janela wall-clock).
+    if (!isHistorical) {
       const next2h = (await sql`
         select count(*)::int as n
         from client_services
@@ -411,12 +390,10 @@ export async function fetchLiveUnit(
           and scheduled_at < now() + interval '2 hours'
       `) as { n: number }[]
       appointmentsNext2h = n(next2h[0]?.n)
-    } else if (isHistorical) {
-      trustCsForNext2h = false
-      appointmentsNext2h = 0
+      slotsNext2hKnown = true
     }
   } catch {
-    trustCsForNext2h = false
+    slotsNext2hKnown = false
   }
 
   const mtdRows: DayMetrics[] = []
@@ -455,7 +432,7 @@ export async function fetchLiveUnit(
     goalSet,
   }
 
-  const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, trustCsForNext2h)
+  const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, slotsNext2hKnown)
 
   const [opsWeek, opsCommerce, opsFinance, opsStock] = await Promise.all([
     fetchOpsWeek(sql, today, monthStart),
