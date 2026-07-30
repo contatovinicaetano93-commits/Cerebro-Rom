@@ -82,7 +82,9 @@ export function ReportsPanel() {
       }
       if (!res.ok) throw new Error(json.error || `Erro ${res.status}`)
       const dayNote =
-        asOf === todayLocalIso() ? 'hoje' : `dia ${asOf} (MTD até a data)`
+        asOf === todayLocalIso()
+          ? 'hoje'
+          : `dia ${asOf} (MTD · estoque omitido · ranking ≤ data)`
       setOkMsg(`Snapshot capturado · ${dayNote}`)
       await loadRuns()
     } catch (e) {
@@ -162,7 +164,8 @@ export function ReportsPanel() {
               <p className="mt-3 text-xs text-muted">
                 Escolha o dia (KPIs do dia + MTD até essa data). Export completo inclui Rede,
                 Unidades, Comparativo, Alertas, Tendência 30d, Semana e Comercial. Em datas
-                passadas, estoque/sync refletem o momento da captura (não rewind).
+                passadas: estoque fica omitido (posição live não rebobina); ranking P1–P3 usa o
+                snapshot mais recente ≤ a data (janela de lookback da unidade).
               </p>
 
               <ul className="mt-4 space-y-2">

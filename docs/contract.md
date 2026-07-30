@@ -52,6 +52,12 @@ Unidade sem `salon_daily_metrics` → erro de schema / ilegível (não entra R$0
 
 Relatórios do Cérebro aceitam `asOf` desde **2025-01-01**, mas o fetch cobre MTD + ~30d da data. Dias sem backfill nas unidades → zeros honestos.
 
+Em `asOf` histórico:
+- **dia / MTD / tendência** = métricas até a data
+- **P1–P3 (ranking/comercial/retorno)** = snapshot mais recente ≤ `asOf` (lookback 14–30d) — `asOfDay` no payload mostra o dia real do snapshot
+- **estoque** = omitido (`available: false`) — posição live não rebobina
+- label de sync da unidade deixa isso explícito
+
 ## Colunas / shapes frágeis
 
 Não renomear sem atualizar `src/lib/live/fetch-unit.ts`, `parse-kpi-layers.ts`, `fetch-money-stock.ts`:

@@ -438,7 +438,8 @@ export async function fetchLiveUnit(
     fetchOpsWeek(sql, today, monthStart),
     fetchOpsCommerce(sql, today),
     fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended),
-    fetchOpsStock(sql),
+    // Estoque é posição live — não rebobina. Em asOf histórico omitimos para não mentir.
+    isHistorical ? Promise.resolve({ ...EMPTY_OPS_STOCK }) : fetchOpsStock(sql),
   ])
 
   let sync = await readUnitSyncStatus(sql)
@@ -446,7 +447,7 @@ export async function fetchLiveUnit(
   if (isHistorical && sync.status !== 'error') {
     sync = {
       ...sync,
-      label: `${sync.label} · métricas do dia ${today} (estoque/sync = agora)`,
+      label: `${sync.label} · métricas do dia ${today} (P1–P3 = snapshot ≤ data · estoque omitido)`,
     }
   }
 
