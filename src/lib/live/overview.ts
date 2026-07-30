@@ -658,7 +658,9 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
     syncPartial ||
     unreadable
 
-  const histNote = isHistorical ? ' · MTD até a data' : ''
+  const histNote = isHistorical
+    ? ' · MTD até a data · estoque omitido · ranking ≤ data'
+    : ''
   return {
     generatedAt: new Date().toISOString(),
     mode: 'live',
