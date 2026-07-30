@@ -153,6 +153,8 @@ export interface UnitSnapshot {
     label: string
     /** true quando a unidade não respondeu (placeholder no painel). */
     offline?: boolean
+    /** true quando há sync Avec mid-flight (stats.running). */
+    running?: boolean
   }
 }
 
