@@ -181,8 +181,10 @@ export function offlineUnitSnapshot(
 
 async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitSnapshot['sync']> {
   // Paridade com salon loadAvecSyncMeta (sync-meta v2):
-  // - só runs finished (stats.running ≠ true)
-  // - stale se nunca syncou OU full >24h OU fast >1h
+  // - finished: running ≠ true
+  // - ordem: error → partial → age-stale → ok (partial não some sob age)
+  // - fastStale só se fast finished existe e >1h (não se fast==null)
+  // - running mid-flight ameniza stale
   const empty: UnitSnapshot['sync'] = {
     status: 'stale',
     lastSyncAt: new Date(0).toISOString(),
@@ -190,7 +192,7 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
   }
 
   try {
-    const [fullRows, fastRows] = await Promise.all([
+    const [fullRows, fastRows, runningRows] = await Promise.all([
       sql`
         select status, created_at, error, kind
         from avec_sync_runs
@@ -207,6 +209,14 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
         order by created_at desc
         limit 1
       `,
+      sql`
+        select created_at
+        from avec_sync_runs
+        where kind in ('fast', 'full')
+          and coalesce(stats->>'running', 'false') = 'true'
+        order by created_at desc
+        limit 1
+      `,
     ])
 
     const full =
@@ -215,14 +225,29 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
     const fast =
       (fastRows as { status: string; created_at: string; error: string | null; kind: string }[])[0] ??
       null
-    if (!full && !fast) return empty
+    const runningAt =
+      (runningRows as { created_at: string }[])[0]?.created_at ?? null
+    const running = runningAt != null
+
+    if (!full && !fast) {
+      if (running) {
+        return {
+          status: 'ok',
+          lastSyncAt: new Date(runningAt).toISOString(),
+          label: 'Sync Avec em andamento…',
+          running: true,
+        }
+      }
+      return empty
+    }
 
     const fullAgeHours =
       full != null ? (Date.now() - new Date(full.created_at).getTime()) / 3_600_000 : null
     const fastAgeHours =
       fast != null ? (Date.now() - new Date(fast.created_at).getTime()) / 3_600_000 : null
     const fullStale = fullAgeHours != null && fullAgeHours > 24
-    const fastStale = fast == null || (fastAgeHours != null && fastAgeHours > 1)
+    // Paridade sync-meta: missing fast ≠ stale por si só (never_synced só se ambos null).
+    const fastStale = fastAgeHours != null && fastAgeHours > 1
     const ageStale = fullStale || fastStale
 
     const latest =
@@ -245,17 +270,37 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
         label: latest.error
           ? `Sync erro (~${ageLabel}): ${latest.error.slice(0, 80)}`
           : `Último sync com erro (~${ageLabel})`,
+        running,
+      }
+    }
+
+    // partial antes de age-stale — partial útil não vira "desatualizado".
+    if (latest.status === 'partial') {
+      const abandoned =
+        latest.error?.includes('abandoned_partial_timeout') ||
+        latest.error?.includes('Sync interrompido')
+      return {
+        status: 'partial',
+        lastSyncAt,
+        label: abandoned
+          ? `Sync incompleto (timeout, ${latest.kind}, ~${ageLabel}) · dados usáveis`
+          : latest.error
+            ? `Sync parcial (${latest.kind}, ~${ageLabel}): ${latest.error.slice(0, 80)}`
+            : `Sync parcial (${latest.kind}, ~${ageLabel}) · dados usáveis`,
+        running,
+      }
+    }
+
+    if (running) {
+      return {
+        status: 'ok',
+        lastSyncAt,
+        label: `Sync Avec em andamento… (último ok ~${ageLabel})`,
+        running: true,
       }
     }
 
     if (ageStale) {
-      if (fast == null) {
-        return {
-          status: 'stale',
-          lastSyncAt,
-          label: 'Sem sync fast recente — caixa/Hoje pode estar velho',
-        }
-      }
       if (fastStale && fastAgeHours != null) {
         return {
           status: 'stale',
@@ -274,16 +319,6 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
         status: 'stale',
         lastSyncAt,
         label: `Sync atrasado (~${ageLabel})`,
-      }
-    }
-
-    if (latest.status === 'partial') {
-      return {
-        status: 'partial',
-        lastSyncAt,
-        label: latest.error
-          ? `Sync parcial (${latest.kind}, ~${ageLabel}): ${latest.error.slice(0, 80)}`
-          : `Sync parcial (${latest.kind}, ~${ageLabel}) · dados usáveis`,
       }
     }
 
@@ -385,7 +420,8 @@ export async function fetchLiveUnit(
       isAsOf ? leadsToday : 0,
       isAsOf ? convertedToday : 0,
     )
-    sanitizeDayMix(row, capacity, capacitySet)
+    // Hoje: sanitize depois do recompute de appointments (mix usa apptCap).
+    if (!isAsOf) sanitizeDayMix(row, capacity, capacitySet)
     last30.push(row)
   }
 
@@ -459,6 +495,8 @@ export async function fetchLiveUnit(
     slotsNext2hKnown = false
   }
 
+  sanitizeDayMix(todayMetrics, capacity, capacitySet)
+
   const mtdRows: DayMetrics[] = []
   {
     // Dias do mês até asOf — não cortar no dia 31 (janela last30 deixa dia 1 de fora).
@@ -467,6 +505,11 @@ export async function fetchLiveUnit(
       const day = isoDaysBackFrom(today, i)
       if (day < monthStart) continue
       const isAsOf = day === today
+      if (isAsOf) {
+        // Usa o today já recomputado (CS appointments + sanitize).
+        mtdRows.push(todayMetrics)
+        continue
+      }
       const row = rowToDay(
         byDay.get(day),
         day,
@@ -474,8 +517,8 @@ export async function fetchLiveUnit(
         dailyGoal,
         goalSet,
         capacitySet,
-        isAsOf ? leadsToday : 0,
-        isAsOf ? convertedToday : 0,
+        0,
+        0,
       )
       // Sanitiza todos os dias do MTD — dump de novos num dia antigo inflava o mês.
       sanitizeDayMix(row, capacity, capacitySet)
