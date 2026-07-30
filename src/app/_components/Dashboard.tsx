@@ -36,6 +36,7 @@ import {
   isUnitConnected,
   isUnitReadable,
 } from '@/lib/salon-day'
+import { UNIT_META, unitGerenciaUrl } from '@/lib/unit-config'
 import { KpiStat, Panel, ProgressBar } from './ui'
 import { CollapsibleSection, SectionControls } from './CollapsibleSection'
 import { LogoutButton } from './LogoutButton'
@@ -814,27 +815,38 @@ export function Dashboard({
                                   : (u?.sync.label ?? '')}
                         </p>
                       </div>
-                      {offline ? (
-                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Offline
-                        </span>
-                      ) : syncHard ? (
-                        <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
-                          Sync
-                        </span>
-                      ) : hollow ? (
-                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Vazio
-                        </span>
-                      ) : quiet ? (
-                        <span className="rounded-md border border-border/60 bg-panel px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted">
-                          Quieto
-                        </span>
-                      ) : u?.sync.status === 'partial' ? (
-                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Parcial
-                        </span>
-                      ) : null}
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <a
+                          href={unitGerenciaUrl(slug)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg border border-border/60 px-2 py-1 text-[0.65rem] text-muted hover:border-brass/40 hover:text-brass"
+                          title={`Abrir relatório gerência · ${UNIT_META[slug].name}`}
+                        >
+                          Gerência ↗
+                        </a>
+                        {offline ? (
+                          <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                            Offline
+                          </span>
+                        ) : syncHard ? (
+                          <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
+                            Sync
+                          </span>
+                        ) : hollow ? (
+                          <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                            Vazio
+                          </span>
+                        ) : quiet ? (
+                          <span className="rounded-md border border-border/60 bg-panel px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted">
+                            Quieto
+                          </span>
+                        ) : u?.sync.status === 'partial' ? (
+                          <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                            Parcial
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4">
@@ -962,19 +974,30 @@ export function Dashboard({
                       <p className={`text-xs uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
                         {u.unit.short}
                       </p>
-                      {offline ? (
-                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Offline
-                        </span>
-                      ) : hardFail ? (
-                        <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
-                          Sync
-                        </span>
-                      ) : hollow ? (
-                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Vazio
-                        </span>
-                      ) : null}
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={unitGerenciaUrl(u.unit.slug)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md border border-border/60 px-1.5 py-0.5 text-[0.6rem] text-muted hover:border-brass/40 hover:text-brass"
+                          title={`Abrir relatório gerência · ${u.unit.name}`}
+                        >
+                          Gerência ↗
+                        </a>
+                        {offline ? (
+                          <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                            Offline
+                          </span>
+                        ) : hardFail ? (
+                          <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
+                            Sync
+                          </span>
+                        ) : hollow ? (
+                          <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                            Vazio
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                     {blocked ? (
                       <p className="mt-3 text-sm text-muted">{unreadableBlockCopy(u, 'semana')}</p>
@@ -1051,19 +1074,30 @@ export function Dashboard({
                       <p className={`text-xs uppercase tracking-wider ${unitAccent(u.unit.slug)}`}>
                         {u.unit.short}
                       </p>
-                      {offline ? (
-                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Offline
-                        </span>
-                      ) : hardFail ? (
-                        <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
-                          Sync
-                        </span>
-                      ) : hollow ? (
-                        <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                          Vazio
-                        </span>
-                      ) : null}
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={unitGerenciaUrl(u.unit.slug)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md border border-border/60 px-1.5 py-0.5 text-[0.6rem] text-muted hover:border-brass/40 hover:text-brass"
+                          title={`Abrir relatório gerência · ${u.unit.name}`}
+                        >
+                          Gerência ↗
+                        </a>
+                        {offline ? (
+                          <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                            Offline
+                          </span>
+                        ) : hardFail ? (
+                          <span className="rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-danger">
+                            Sync
+                          </span>
+                        ) : hollow ? (
+                          <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
+                            Vazio
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                     {blocked ? (
                       <p className="mt-3 text-sm text-muted">{unreadableBlockCopy(u, 'comercial')}</p>

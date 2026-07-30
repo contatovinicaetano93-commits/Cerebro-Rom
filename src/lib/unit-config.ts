@@ -21,13 +21,20 @@ export const UNIT_META: Record<UnitSlug, UnitMeta> = {
     name: 'ROM Brasil',
     short: 'Brasil',
     accent: '#c4a35a',
+    panelUrl: 'https://rom-club.vercel.app',
   },
   'rom-iguatemi': {
     slug: 'rom-iguatemi',
     name: 'ROM Iguatemi',
     short: 'Iguatemi',
     accent: '#7eb8a8',
+    panelUrl: 'https://rom-iguatemi.vercel.app',
   },
+}
+
+/** Relatório gerência (0011/0021) no painel da unidade. */
+export function unitGerenciaUrl(slug: UnitSlug): string {
+  return `${UNIT_META[slug].panelUrl}/admin/relatorio-diretoria`
 }
 
 /**

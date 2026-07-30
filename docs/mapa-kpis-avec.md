@@ -1,6 +1,6 @@
 # Cérebro ROM — mapa único
 
-Fonte de verdade. UI: **Comando → Metas → Comparativo → Hoje → Semana → Comercial**.
+Fonte de verdade do mapa UI. Contrato de schema/KPI Cérebro↔unidades: **[contract.md](./contract.md)**.
 
 ```
 Avec (por unidade)

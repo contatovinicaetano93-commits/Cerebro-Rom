@@ -5,6 +5,8 @@ export interface UnitMeta {
   name: string
   short: string
   accent: string
+  /** URL pública do painel operacional da unidade. */
+  panelUrl: string
 }
 
 export interface DayMetrics {
