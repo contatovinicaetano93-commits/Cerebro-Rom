@@ -22,12 +22,13 @@ function getClient(databaseUrl: string): PostgresSql {
   if (!client) {
     client = postgres(databaseUrl, {
       ssl: 'require',
-      max: 1,
+      // 2 conexões: overview race + poll seguinte sem serializar tudo em 1 slot.
+      max: 2,
       prepare: false,
       idle_timeout: 20,
       max_lifetime: 60 * 5,
-      // Neon morto/quota pode aceitar TCP e não responder — não ficar preso.
-      connect_timeout: 8,
+      // Pooler morto/quota pode aceitar TCP e não responder — não ficar preso.
+      connect_timeout: 10,
     })
     clients.set(databaseUrl, client)
   }

@@ -17,7 +17,7 @@ import {
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
 /** Uma unidade lenta (rede/pooler) não pode travar o painel inteiro. */
-const UNIT_FETCH_TIMEOUT_MS = 12_000
+const UNIT_FETCH_TIMEOUT_MS = 22_000
 
 async function fetchUnitBounded(
   config: ReturnType<typeof getUnitConfigs>[number],
@@ -36,12 +36,8 @@ async function fetchUnitBounded(
   try {
     return await Promise.race([fetchLiveUnit(config, day), timeout])
   } catch (err) {
-    // Timeout: não evict — a query órfã ainda pode estar no client max:1;
-    // matar o client no meio piora a corrida com o próximo poll.
-    const msg = String(err instanceof Error ? err.message : err)
-    if (!/Timeout \d+s/i.test(msg)) {
-      evictSql(url)
-    }
+    // Timeout ou erro: evict client max:1 preso — próximo poll não herda hang.
+    evictSql(url)
     throw err
   } finally {
     if (timer) clearTimeout(timer)
