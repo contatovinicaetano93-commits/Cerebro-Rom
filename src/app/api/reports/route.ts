@@ -46,7 +46,7 @@ export async function POST(req: Request) {
           return NextResponse.json(
             {
               error:
-                'asOf inválido — use YYYY-MM-DD (hoje ou até 120 dias atrás, America/Sao_Paulo)',
+                'asOf inválido — use YYYY-MM-DD (hoje ou desde 2025-01-01, America/Sao_Paulo)',
             },
             { status: 400 },
           )

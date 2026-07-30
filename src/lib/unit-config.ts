@@ -92,6 +92,12 @@ export function todayIsoSaoPaulo(): string {
 const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 
 /**
+ * Primeiro dia capturável em Relatórios (alinha com gerência BR/IG desde 2025).
+ * Métricas vêm de salon_daily_metrics nas unidades — dias sem sync voltam zerados.
+ */
+export const REPORT_AS_OF_EARLIEST = '2025-01-01'
+
+/**
  * Valida dia ISO (YYYY-MM-DD) ≤ hoje (America/Sao_Paulo).
  * Usado em captura/export de relatório com data escolhida.
  */
@@ -111,9 +117,7 @@ export function parseAsOfDay(raw: unknown): string | null {
   }
   const today = todayIsoSaoPaulo()
   if (s > today) return null
-  // Limite prático: métricas diárias no fetch cobrem ~30d; não abrir anos.
-  const earliest = isoDaysBackFrom(today, 120)
-  if (s < earliest) return null
+  if (s < REPORT_AS_OF_EARLIEST) return null
   return s
 }
 

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { BarChart3, Camera, Download, FileSpreadsheet } from 'lucide-react'
 import { formatCurrency, formatDateTime } from '@/lib/format'
+import { REPORT_AS_OF_EARLIEST } from '@/lib/unit-config'
 
 type ReportRunMeta = {
   id: string
@@ -29,14 +30,7 @@ function todayLocalIso(): string {
 }
 
 function minAsOfIso(): string {
-  const today = todayLocalIso()
-  const [y, m, d] = today.split('-').map(Number)
-  const dt = new Date(Date.UTC(y!, m! - 1, d!))
-  dt.setUTCDate(dt.getUTCDate() - 120)
-  const yy = dt.getUTCFullYear()
-  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
-  const dd = String(dt.getUTCDate()).padStart(2, '0')
-  return `${yy}-${mm}-${dd}`
+  return REPORT_AS_OF_EARLIEST
 }
 
 export function ReportsPanel() {
