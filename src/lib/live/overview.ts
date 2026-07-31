@@ -644,6 +644,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
 
   const syncHardFail = units.some(isSyncHardFail)
   const syncPartial = units.some((u) => !u.sync.offline && u.sync.status === 'partial')
+  const syncStale = units.some((u) => !u.sync.offline && u.sync.status === 'stale')
   const unreadable = units.some((u) => !isUnitReadable(u))
   // hollow já entra em unreadable; flag só para rótulo do período.
   const hollowMetrics = units.some((u) => isMetricsHollow(u))
@@ -652,6 +653,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
     fetchErrors.length > 0 ||
     syncHardFail ||
     syncPartial ||
+    syncStale ||
     unreadable
 
   const histNote = isHistorical
@@ -666,11 +668,13 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
         ? `Live parcial · sync com erro · ${day}${histNote}`
         : syncPartial
           ? `Live parcial · sync incompleto · ${day}${histNote}`
-          : hollowMetrics
-            ? `Live parcial · base sem métricas · ${day}${histNote}`
-            : unreadable
-              ? `Live parcial · unidade ilegível · ${day}${histNote}`
-              : `Live parcial · ${day}${histNote}`
+          : syncStale
+            ? `Live parcial · sync desatualizado · ${day}${histNote}`
+            : hollowMetrics
+              ? `Live parcial · base sem métricas · ${day}${histNote}`
+              : unreadable
+                ? `Live parcial · unidade ilegível · ${day}${histNote}`
+                : `Live parcial · ${day}${histNote}`
       : `Live · ${day}${histNote}`,
     consolidated,
     units,

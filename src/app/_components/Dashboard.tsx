@@ -364,17 +364,19 @@ export function Dashboard({
 
   const networkSyncSource = useMemo(() => {
     const statuses = data.units.map((u) => u.sync.status)
+    const hasSyncErrorOrPartial = statuses.some((s) => s === 'error' || s === 'partial')
+    const hasSyncStale = statuses.some((s) => s === 'stale')
     const hollowOnly =
       data.partial &&
       data.units.some((u) => isMetricsHollow(u)) &&
-      !statuses.some((s) => s === 'error' || s === 'partial') &&
+      !hasSyncErrorOrPartial &&
       !data.units.some((u) => u.sync.offline)
     if (hollowOnly) return 'incompleto' as const
     // Prioridade: error/partial (incompleto) > stale (desatualizado) — não suavizar token morto.
-    if (statuses.some((s) => s === 'error' || s === 'partial') || data.partial) {
+    if (hasSyncErrorOrPartial || (data.partial && !hasSyncStale)) {
       return 'incompleto' as const
     }
-    if (statuses.some((s) => s === 'stale')) return 'desatualizado' as const
+    if (hasSyncStale) return 'desatualizado' as const
     return null
   }, [data.units, data.partial])
 
@@ -442,6 +444,8 @@ export function Dashboard({
                     ? 'Totais refletem só unidades ao vivo.'
                     : data.units.some((u) => u.sync.status === 'error')
                       ? 'Sync com erro em alguma unidade — KPIs do dia podem estar incompletos.'
+                      : data.units.some((u) => u.sync.status === 'stale')
+                        ? 'Sync desatualizado em alguma unidade — confira cron antes de agir.'
                       : data.units.some((u) => isMetricsHollow(u)) &&
                           !data.units.some(
                             (u) =>
@@ -841,9 +845,9 @@ export function Dashboard({
                           <span className="rounded-md border border-border/60 bg-panel px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted">
                             Quieto
                           </span>
-                        ) : u?.sync.status === 'partial' ? (
+                        ) : u?.sync.status === 'partial' || u?.sync.status === 'stale' ? (
                           <span className="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-warning">
-                            Parcial
+                            {u?.sync.status === 'stale' ? 'Atrasado' : 'Parcial'}
                           </span>
                         ) : null}
                       </div>
