@@ -22,7 +22,7 @@ function run(
 }
 
 describe('resolveUnitSyncStatus', () => {
-  it('surfaces an older full error even when newer fast finished ok', () => {
+  it('prefers a newer fast ok over an older full error', () => {
     const sync = resolveUnitSyncStatus({
       full: run('full', 'error', 50, 'P3 falhou'),
       fast: run('fast', 'ok', 5),
@@ -30,9 +30,9 @@ describe('resolveUnitSyncStatus', () => {
       nowMs: NOW,
     })
 
-    expect(sync.status).toBe('error')
-    expect(sync.lastSyncAt).toBe(iso(50))
-    expect(sync.label).toContain('P3 falhou')
+    expect(sync.status).toBe('ok')
+    expect(sync.lastSyncAt).toBe(iso(5))
+    expect(sync.label).toContain('Avec sync há 5 min')
   })
 
   it('prefers the most recent errored kind when both finished rows errored', () => {
@@ -48,17 +48,42 @@ describe('resolveUnitSyncStatus', () => {
     expect(sync.label).toContain('fast falhou')
   })
 
-  it('surfaces a partial row before considering stale age', () => {
+  it('prefers a newer fast ok over an older full partial timeout', () => {
     const sync = resolveUnitSyncStatus({
-      full: run('full', 'partial', 60 * 26, 'abandoned_partial_timeout'),
+      full: run('full', 'partial', 60 * 5, 'abandoned_partial_timeout'),
       fast: run('fast', 'ok', 10),
       runningAt: null,
       nowMs: NOW,
     })
 
+    expect(sync.status).toBe('ok')
+    expect(sync.lastSyncAt).toBe(iso(10))
+    expect(sync.label).toContain('Avec sync há 10 min')
+  })
+
+  it('still marks analytics stale when full is older than 24h even if fast ok', () => {
+    const sync = resolveUnitSyncStatus({
+      full: run('full', 'ok', 60 * 26),
+      fast: run('fast', 'ok', 10),
+      runningAt: null,
+      nowMs: NOW,
+    })
+
+    expect(sync.status).toBe('stale')
+    expect(sync.label).toContain('Sync full atrasado')
+  })
+
+  it('surfaces the newest partial when it is more recent than ok', () => {
+    const sync = resolveUnitSyncStatus({
+      full: run('full', 'ok', 60 * 2),
+      fast: run('fast', 'partial', 8, 'abandoned_partial_timeout'),
+      runningAt: null,
+      nowMs: NOW,
+    })
+
     expect(sync.status).toBe('partial')
-    expect(sync.lastSyncAt).toBe(iso(60 * 26))
-    expect(sync.label).toContain('timeout, full')
+    expect(sync.lastSyncAt).toBe(iso(8))
+    expect(sync.label).toContain('timeout, fast')
   })
 
   it('ignores an abandoned running row so stale age can surface', () => {

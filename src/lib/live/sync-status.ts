@@ -71,36 +71,35 @@ export function resolveUnitSyncStatus({
   const ageStale = fullStale || fastStale
   const latest = newestSyncRun(finished)!
 
-  const errorRun = newestSyncRun(finished.filter((row) => row.status === 'error'))
-  if (errorRun != null) {
-    const lastSyncAt = new Date(errorRun.created_at).toISOString()
-    const ageLabel = syncAgeLabel(errorRun.created_at, nowMs)
+  // Status do run mais recente — full antigo error/partial não mascara fast ok (Hoje/caixa).
+  if (latest.status === 'error') {
+    const lastSyncAt = new Date(latest.created_at).toISOString()
+    const ageLabel = syncAgeLabel(latest.created_at, nowMs)
     return {
       status: 'error',
       lastSyncAt,
-      label: errorRun.error
-        ? `Sync erro (~${ageLabel}): ${errorRun.error.slice(0, 80)}`
+      label: latest.error
+        ? `Sync erro (~${ageLabel}): ${latest.error.slice(0, 80)}`
         : `Último sync com erro (~${ageLabel})`,
       running,
     }
   }
 
   // partial antes de running/age-stale — partial útil não vira "desatualizado".
-  const partialRun = newestSyncRun(finished.filter((row) => row.status === 'partial'))
-  if (partialRun != null) {
-    const lastSyncAt = new Date(partialRun.created_at).toISOString()
-    const ageLabel = syncAgeLabel(partialRun.created_at, nowMs)
+  if (latest.status === 'partial') {
+    const lastSyncAt = new Date(latest.created_at).toISOString()
+    const ageLabel = syncAgeLabel(latest.created_at, nowMs)
     const abandoned =
-      partialRun.error?.includes('abandoned_partial_timeout') ||
-      partialRun.error?.includes('Sync interrompido')
+      latest.error?.includes('abandoned_partial_timeout') ||
+      latest.error?.includes('Sync interrompido')
     return {
       status: 'partial',
       lastSyncAt,
       label: abandoned
-        ? `Sync incompleto (timeout, ${partialRun.kind}, ~${ageLabel}) · dados usáveis`
-        : partialRun.error
-          ? `Sync parcial (${partialRun.kind}, ~${ageLabel}): ${partialRun.error.slice(0, 80)}`
-          : `Sync parcial (${partialRun.kind}, ~${ageLabel}) · dados usáveis`,
+        ? `Sync incompleto (timeout, ${latest.kind}, ~${ageLabel}) · dados usáveis`
+        : latest.error
+          ? `Sync parcial (${latest.kind}, ~${ageLabel}): ${latest.error.slice(0, 80)}`
+          : `Sync parcial (${latest.kind}, ~${ageLabel}) · dados usáveis`,
       running,
     }
   }
