@@ -1,5 +1,6 @@
 import type { getSql } from '@/lib/db'
-import type { OpsCommerce, OpsWeek } from '@/lib/types'
+import { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
+import type { DayMetrics, OpsCommerce, OpsWeek } from '@/lib/types'
 
 function n(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -280,6 +281,7 @@ async function fetchLatestP3(sql: Sql, today: string): Promise<P3Row | null> {
 /**
  * Fallback quando salon_p3_daily.return_rate está vazio (ex.: IG cutover / 0007 lista).
  * Mix MTD: returning / (returning + new) em salon_daily_metrics.
+ * Sanitiza dia a dia (dump Avec de “novos”) antes de somar — senão infla o denominador.
  */
 async function fetchReturnRateFromDailyMix(
   sql: Sql,
@@ -290,14 +292,49 @@ async function fetchReturnRateFromDailyMix(
   try {
     const rows = (await sql`
       select
-        coalesce(sum(returning_clients), 0)::int as returning_clients,
-        coalesce(sum(new_clients), 0)::int as new_clients
+        day::text as day,
+        coalesce(appointments, 0)::int as appointments,
+        coalesce(attended, 0)::int as attended,
+        coalesce(returning_clients, 0)::int as returning_clients,
+        coalesce(new_clients, 0)::int as new_clients,
+        coalesce(revenue, 0)::float as revenue
       from salon_daily_metrics
       where day >= ${monthStart}::date
         and day <= ${today}::date
-    `) as { returning_clients: number; new_clients: number }[]
-    const returning = n(rows[0]?.returning_clients)
-    const neu = n(rows[0]?.new_clients)
+    `) as {
+      day: string
+      appointments: number
+      attended: number
+      returning_clients: number
+      new_clients: number
+      revenue: number
+    }[]
+
+    let returning = 0
+    let neu = 0
+    for (const row of rows) {
+      const day: DayMetrics = {
+        day: row.day,
+        revenue: n(row.revenue),
+        appointments: n(row.appointments),
+        attended: n(row.attended),
+        noShows: 0,
+        cancelled: 0,
+        newClients: n(row.new_clients),
+        returningClients: n(row.returning_clients),
+        ticketAvg: 0,
+        capacity: 0,
+        dailyGoal: 0,
+        goalSet: false,
+        capacitySet: false,
+        leads: 0,
+        converted: 0,
+      }
+      sanitizeDayMix(day, 0, false)
+      returning += day.returningClients
+      neu += day.newClients
+    }
+
     const denom = returning + neu
     if (denom <= 0 || returning <= 0) return null
     return {
