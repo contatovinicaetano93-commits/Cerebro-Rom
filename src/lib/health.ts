@@ -1,6 +1,14 @@
 import { getUnitConfigs } from '@/lib/unit-config'
 import { isAuthEnabled, isProduction } from '@/lib/auth'
 import { getSql } from '@/lib/db'
+import {
+  computeSyncOk,
+  type UnitHealthProbe,
+  type UnitSyncMeta,
+} from '@/lib/health-sync'
+
+export type { UnitHealthProbe, UnitSyncMeta }
+export { computeSyncOk }
 
 async function probeUnitDb(url: string | null | undefined) {
   if (!url?.trim()) {
@@ -8,25 +16,13 @@ async function probeUnitDb(url: string | null | undefined) {
       configured: false,
       connected: false,
       error: null as string | null,
-      sync: null as null | {
-        fast_status: string | null
-        fast_age_min: number | null
-        full_status: string | null
-        full_age_min: number | null
-        running: boolean
-      },
+      sync: null as UnitSyncMeta | null,
     }
   }
   try {
     const sql = getSql(url)
     await sql`select 1 as ok`
-    let sync: {
-      fast_status: string | null
-      fast_age_min: number | null
-      full_status: string | null
-      full_age_min: number | null
-      running: boolean
-    } | null = null
+    let sync: UnitSyncMeta | null = null
     try {
       const [fastRows, fullRows, runningRows] = await Promise.all([
         sql`
@@ -86,24 +82,28 @@ export async function getPublicHealthStatus() {
 /**
  * Admin logado — readiness leve.
  * Não chama buildOverview (dobraria leituras nos DBs das unidades).
+ * `ok` = liveness (DB+auth). `sync_ok` = sync operacional (error/partial/stale).
  */
 export async function getHealthStatus() {
   const configs = getUnitConfigs()
-  const probes = await Promise.all(
+  const probes: UnitHealthProbe[] = await Promise.all(
     configs.map(async (c) => ({
       slug: c.meta.slug,
       name: c.meta.name,
       ...(await probeUnitDb(c.databaseUrl)),
     })),
   )
+  const syncOk = computeSyncOk(probes)
 
   const br = configs.find((c) => c.meta.slug === 'rom-brasil')
   const ig = configs.find((c) => c.meta.slug === 'rom-iguatemi')
 
   return {
     ok: probes.some((p) => p.connected) && (!isProduction() || isAuthEnabled()),
+    sync_ok: syncOk,
     readiness: {
       auth: isAuthEnabled(),
+      sync_ok: syncOk,
       brasil_supabase: Boolean(br?.databaseUrl),
       iguatemi_supabase: Boolean(ig?.databaseUrl),
       // Aliases Neon: sempre false (unidades não usam mais Neon).
@@ -111,7 +111,7 @@ export async function getHealthStatus() {
       neon_brasil: false,
       neon_iguatemi: false,
       awaiting_avec_token: false,
-      note: 'Brasil+Iguatemi=Supabase pooler · health faz probe leve + meta de sync (overview em /api/overview)',
+      note: 'Brasil+Iguatemi=Supabase pooler · health faz probe leve + meta de sync/sync_ok (overview em /api/overview)',
     },
     units: probes,
     // Overview completo fica em GET /api/overview — evita 2× carga no DB.

@@ -1,4 +1,4 @@
-import { getHealthStatus } from '@/lib/health'
+import { getHealthStatus, type UnitHealthProbe } from '@/lib/health'
 import { AlertManager } from '@/lib/alerts'
 
 export interface HealthMetrics {
@@ -18,7 +18,16 @@ export class HealthMonitor {
       const health = await getHealthStatus()
 
       if (!health.ok) {
-        issues.push('Overall health check failed')
+        const message =
+          'Connectivity/auth health check failed: no unit database is connected, or auth is disabled in production.'
+        issues.push(message)
+        await this.alertIfNew('connectivity_auth_failed', 'error', 'Health Connectivity/Auth Failed', message)
+      }
+
+      if (health.sync_ok === false) {
+        const message = describeSyncHealthIssue(health.units)
+        issues.push(message)
+        await this.alertIfNew('sync_degraded', 'warning', 'Sync Health Degraded', message)
       }
 
       // Check unit databases
@@ -76,4 +85,45 @@ export class HealthMonitor {
       email: severity === 'critical',
     })
   }
+}
+
+function describeSyncHealthIssue(units: UnitHealthProbe[]): string {
+  const syncIssues = units
+    .filter((unit) => unit.connected)
+    .flatMap((unit) => describeUnitSyncIssues(unit))
+
+  if (syncIssues.length === 0) {
+    return 'Sync health degraded: sync probe reported an operational issue.'
+  }
+
+  return `Sync health degraded: ${syncIssues.join('; ')}`
+}
+
+function describeUnitSyncIssues(unit: UnitHealthProbe): string[] {
+  const sync = unit.sync
+  if (sync == null) {
+    return [`${unit.slug} sync metadata unavailable`]
+  }
+
+  const issues: string[] = []
+  if (sync.fast_status === 'error' || sync.fast_status === 'partial') {
+    issues.push(`${unit.slug} fast sync ${sync.fast_status}`)
+  }
+  if (sync.full_status === 'error' || sync.full_status === 'partial') {
+    issues.push(`${unit.slug} full sync ${sync.full_status}`)
+  }
+
+  if (!sync.running) {
+    if (sync.fast_status == null && sync.full_status == null) {
+      issues.push(`${unit.slug} sync metadata has no finished runs`)
+    }
+    if (sync.fast_age_min != null && sync.fast_age_min > 60) {
+      issues.push(`${unit.slug} fast sync stale (${sync.fast_age_min} min)`)
+    }
+    if (sync.full_age_min != null && sync.full_age_min > 24 * 60) {
+      issues.push(`${unit.slug} full sync stale (${sync.full_age_min} min)`)
+    }
+  }
+
+  return issues
 }
