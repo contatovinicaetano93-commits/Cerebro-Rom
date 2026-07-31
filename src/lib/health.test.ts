@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeSyncOk,
+  pickHealthFinishedRun,
   type UnitHealthProbe,
   type UnitSyncMeta,
 } from './health-sync'
+import { isEmptyKillError } from './live/sync-status'
 
 function sync(overrides: Partial<UnitSyncMeta> = {}): UnitSyncMeta {
   return {
@@ -50,5 +52,46 @@ describe('computeSyncOk', () => {
         probe({ sync: sync({ fast_age_min: 61, full_age_min: 24 * 60 + 1, running: true }) }),
       ]),
     ).toBe(true)
+  })
+})
+
+describe('pickHealthFinishedRun', () => {
+  it('skips empty-kill when a healthier finished run exists', () => {
+    const picked = pickHealthFinishedRun(
+      [
+        {
+          status: 'error',
+          created_at: '2026-07-31T12:00:00.000Z',
+          error: 'Sync interrompido (timeout/kill)',
+        },
+        {
+          status: 'ok',
+          created_at: '2026-07-31T11:40:00.000Z',
+          error: null,
+        },
+      ],
+      isEmptyKillError,
+    )
+    expect(picked?.status).toBe('ok')
+  })
+
+  it('keeps real errors', () => {
+    const picked = pickHealthFinishedRun(
+      [
+        {
+          status: 'error',
+          created_at: '2026-07-31T12:00:00.000Z',
+          error: 'P3 falhou',
+        },
+        {
+          status: 'ok',
+          created_at: '2026-07-31T11:40:00.000Z',
+          error: null,
+        },
+      ],
+      isEmptyKillError,
+    )
+    expect(picked?.status).toBe('error')
+    expect(picked?.error).toBe('P3 falhou')
   })
 })
