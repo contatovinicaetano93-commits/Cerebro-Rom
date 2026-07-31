@@ -90,7 +90,7 @@ describe('resolveUnitSyncStatus', () => {
     const sync = resolveUnitSyncStatus({
       full: run('full', 'ok', 60 * 2),
       fast: run('fast', 'ok', 70),
-      runningAt: iso(13),
+      runningAt: iso(17),
       nowMs: NOW,
     })
 
@@ -110,5 +110,31 @@ describe('resolveUnitSyncStatus', () => {
     expect(sync.status).toBe('ok')
     expect(sync.running).toBe(true)
     expect(sync.label).toContain('em andamento')
+  })
+
+  it('prefers older full ok over a newer empty kill error on fast', () => {
+    const sync = resolveUnitSyncStatus({
+      full: run('full', 'ok', 30),
+      fast: run('fast', 'error', 2, 'Sync interrompido (abandoned_partial_timeout)'),
+      runningAt: null,
+      nowMs: NOW,
+    })
+
+    expect(sync.status).toBe('ok')
+    expect(sync.lastSyncAt).toBe(iso(30))
+    expect(sync.label).toContain('Avec sync há 30 min')
+  })
+
+  it('still surfaces a real newer error such as P3 falhou', () => {
+    const sync = resolveUnitSyncStatus({
+      full: run('full', 'ok', 40),
+      fast: run('fast', 'error', 3, 'P3 falhou'),
+      runningAt: null,
+      nowMs: NOW,
+    })
+
+    expect(sync.status).toBe('error')
+    expect(sync.lastSyncAt).toBe(iso(3))
+    expect(sync.label).toContain('P3 falhou')
   })
 })

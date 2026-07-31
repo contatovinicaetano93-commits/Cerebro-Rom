@@ -7,7 +7,7 @@ export type UnitSyncRunRow = {
   kind: string
 }
 
-const RUNNING_SYNC_TTL_MS = 12 * 60_000
+const RUNNING_SYNC_TTL_MS = 16 * 60_000
 
 function syncRunTime(row: Pick<UnitSyncRunRow, 'created_at'>): number {
   return new Date(row.created_at).getTime()
@@ -18,6 +18,13 @@ function newestSyncRun(rows: UnitSyncRunRow[]): UnitSyncRunRow | null {
   return rows.reduce((latest, row) =>
     syncRunTime(row) >= syncRunTime(latest) ? row : latest,
   )
+}
+
+/** Orphan/kill errors with no useful progress — do not mask older healthy ok/partial. */
+function isEmptyKillError(row: UnitSyncRunRow): boolean {
+  if (row.status !== 'error') return false
+  const e = row.error ?? ''
+  return /abandoned|Sync interrompido|timeout\/kill|interrompido/i.test(e)
 }
 
 function syncAgeLabel(createdAt: string, nowMs: number): string {
@@ -69,7 +76,10 @@ export function resolveUnitSyncStatus({
   // Paridade sync-meta: missing fast ≠ stale por si só (never_synced só se ambos null).
   const fastStale = fastAgeHours != null && fastAgeHours > 1
   const ageStale = fullStale || fastStale
-  const latest = newestSyncRun(finished)!
+  // Ignore empty kill/abandon errors when a healthier finished run exists.
+  const withoutEmptyKills = finished.filter((r) => !isEmptyKillError(r))
+  const candidates = withoutEmptyKills.length > 0 ? withoutEmptyKills : finished
+  const latest = newestSyncRun(candidates)!
 
   // Status do run mais recente — full antigo error/partial não mascara fast ok (Hoje/caixa).
   if (latest.status === 'error') {
