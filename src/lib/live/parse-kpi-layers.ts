@@ -365,7 +365,7 @@ export async function fetchOpsWeek(
     if (fromMix != null && fromMix.rate > 0) {
       returnRate = fromMix.rate
       returnAsOfDay = today
-      if (newClientsPeriod == null) newClientsPeriod = fromMix.newClients
+      newClientsPeriod = fromMix.newClients
     }
   }
 

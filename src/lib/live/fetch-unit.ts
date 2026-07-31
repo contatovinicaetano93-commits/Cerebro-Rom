@@ -11,6 +11,7 @@ import { fetchOpsCommerce, fetchOpsWeek } from '@/lib/live/parse-kpi-layers'
 import { EMPTY_OPS_FINANCE, EMPTY_OPS_STOCK, fetchOpsFinance, fetchOpsStock } from '@/lib/live/fetch-money-stock'
 import { readGoalsFromDb, resolveGoals } from '@/lib/goals'
 import { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
+import { resolveUnitSyncStatus, type UnitSyncRunRow } from '@/lib/live/sync-status'
 import type { DayMetrics, OpsToday, UnitMeta, UnitSnapshot } from '@/lib/types'
 
 export { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
@@ -184,7 +185,7 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
   // - finished: running ≠ true
   // - ordem: error → partial → age-stale → ok (partial não some sob age)
   // - fastStale só se fast finished existe e >1h (não se fast==null)
-  // - running mid-flight ameniza stale
+  // - running mid-flight só ameniza stale dentro de TTL curto
   const empty: UnitSnapshot['sync'] = {
     status: 'stale',
     lastSyncAt: new Date(0).toISOString(),
@@ -219,118 +220,10 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
       `,
     ])
 
-    const full =
-      (fullRows as { status: string; created_at: string; error: string | null; kind: string }[])[0] ??
-      null
-    const fast =
-      (fastRows as { status: string; created_at: string; error: string | null; kind: string }[])[0] ??
-      null
-    const runningAt =
-      (runningRows as { created_at: string }[])[0]?.created_at ?? null
-    const running = runningAt != null
-
-    if (!full && !fast) {
-      if (running) {
-        return {
-          status: 'ok',
-          lastSyncAt: new Date(runningAt).toISOString(),
-          label: 'Sync Avec em andamento…',
-          running: true,
-        }
-      }
-      return empty
-    }
-
-    const fullAgeHours =
-      full != null ? (Date.now() - new Date(full.created_at).getTime()) / 3_600_000 : null
-    const fastAgeHours =
-      fast != null ? (Date.now() - new Date(fast.created_at).getTime()) / 3_600_000 : null
-    const fullStale = fullAgeHours != null && fullAgeHours > 24
-    // Paridade sync-meta: missing fast ≠ stale por si só (never_synced só se ambos null).
-    const fastStale = fastAgeHours != null && fastAgeHours > 1
-    const ageStale = fullStale || fastStale
-
-    const latest =
-      full && fast
-        ? new Date(fast.created_at).getTime() >= new Date(full.created_at).getTime()
-          ? fast
-          : full
-        : (full ?? fast)!
-
-    const lastSyncAt = new Date(latest.created_at).toISOString()
-    const ageMs = Date.now() - new Date(latest.created_at).getTime()
-    const ageH = ageMs / 3_600_000
-    const ageLabel =
-      ageH < 1 ? `${Math.max(1, Math.round(ageH * 60))} min` : `${ageH.toFixed(1)}h`
-
-    if (latest.status === 'error') {
-      return {
-        status: 'error',
-        lastSyncAt,
-        label: latest.error
-          ? `Sync erro (~${ageLabel}): ${latest.error.slice(0, 80)}`
-          : `Último sync com erro (~${ageLabel})`,
-        running,
-      }
-    }
-
-    // partial antes de age-stale — partial útil não vira "desatualizado".
-    if (latest.status === 'partial') {
-      const abandoned =
-        latest.error?.includes('abandoned_partial_timeout') ||
-        latest.error?.includes('Sync interrompido')
-      return {
-        status: 'partial',
-        lastSyncAt,
-        label: abandoned
-          ? `Sync incompleto (timeout, ${latest.kind}, ~${ageLabel}) · dados usáveis`
-          : latest.error
-            ? `Sync parcial (${latest.kind}, ~${ageLabel}): ${latest.error.slice(0, 80)}`
-            : `Sync parcial (${latest.kind}, ~${ageLabel}) · dados usáveis`,
-        running,
-      }
-    }
-
-    if (running) {
-      return {
-        status: 'ok',
-        lastSyncAt,
-        label: `Sync Avec em andamento… (último ok ~${ageLabel})`,
-        running: true,
-      }
-    }
-
-    if (ageStale) {
-      if (fastStale && fastAgeHours != null) {
-        return {
-          status: 'stale',
-          lastSyncAt,
-          label: `Sync fast atrasado (~${Math.max(1, Math.round(fastAgeHours * 60))} min) — caixa/Hoje pode estar velho`,
-        }
-      }
-      if (fullStale && fullAgeHours != null) {
-        return {
-          status: 'stale',
-          lastSyncAt,
-          label: `Sync full atrasado (~${fullAgeHours.toFixed(1)}h) — analytics desatualizados`,
-        }
-      }
-      return {
-        status: 'stale',
-        lastSyncAt,
-        label: `Sync atrasado (~${ageLabel})`,
-      }
-    }
-
-    const mins = Math.max(1, Math.round(ageMs / 60_000))
-    return {
-      status: 'ok',
-      lastSyncAt,
-      label:
-        mins < 60
-          ? `Avec sync há ${mins} min`
-          : `Avec sync há ${(mins / 60).toFixed(1)}h`,
-    }
+    const full = (fullRows as UnitSyncRunRow[])[0] ?? null
+    const fast = (fastRows as UnitSyncRunRow[])[0] ?? null
+    const runningAt = (runningRows as { created_at: string }[])[0]?.created_at ?? null
+    return resolveUnitSyncStatus({ full, fast, runningAt })
   } catch {
     return empty
   }

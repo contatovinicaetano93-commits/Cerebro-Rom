@@ -111,7 +111,7 @@ export async function getHealthStatus() {
       neon_brasil: false,
       neon_iguatemi: false,
       awaiting_avec_token: false,
-      note: 'Brasil+Iguatemi=Supabase pooler · health só faz select 1 (overview em /api/overview)',
+      note: 'Brasil+Iguatemi=Supabase pooler · health faz probe leve + meta de sync (overview em /api/overview)',
     },
     units: probes,
     // Overview completo fica em GET /api/overview — evita 2× carga no DB.
