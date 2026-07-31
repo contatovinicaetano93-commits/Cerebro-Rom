@@ -6,6 +6,25 @@ export type UnitSyncMeta = {
   running: boolean
 }
 
+export type UnitSyncRunProbeRow = {
+  status: string
+  created_at: string
+  error: string | null
+}
+
+/**
+ * Latest usable finished run for health probes — skip empty-kill when a
+ * healthier row exists (paridade resolveUnitSyncStatus / overview).
+ */
+export function pickHealthFinishedRun(
+  rows: UnitSyncRunProbeRow[],
+  isEmptyKill: (row: Pick<UnitSyncRunProbeRow, 'status' | 'error'>) => boolean,
+): UnitSyncRunProbeRow | null {
+  if (rows.length === 0) return null
+  const usable = rows.find((row) => !isEmptyKill(row))
+  return usable ?? rows[0] ?? null
+}
+
 export type UnitHealthProbe = {
   slug: string
   name: string

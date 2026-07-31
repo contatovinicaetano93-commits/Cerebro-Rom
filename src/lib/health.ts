@@ -3,9 +3,12 @@ import { isAuthEnabled, isProduction } from '@/lib/auth'
 import { getSql } from '@/lib/db'
 import {
   computeSyncOk,
+  pickHealthFinishedRun,
   type UnitHealthProbe,
   type UnitSyncMeta,
+  type UnitSyncRunProbeRow,
 } from '@/lib/health-sync'
+import { isEmptyKillError } from '@/lib/live/sync-status'
 
 export type { UnitHealthProbe, UnitSyncMeta }
 export { computeSyncOk }
@@ -24,18 +27,19 @@ async function probeUnitDb(url: string | null | undefined) {
     await sql`select 1 as ok`
     let sync: UnitSyncMeta | null = null
     try {
+      // limit 5: pula streak de empty-kill sem carregar histórico inteiro
       const [fastRows, fullRows, runningRows] = await Promise.all([
         sql`
-          select status, created_at
+          select status, created_at, error
           from avec_sync_runs
           where kind = 'fast' and coalesce(stats->>'running', 'false') <> 'true'
-          order by created_at desc limit 1
+          order by created_at desc limit 5
         `,
         sql`
-          select status, created_at
+          select status, created_at, error
           from avec_sync_runs
           where kind = 'full' and coalesce(stats->>'running', 'false') <> 'true'
-          order by created_at desc limit 1
+          order by created_at desc limit 5
         `,
         sql`
           select 1 as n from avec_sync_runs
@@ -43,8 +47,14 @@ async function probeUnitDb(url: string | null | undefined) {
           limit 1
         `,
       ])
-      const fast = (fastRows as { status: string; created_at: string }[])[0]
-      const full = (fullRows as { status: string; created_at: string }[])[0]
+      const fast = pickHealthFinishedRun(
+        fastRows as UnitSyncRunProbeRow[],
+        isEmptyKillError,
+      )
+      const full = pickHealthFinishedRun(
+        fullRows as UnitSyncRunProbeRow[],
+        isEmptyKillError,
+      )
       const ageMin = (at: string | undefined) =>
         at != null ? Math.round((Date.now() - new Date(at).getTime()) / 60_000) : null
       sync = {

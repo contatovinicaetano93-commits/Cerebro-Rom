@@ -21,7 +21,7 @@ function newestSyncRun(rows: UnitSyncRunRow[]): UnitSyncRunRow | null {
 }
 
 /** Orphan/kill errors with no useful progress — do not mask older healthy ok/partial. */
-function isEmptyKillError(row: UnitSyncRunRow): boolean {
+export function isEmptyKillError(row: Pick<UnitSyncRunRow, 'status' | 'error'>): boolean {
   if (row.status !== 'error') return false
   const e = row.error ?? ''
   return /abandoned|Sync interrompido|timeout\/kill|interrompido/i.test(e)
