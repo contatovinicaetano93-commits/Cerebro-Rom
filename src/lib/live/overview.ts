@@ -619,11 +619,9 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
   )
 
   const liveUnits = units.filter((u) => !u.sync.offline)
-  if (liveUnits.length === 0) {
-    throw new Error('Nenhuma unidade live respondeu')
-  }
-
-  const consolidated = consolidate(liveUnits)
+  // Outage total: NÃO throw — preserva snapshots offline + fetchErrors já montados.
+  const consolidated =
+    liveUnits.length > 0 ? consolidate(liveUnits) : emptyConsolidated()
   // Trend recebe todas (offline/hard-fail → null na série — não zero falso).
   const trend30 = buildTrend30(units)
 
@@ -631,7 +629,16 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
     ...fetchErrors,
     ...buildNextActions(liveUnits, consolidated.goalsConfigured),
   ]
-  if (liveUnits.length < 2) {
+  if (liveUnits.length === 0) {
+    nextActions.unshift({
+      id: 'all-units-offline',
+      severity: 'critical',
+      unit: 'both',
+      title: 'Nenhuma unidade live respondeu',
+      detail: 'Brasil e Iguatemi offline ou ilegíveis — painel mostra diagnóstico por unidade',
+      action: 'Validar connection strings (pooler Supabase) e schema das duas unidades',
+    })
+  } else if (liveUnits.length < 2) {
     nextActions.unshift({
       id: 'partial-units',
       severity: 'warning',
@@ -659,23 +666,26 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
   const histNote = isHistorical
     ? ' · MTD até a data · estoque omitido · ranking ≤ data'
     : ''
+  const allOffline = liveUnits.length === 0
   return {
     generatedAt: new Date().toISOString(),
-    mode: 'live',
+    mode: allOffline ? 'degraded' : 'live',
     partial,
-    periodLabel: partial
-      ? syncHardFail
-        ? `Live parcial · sync com erro · ${day}${histNote}`
-        : syncPartial
-          ? `Live parcial · sync incompleto · ${day}${histNote}`
-          : syncStale
-            ? `Live parcial · sync desatualizado · ${day}${histNote}`
-            : hollowMetrics
-              ? `Live parcial · base sem métricas · ${day}${histNote}`
-              : unreadable
-                ? `Live parcial · unidade ilegível · ${day}${histNote}`
-                : `Live parcial · ${day}${histNote}`
-      : `Live · ${day}${histNote}`,
+    periodLabel: allOffline
+      ? `Degradado · nenhuma unidade live · ${day}${histNote}`
+      : partial
+        ? syncHardFail
+          ? `Live parcial · sync com erro · ${day}${histNote}`
+          : syncPartial
+            ? `Live parcial · sync incompleto · ${day}${histNote}`
+            : syncStale
+              ? `Live parcial · sync desatualizado · ${day}${histNote}`
+              : hollowMetrics
+                ? `Live parcial · base sem métricas · ${day}${histNote}`
+                : unreadable
+                  ? `Live parcial · unidade ilegível · ${day}${histNote}`
+                  : `Live parcial · ${day}${histNote}`
+        : `Live · ${day}${histNote}`,
     consolidated,
     units,
     trend30,

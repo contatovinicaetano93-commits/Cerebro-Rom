@@ -58,10 +58,9 @@ Abra [http://localhost:3000](http://localhost:3000) → redireciona para `/login
 | Variável | Padrão |
 |----------|--------|
 | `CEREBRO_ADMIN_USER` | `waltter` |
-| `CEREBRO_ADMIN_PASSWORD` | *(obrigatório em produção)* |
-| `CEREBRO_SESSION_SECRET` | opcional — secret da sessão (senão usa a senha) |
+| `CEREBRO_ADMIN_PASSWORD` | *(obrigatório em produção; também assina a sessão)* |
 
-Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias). Login: rate limit 10/15min por IP (Neon Cérebro). `/api/health` exige login.
+Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias), HMAC = senha admin (Edge e Serverless compartilham a mesma chave). `CEREBRO_SESSION_SECRET` não é usado. Login: rate limit 10/15min por IP. `/api/health` exige login.
 
 Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergência).
 
