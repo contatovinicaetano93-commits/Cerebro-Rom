@@ -85,7 +85,7 @@ function buildUnit(
     capacityNext2h,
     Math.round(capacityNext2h * (0.55 + seeded(slug === 'rom-brasil' ? 3 : 9) * 0.4)),
   )
-  const mixBase = today.newClients + today.returningClients
+  const mixBase = (today.newClients ?? 0) + (today.returningClients ?? 0)
   const mtdRevenue = sumField(mtdDays, 'revenue')
   const mtdAttended = sumField(mtdDays, 'attended')
   const packages =
@@ -108,12 +108,12 @@ function buildUnit(
     unit: UNIT_META[slug],
     today,
     opsToday: {
-      openSlotsToday: Math.max(0, capacity - today.appointments),
+      openSlotsToday: Math.max(0, capacity - (today.appointments ?? 0)),
       appointmentsNext2h,
       capacityNext2h,
       openSlotsNext2h: Math.max(0, capacityNext2h - appointmentsNext2h),
       slotsNext2hKnown: capacity > 0,
-      newShare: mixBase > 0 ? today.newClients / mixBase : 0,
+      newShare: mixBase > 0 ? (today.newClients ?? 0) / mixBase : 0,
     },
     opsWeek: {
       professionals: pros,
@@ -231,16 +231,16 @@ export function buildMockOverview(): CerebroOverview {
   )
 
   const units = [brasil, iguatemi]
-  const todayRevenue = units.reduce((a, u) => a + u.today.revenue, 0)
+  const todayRevenue = units.reduce((a, u) => a + (u.today.revenue ?? 0), 0)
   const todayGoal = units.reduce((a, u) => a + u.today.dailyGoal, 0)
   const mtdRevenue = units.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdGoal = units.reduce((a, u) => a + u.mtd.goal, 0)
-  const attended = units.reduce((a, u) => a + u.today.attended, 0)
-  const appointments = units.reduce((a, u) => a + u.today.appointments, 0)
-  const noShows = units.reduce((a, u) => a + u.today.noShows, 0)
+  const attended = units.reduce((a, u) => a + (u.today.attended ?? 0), 0)
+  const appointments = units.reduce((a, u) => a + (u.today.appointments ?? 0), 0)
+  const noShows = units.reduce((a, u) => a + (u.today.noShows ?? 0), 0)
   const capacity = units.reduce((a, u) => a + u.today.capacity, 0)
-  const newClients = units.reduce((a, u) => a + u.today.newClients, 0)
-  const returningClients = units.reduce((a, u) => a + u.today.returningClients, 0)
+  const newClients = units.reduce((a, u) => a + (u.today.newClients ?? 0), 0)
+  const returningClients = units.reduce((a, u) => a + (u.today.returningClients ?? 0), 0)
   const leads = units.reduce((a, u) => a + u.today.leads, 0)
   const converted = units.reduce((a, u) => a + u.today.converted, 0)
   const ticketAvg = attended > 0 ? Math.round(todayRevenue / attended) : 0
@@ -268,14 +268,14 @@ export function buildMockOverview(): CerebroOverview {
       occupancyConfigured: true,
       attendanceConfigured: true,
       ticketAvg,
-      revenueAtRisk: units.reduce((a, u) => a + u.today.noShows * u.today.ticketAvg, 0),
+      revenueAtRisk: units.reduce((a, u) => a + (u.today.noShows ?? 0) * (u.today.ticketAvg ?? 0), 0),
       newClients,
       returningClients,
       conversionRate: rate(converted, leads),
       openSlotsToday: units.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
       openSlotsNext2h: units.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
       slotsNext2hConfigured: units.some((u) => u.opsToday.slotsNext2hKnown),
-      cancelledToday: units.reduce((a, u) => a + u.today.cancelled, 0),
+      cancelledToday: units.reduce((a, u) => a + (u.today.cancelled ?? 0), 0),
       noShowsToday: noShows,
       newShare: mixBase > 0 ? newClients / mixBase : 0,
       cmv,
@@ -291,8 +291,8 @@ export function buildMockOverview(): CerebroOverview {
     units,
     trend30: brasil.last30.map((row, idx) => ({
       day: row.day.slice(5),
-      brasil: row.revenue,
-      iguatemi: iguatemi.last30[idx]!.revenue,
+      brasil: row.revenue ?? 0,
+      iguatemi: iguatemi.last30[idx]!.revenue ?? 0,
     })),
     nextActions: [
       {
@@ -308,7 +308,7 @@ export function buildMockOverview(): CerebroOverview {
         severity: 'critical',
         unit: 'rom-brasil',
         title: 'No-show — Brasil',
-        detail: `${brasil.today.noShows} no-shows hoje`,
+        detail: `${brasil.today.noShows ?? 0} no-shows hoje`,
         action: 'Remarcar nas próximas 2h',
       },
     ],

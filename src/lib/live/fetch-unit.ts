@@ -25,6 +25,17 @@ function n(v: unknown): number {
   return 0
 }
 
+/** Returns null for null/undefined/''; coerces numeric strings. */
+function nNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (typeof v === 'string' && v.trim()) {
+    const x = Number(v)
+    return Number.isFinite(x) ? x : null
+  }
+  return null
+}
+
 function emptyDay(
   day: string,
   capacity: number,
@@ -34,14 +45,14 @@ function emptyDay(
 ): DayMetrics {
   return {
     day,
-    revenue: 0,
-    appointments: 0,
-    attended: 0,
-    noShows: 0,
-    cancelled: 0,
-    newClients: 0,
-    returningClients: 0,
-    ticketAvg: 0,
+    revenue: null,
+    appointments: null,
+    attended: null,
+    noShows: null,
+    cancelled: null,
+    newClients: null,
+    returningClients: null,
+    ticketAvg: null,
     capacity,
     dailyGoal,
     goalSet,
@@ -56,16 +67,20 @@ function buildOpsToday(
   appointmentsNext2h: number,
   slotsNext2hKnown: boolean,
 ): OpsToday {
-  const openSlotsToday = today.capacitySet
-    ? Math.max(0, today.capacity - today.appointments)
-    : 0
+  // Null appointments = unknown; treat as 0 only when capacitySet (conservative).
+  const openSlotsToday =
+    today.capacitySet && today.appointments != null
+      ? Math.max(0, today.capacity - today.appointments)
+      : 0
   const known = today.capacitySet && slotsNext2hKnown
   const capacityNext2h = known
-    ? Math.max(1, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
+    ? Math.max(0, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
     : 0
   const openSlotsNext2h = known ? Math.max(0, capacityNext2h - appointmentsNext2h) : 0
-  const mixBase = today.newClients + today.returningClients
-  const newShare = mixBase > 0 ? today.newClients / mixBase : 0
+  const newC = today.newClients ?? 0
+  const retC = today.returningClients ?? 0
+  const mixBase = newC + retC
+  const newShare = mixBase > 0 ? newC / mixBase : 0
 
   return {
     openSlotsToday,
@@ -100,20 +115,25 @@ function rowToDay(
   converted = 0,
 ): DayMetrics {
   if (!row) return emptyDay(day, capacity, dailyGoal, goalSet, capacitySet)
-  const attended = n(row.attended)
-  const revenue = n(row.revenue)
+  const attended = nNull(row.attended)
+  const revenue = nNull(row.revenue)
+  const rawTicketAvg = nNull(row.ticket_avg)
   const ticketAvg =
-    row.ticket_avg != null ? n(row.ticket_avg) : attended > 0 ? revenue / attended : 0
+    rawTicketAvg !== null
+      ? Math.round(rawTicketAvg)
+      : attended != null && attended > 0 && revenue != null
+        ? Math.round(revenue / attended)
+        : null
   return {
     day,
     revenue,
-    appointments: n(row.appointments),
+    appointments: nNull(row.appointments),
     attended,
-    noShows: n(row.no_shows),
-    cancelled: n(row.cancelled),
-    newClients: n(row.new_clients),
-    returningClients: n(row.returning_clients),
-    ticketAvg: Math.round(ticketAvg),
+    noShows: nNull(row.no_shows),
+    cancelled: nNull(row.cancelled),
+    newClients: nNull(row.new_clients),
+    returningClients: nNull(row.returning_clients),
+    ticketAvg,
     capacity,
     dailyGoal,
     goalSet,
@@ -329,6 +349,8 @@ export async function fetchLiveUnit(
    * ter vindo de metrics (CS cai quando serviços são concluídos e limpam horário).
    */
   let slotsNext2hKnown = false
+  /** true when CS day count was coherent (scheduled >= attended); gates 2h trust. */
+  let csTrustedForToday = false
   try {
     // Paridade recompute salon: abertos do dia + concluídos do dia (não só leftovers).
     // Cabeças (DISTINCT contact_id) — paridade com recomputeSalonMetricsFromRom nas unidades.
@@ -354,36 +376,40 @@ export async function fetchLiveUnit(
         )
     `) as { n: number }[]
     const scheduled = n(appt[0]?.n)
-    const metricAppt = todayMetrics.appointments
-    const attended = todayMetrics.attended
+    const metricAppt = todayMetrics.appointments ?? 0
+    const todayAttended = todayMetrics.attended ?? 0
     // client_services no ROM pode estar incompleto vs Avec (metrics).
     // Nunca deixar appointments < attended (quebra comparecimento/vagas).
-    if (scheduled >= attended && scheduled > 0) {
-      // Live coerente: usa CS. Se metrics Avec tem mais agenda (mesmo lag leve), prefer metrics
+    if (scheduled >= todayAttended && scheduled > 0) {
+      // Live coerente: CS is trusted. Se metrics Avec tem mais agenda (mesmo lag leve), prefer metrics
       // — no-shows/cancel vêm de metrics; CS incompleto distorce comparecimento/vagas.
-      if (metricAppt >= attended && metricAppt > scheduled) {
+      csTrustedForToday = true
+      if (metricAppt >= todayAttended && metricAppt > scheduled) {
         todayMetrics.appointments = metricAppt
       } else {
         todayMetrics.appointments = scheduled
       }
-    } else if (metricAppt >= attended && metricAppt > 0) {
+    } else if (metricAppt >= todayAttended && metricAppt > 0) {
       todayMetrics.appointments = metricAppt
     } else {
-      todayMetrics.appointments = Math.max(scheduled, metricAppt, attended)
+      todayMetrics.appointments = Math.max(scheduled, metricAppt, todayAttended)
     }
 
     // Vagas 2h só no dia corrente (janela wall-clock).
+    // slotsNext2hKnown requer CS confiável para o dia + query 2h executada.
     if (!isHistorical) {
       const next2h = (await sql`
-        select count(distinct contact_id)::int as n
-        from client_services
-        where active = true
-          and scheduled_at is not null
-          and scheduled_at >= now()
-          and scheduled_at < now() + interval '2 hours'
+        select count(distinct cs.contact_id)::int as n
+        from client_services cs
+        join contacts c on c.id = cs.contact_id
+        where cs.active = true
+          and c.anonymized_at is null
+          and cs.scheduled_at is not null
+          and cs.scheduled_at >= now()
+          and cs.scheduled_at < now() + interval '2 hours'
       `) as { n: number }[]
       appointmentsNext2h = n(next2h[0]?.n)
-      slotsNext2hKnown = true
+      slotsNext2hKnown = csTrustedForToday
     }
   } catch {
     slotsNext2hKnown = false
@@ -419,16 +445,16 @@ export async function fetchLiveUnit(
       mtdRows.push(row)
     }
   }
-  const mtdRevenue = mtdRows.reduce((a, d) => a + d.revenue, 0)
-  const mtdAttended = mtdRows.reduce((a, d) => a + d.attended, 0)
+  const mtdRevenue = mtdRows.reduce((a, d) => a + (d.revenue ?? 0), 0)
+  const mtdAttended = mtdRows.reduce((a, d) => a + (d.attended ?? 0), 0)
   const mtd = {
     revenue: mtdRevenue,
     attended: mtdAttended,
-    noShows: mtdRows.reduce((a, d) => a + d.noShows, 0),
-    appointments: mtdRows.reduce((a, d) => a + d.appointments, 0),
-    newClients: mtdRows.reduce((a, d) => a + d.newClients, 0),
-    returningClients: mtdRows.reduce((a, d) => a + d.returningClients, 0),
-    cancelled: mtdRows.reduce((a, d) => a + d.cancelled, 0),
+    noShows: mtdRows.reduce((a, d) => a + (d.noShows ?? 0), 0),
+    appointments: mtdRows.reduce((a, d) => a + (d.appointments ?? 0), 0),
+    newClients: mtdRows.reduce((a, d) => a + (d.newClients ?? 0), 0),
+    returningClients: mtdRows.reduce((a, d) => a + (d.returningClients ?? 0), 0),
+    cancelled: mtdRows.reduce((a, d) => a + (d.cancelled ?? 0), 0),
     goal: goalSet ? dailyGoal * dayOfMonth(today) : 0,
     goalSet,
   }

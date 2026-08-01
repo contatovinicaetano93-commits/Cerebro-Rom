@@ -766,7 +766,12 @@ export function Dashboard({
                 // Quieto mesmo com sync parcial — não confundir dia sem agenda com falha.
                 const quiet = readable && !syncHard && !hollow && !active
                 // Never-sync / token morto: todos os KPIs do chip → — (não misturar ops com fat —).
-                const revenue = !u || !readable ? dash : formatCurrency(u.today.revenue)
+                const revenue =
+                  !u || !readable
+                    ? dash
+                    : u.today.revenue == null
+                      ? dash
+                      : formatCurrency(u.today.revenue)
                 const vagasHoje =
                   !u || !readable || !u.today.capacitySet
                     ? dash
@@ -782,14 +787,15 @@ export function Dashboard({
                 const cancelNoshow =
                   !u || !readable || !operable
                     ? dash
-                    : `${u.today.cancelled} · ${u.today.noShows}`
+                    : `${u.today.cancelled ?? '—'} · ${u.today.noShows ?? '—'}`
                 const novosRec =
-                  !u || !readable || !active || (u.today.attended <= 0 && u.today.revenue <= 0)
+                  !u || !readable || !active ||
+                  ((u.today.attended ?? 0) <= 0 && (u.today.revenue ?? 0) <= 0)
                     ? dash
-                    : u.today.newClients + u.today.returningClients <= 0 &&
-                        (u.today.attended > 0 || u.today.appointments > 0)
+                    : (u.today.newClients ?? 0) + (u.today.returningClients ?? 0) <= 0 &&
+                        ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) > 0)
                       ? dash
-                      : `${u.today.newClients} · ${u.today.returningClients}`
+                      : `${u.today.newClients ?? '—'} · ${u.today.returningClients ?? '—'}`
                 const borderAccent =
                   slug === 'rom-brasil' ? 'border-brass/35' : 'border-teal/35'
 
@@ -911,7 +917,7 @@ export function Dashboard({
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
                             operable &&
                             u != null &&
-                            u.today.cancelled + u.today.noShows > 0
+                            (u.today.cancelled ?? 0) + (u.today.noShows ?? 0) > 0
                               ? 'text-warning'
                               : 'text-foreground'
                           }`}

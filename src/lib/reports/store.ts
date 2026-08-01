@@ -103,17 +103,21 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
 
   const occupancy =
     trusted && u.today.capacitySet && u.today.capacity > 0
-      ? rate(u.today.appointments, u.today.capacity)
+      ? rate(u.today.appointments ?? 0, u.today.capacity)
       : null
   const attendance =
-    trusted && u.today.appointments > 0 ? rate(u.today.attended, u.today.appointments) : null
+    trusted && (u.today.appointments ?? 0) > 0
+      ? rate(u.today.attended ?? 0, u.today.appointments ?? 0)
+      : null
   const noShowRate =
-    trusted && u.today.appointments > 0 ? rate(u.today.noShows, u.today.appointments) : null
+    trusted && (u.today.appointments ?? 0) > 0
+      ? rate(u.today.noShows ?? 0, u.today.appointments ?? 0)
+      : null
   // Colunas NOT NULL no snapshot: 0 quando offline/não confiável; taxas nullable = null.
-  const lostCount = u.today.noShows + u.today.cancelled
+  const lostCount = (u.today.noShows ?? 0) + (u.today.cancelled ?? 0)
   const lostRevenue =
-    trusted && lostCount > 0 && u.today.ticketAvg > 0
-      ? Math.round(lostCount * u.today.ticketAvg)
+    trusted && lostCount > 0 && (u.today.ticketAvg ?? 0) > 0
+      ? Math.round(lostCount * (u.today.ticketAvg ?? 0))
       : 0
 
   return {
@@ -123,12 +127,12 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
     unit_slug: u.unit.slug as UnitSlug,
     unit_short: u.unit.short,
     day: u.today.day,
-    revenue_today: blankMoney ? 0 : u.today.revenue,
-    appointments: !active ? 0 : u.today.appointments,
-    attended: !active ? 0 : u.today.attended,
-    no_shows: !active ? 0 : u.today.noShows,
-    cancelled: !active ? 0 : u.today.cancelled,
-    ticket_avg: !active || u.today.attended <= 0 ? 0 : u.today.ticketAvg,
+    revenue_today: blankMoney ? 0 : (u.today.revenue ?? 0),
+    appointments: !active ? 0 : (u.today.appointments ?? 0),
+    attended: !active ? 0 : (u.today.attended ?? 0),
+    no_shows: !active ? 0 : (u.today.noShows ?? 0),
+    cancelled: !active ? 0 : (u.today.cancelled ?? 0),
+    ticket_avg: !active || (u.today.attended ?? 0) <= 0 ? 0 : (u.today.ticketAvg ?? 0),
     capacity: u.today.capacitySet ? u.today.capacity : 0,
     daily_goal: u.today.goalSet ? u.today.dailyGoal : 0,
     goal_set: u.today.goalSet,

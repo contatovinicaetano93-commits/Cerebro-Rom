@@ -137,4 +137,20 @@ describe('resolveUnitSyncStatus', () => {
     expect(sync.lastSyncAt).toBe(iso(3))
     expect(sync.label).toContain('P3 falhou')
   })
+
+  it('does not mark fast stale based on an old empty-kill error row', () => {
+    // Old empty-kill fast (90 min) should NOT trigger fastStale; only full age matters.
+    const sync = resolveUnitSyncStatus({
+      full: run('full', 'ok', 30),
+      fast: run('fast', 'error', 90, 'Sync interrompido (abandoned_partial_timeout)'),
+      runningAt: null,
+      nowMs: NOW,
+    })
+
+    // Without fix: fastAgeHours=1.5h → fastStale=true → stale label "fast atrasado".
+    // With fix: empty-kill fast not counted for age → fastStale=false → full fresh → ok.
+    expect(sync.status).toBe('ok')
+    expect(sync.label).toContain('30 min')
+    expect(sync.label).not.toContain('fast atrasado')
+  })
 })
