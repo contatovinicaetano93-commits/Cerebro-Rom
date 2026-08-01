@@ -143,8 +143,8 @@ function flatUnit(runId: string, capturedAt: string, u: UnitSnapshot) {
     open_slots_today: trusted && u.today.capacitySet ? u.opsToday.openSlotsToday : 0,
     open_slots_next_2h:
       trusted && u.opsToday.slotsNext2hKnown ? u.opsToday.openSlotsNext2h : 0,
-    mtd_revenue: blankMoney ? 0 : u.opsFinance.mtdRevenue,
-    mtd_attended: blankMoney ? 0 : u.opsFinance.mtdAttended,
+    mtd_revenue: blankMoney ? 0 : (u.opsFinance.mtdRevenue ?? 0),
+    mtd_attended: blankMoney ? 0 : (u.opsFinance.mtdAttended ?? 0),
     mtd_ticket_avg: blankMoney ? 0 : u.opsFinance.mtdTicketAvg ?? 0,
     cmv: blankMoney || !u.opsFinance.cmvKnown ? 0 : u.opsFinance.cmv,
     cmv_share: blankMoney || !u.opsFinance.cmvKnown ? null : u.opsFinance.cmvShare,
@@ -190,7 +190,7 @@ export async function captureReportSnapshot(
       ${overview.periodLabel},
       ${unitCount},
       ${networkReadable ? overview.consolidated.todayRevenue : 0},
-      ${networkReadable ? overview.consolidated.mtdRevenue : 0},
+      ${networkReadable ? (overview.consolidated.mtdRevenue ?? 0) : 0},
       ${networkReadable},
       ${overview}
     )
@@ -229,7 +229,7 @@ export async function captureReportSnapshot(
     periodLabel: overview.periodLabel,
     unitCount,
     todayRevenue: networkReadable ? overview.consolidated.todayRevenue : 0,
-    mtdRevenue: networkReadable ? overview.consolidated.mtdRevenue : 0,
+    mtdRevenue: networkReadable ? (overview.consolidated.mtdRevenue ?? 0) : 0,
     networkReadable,
   }
 }

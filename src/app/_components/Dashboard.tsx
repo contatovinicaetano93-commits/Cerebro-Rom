@@ -544,22 +544,30 @@ export function Dashboard({
           <Panel>
             <KpiStat
               label="MTD · Ticket"
-              value={c.networkReadable ? formatCurrency(c.mtdRevenue) : '—'}
+              value={
+                !c.networkReadable
+                  ? '—'
+                  : c.mtdRevenue == null
+                    ? 'aguardando caixa'
+                    : formatCurrency(c.mtdRevenue)
+              }
               hint={
                 !c.networkReadable
                   ? 'Nenhuma unidade com sync legível'
-                  : c.goalsConfigured
-                    ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${
-                        c.mtdTicketAvg != null ? formatCurrency(c.mtdTicketAvg) : '—'
-                      }`
-                    : `Ticket ${
-                        c.mtdTicketAvg != null ? formatCurrency(c.mtdTicketAvg) : '—'
-                      }${c.cmvKnown ? ` · CMV ${formatCurrency(c.cmv)}` : ''}`
+                  : c.mtdRevenue == null
+                    ? 'Agenda ok · Avec ainda sem faturamento pago no mês'
+                    : c.goalsConfigured
+                      ? `${formatPct(c.mtdGoalProgress)} da meta · ticket ${
+                          c.mtdTicketAvg != null ? formatCurrency(c.mtdTicketAvg) : '—'
+                        }`
+                      : `Ticket ${
+                          c.mtdTicketAvg != null ? formatCurrency(c.mtdTicketAvg) : '—'
+                        }${c.cmvKnown ? ` · CMV ${formatCurrency(c.cmv)}` : ''}`
               }
               source={sourceHint('Avec', networkSyncSource)}
               legend={LEGEND.mtd}
             />
-            {c.networkReadable && c.goalsConfigured ? (
+            {c.networkReadable && c.goalsConfigured && c.mtdRevenue != null ? (
               <div className="mt-3">
                 <ProgressBar value={c.mtdGoalProgress} color="teal" />
               </div>

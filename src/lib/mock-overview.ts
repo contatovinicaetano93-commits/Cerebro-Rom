@@ -233,7 +233,7 @@ export function buildMockOverview(): CerebroOverview {
   const units = [brasil, iguatemi]
   const todayRevenue = units.reduce((a, u) => a + (u.today.revenue ?? 0), 0)
   const todayGoal = units.reduce((a, u) => a + u.today.dailyGoal, 0)
-  const mtdRevenue = units.reduce((a, u) => a + u.mtd.revenue, 0)
+  const mtdRevenue = units.reduce((a, u) => a + (u.mtd.revenue ?? 0), 0)
   const mtdGoal = units.reduce((a, u) => a + u.mtd.goal, 0)
   const attended = units.reduce((a, u) => a + (u.today.attended ?? 0), 0)
   const appointments = units.reduce((a, u) => a + (u.today.appointments ?? 0), 0)

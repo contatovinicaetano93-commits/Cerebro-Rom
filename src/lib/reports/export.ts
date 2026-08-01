@@ -186,9 +186,19 @@ function capaRows(run: ReportRunDetail): (string | number | null)[][] {
     o.mode === 'live' &&
     o.consolidated.networkReadable &&
     o.consolidated.todayRevenue === 0 &&
+    o.consolidated.mtdRevenue != null &&
     o.consolidated.mtdRevenue > 0
   ) {
     notes.push('Faturamento hoje = R$ 0 com MTD > 0: dia sem venda ainda OU sync do dia atrasado.')
+  }
+  if (
+    o.mode === 'live' &&
+    o.consolidated.networkReadable &&
+    o.consolidated.mtdRevenue == null
+  ) {
+    notes.push(
+      'Receita MTD aguardando caixa Avec (nenhum dia do mês com faturamento conhecido ainda).',
+    )
   }
   if (/MTD até a data/i.test(o.periodLabel)) {
     notes.push(
