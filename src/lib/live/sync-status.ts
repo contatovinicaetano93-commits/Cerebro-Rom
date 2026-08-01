@@ -99,23 +99,26 @@ export function resolveUnitSyncStatus({
     }
   }
 
-  // partial antes de running/age-stale — partial útil não vira "desatualizado".
+  // partial duro (timeout/kill ou error string) antes de age-stale.
+  // Soft partial (error null — ex. orçamento esgotado limpo no fast) NÃO marca a
+  // rede como "incompleto": cai no fluxo ok/stale abaixo, como se fosse ok.
   if (latest.status === 'partial') {
     const lastSyncAt = new Date(latest.created_at).toISOString()
     const ageLabel = syncAgeLabel(latest.created_at, nowMs)
     const abandoned =
       latest.error?.includes('abandoned_partial_timeout') ||
       latest.error?.includes('Sync interrompido')
-    return {
-      status: 'partial',
-      lastSyncAt,
-      label: abandoned
-        ? `Sync incompleto (timeout, ${latest.kind}, ~${ageLabel}) · dados usáveis`
-        : latest.error
-          ? `Sync parcial (${latest.kind}, ~${ageLabel}): ${latest.error.slice(0, 80)}`
-          : `Sync parcial (${latest.kind}, ~${ageLabel}) · dados usáveis`,
-      running,
+    if (abandoned || latest.error) {
+      return {
+        status: 'partial',
+        lastSyncAt,
+        label: abandoned
+          ? `Sync incompleto (timeout, ${latest.kind}, ~${ageLabel}) · dados usáveis`
+          : `Sync parcial (${latest.kind}, ~${ageLabel}): ${latest.error!.slice(0, 80)}`,
+        running,
+      }
     }
+    // soft partial — continua para running / ageStale / ok
   }
 
   const lastSyncAt = new Date(latest.created_at).toISOString()
@@ -143,7 +146,7 @@ export function resolveUnitSyncStatus({
       return {
         status: 'stale',
         lastSyncAt,
-        label: `Sync full atrasado (~${fullAgeHours.toFixed(1)}h) — analytics desatualizados`,
+        label: `Snapshot Avec full atrasado (~${fullAgeHours.toFixed(1)}h) — receita do dia ok via fast`,
       }
     }
     return {
