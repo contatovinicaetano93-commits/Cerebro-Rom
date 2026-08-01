@@ -70,10 +70,10 @@ describe('resolveUnitSyncStatus', () => {
     })
 
     expect(sync.status).toBe('stale')
-    expect(sync.label).toContain('Sync full atrasado')
+    expect(sync.label).toContain('Snapshot Avec full atrasado')
   })
 
-  it('surfaces the newest partial when it is more recent than ok', () => {
+  it('surfaces the newest hard partial when it is more recent than ok', () => {
     const sync = resolveUnitSyncStatus({
       full: run('full', 'ok', 60 * 2),
       fast: run('fast', 'partial', 8, 'abandoned_partial_timeout'),
@@ -84,6 +84,32 @@ describe('resolveUnitSyncStatus', () => {
     expect(sync.status).toBe('partial')
     expect(sync.lastSyncAt).toBe(iso(8))
     expect(sync.label).toContain('timeout, fast')
+  })
+
+  it('treats soft fast partial (error null / budget abort) as ok when fresh', () => {
+    const sync = resolveUnitSyncStatus({
+      full: run('full', 'ok', 60 * 2),
+      fast: run('fast', 'partial', 8, null),
+      runningAt: null,
+      nowMs: NOW,
+    })
+
+    expect(sync.status).toBe('ok')
+    expect(sync.lastSyncAt).toBe(iso(8))
+    expect(sync.label).toContain('Avec sync há 8 min')
+  })
+
+  it('still marks full stale when soft fast partial is fresh but full >24h', () => {
+    const sync = resolveUnitSyncStatus({
+      full: run('full', 'ok', 60 * 26),
+      fast: run('fast', 'partial', 10, null),
+      runningAt: null,
+      nowMs: NOW,
+    })
+
+    expect(sync.status).toBe('stale')
+    expect(sync.label).toContain('Snapshot Avec full atrasado')
+    expect(sync.label).toContain('receita do dia ok via fast')
   })
 
   it('ignores an abandoned running row so stale age can surface', () => {
