@@ -90,8 +90,10 @@ export type PaymentReconcileStatus =
  * Receita/ticket = salon_daily_metrics · CMV = saídas 0044 · mix = 0081 via P2.
  */
 export interface OpsFinance {
-  mtdRevenue: number
-  mtdAttended: number
+  /** null quando nenhum dia do MTD tem receita conhecida (caixa Avec ainda não fechou). */
+  mtdRevenue: number | null
+  /** null quando nenhum dia do MTD tem atendidos conhecidos. */
+  mtdAttended: number | null
   /** null quando sem atendidos MTD (não inventar ticket R$0). */
   mtdTicketAvg: number | null
   cmv: number
@@ -138,8 +140,10 @@ export interface UnitSnapshot {
   opsFinance: OpsFinance
   opsStock: OpsStock
   mtd: {
-    revenue: number
-    attended: number
+    /** null = nenhum dia do mês com receita conhecida (não confundir com R$0). */
+    revenue: number | null
+    /** null = nenhum dia do mês com atendidos conhecidos. */
+    attended: number | null
     noShows: number
     appointments: number
     newClients: number
@@ -214,7 +218,11 @@ export interface CerebroOverview {
     todayOpsActive: boolean
     /** Há unidade com receita ou atendido hoje (% meta / gap de dinheiro). */
     todayMoneyActive: boolean
-    mtdRevenue: number
+    /**
+     * null quando nenhuma unidade legível tem receita MTD conhecida
+     * (ex.: dia 1 do mês, Avec sem faturamento pago ainda).
+     */
+    mtdRevenue: number | null
     mtdGoal: number
     mtdGoalProgress: number
     /** Ticket médio do mês (receita MTD ÷ atendidos MTD). null sem atendidos. */

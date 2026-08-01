@@ -31,7 +31,9 @@ export function isMetricsHollow(u: UnitSnapshot): boolean {
       (d.attended == null || d.attended === 0) &&
       (d.appointments == null || d.appointments === 0),
   )
-  return u.mtd.revenue === 0 && u.mtd.attended === 0 && last30Empty
+  const mtdRevEmpty = u.mtd.revenue == null || u.mtd.revenue === 0
+  const mtdAttEmpty = u.mtd.attended == null || u.mtd.attended === 0
+  return mtdRevEmpty && mtdAttEmpty && last30Empty
 }
 
 /**

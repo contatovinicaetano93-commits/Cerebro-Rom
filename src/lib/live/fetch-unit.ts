@@ -180,8 +180,8 @@ export function offlineUnitSnapshot(
     opsFinance: { ...EMPTY_OPS_FINANCE },
     opsStock: { ...EMPTY_OPS_STOCK },
     mtd: {
-      revenue: 0,
-      attended: 0,
+      revenue: null,
+      attended: null,
       noShows: 0,
       appointments: 0,
       newClients: 0,
@@ -445,8 +445,14 @@ export async function fetchLiveUnit(
       mtdRows.push(row)
     }
   }
-  const mtdRevenue = mtdRows.reduce((a, d) => a + (d.revenue ?? 0), 0)
-  const mtdAttended = mtdRows.reduce((a, d) => a + (d.attended ?? 0), 0)
+  const revenueKnown = mtdRows.some((d) => d.revenue != null)
+  const attendedKnown = mtdRows.some((d) => d.attended != null)
+  const mtdRevenue = revenueKnown
+    ? mtdRows.reduce((a, d) => a + (d.revenue ?? 0), 0)
+    : null
+  const mtdAttended = attendedKnown
+    ? mtdRows.reduce((a, d) => a + (d.attended ?? 0), 0)
+    : null
   const mtd = {
     revenue: mtdRevenue,
     attended: mtdAttended,

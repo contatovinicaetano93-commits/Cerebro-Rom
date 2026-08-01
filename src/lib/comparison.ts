@@ -153,10 +153,14 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   const paymentGap = (u: UnitSnapshot): number | null => {
     if (!isUnitConnected(u) || !trustsRollingKpis(u) || !u.opsFinance.paymentsKnown) return null
     if (u.opsFinance.paymentReconcile === 'unknown') return null
-    if (u.opsFinance.paymentReconcile === 'missing_payments' && u.opsFinance.mtdRevenue <= 0) {
+    if (
+      u.opsFinance.paymentReconcile === 'missing_payments' &&
+      (u.opsFinance.mtdRevenue == null || u.opsFinance.mtdRevenue <= 0)
+    ) {
       return null
     }
     if (u.opsFinance.paymentGap != null) return u.opsFinance.paymentGap
+    if (u.opsFinance.mtdRevenue == null) return null
     return Math.round((u.opsFinance.paymentsTotal - u.opsFinance.mtdRevenue) * 100) / 100
   }
 

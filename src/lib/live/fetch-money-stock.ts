@@ -87,8 +87,8 @@ async function fetchOfficialStockTotal(sql: Sql): Promise<number | null> {
 }
 
 export const EMPTY_OPS_FINANCE: OpsFinance = {
-  mtdRevenue: 0,
-  mtdAttended: 0,
+  mtdRevenue: null,
+  mtdAttended: null,
   mtdTicketAvg: null,
   cmv: 0,
   cmvKnown: false,
@@ -120,10 +120,13 @@ export async function fetchOpsFinance(
   sql: Sql,
   monthStart: string,
   today: string,
-  mtdRevenue: number,
-  mtdAttended: number,
+  mtdRevenue: number | null,
+  mtdAttended: number | null,
 ): Promise<OpsFinance> {
-  const mtdTicketAvg = mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : null
+  const mtdTicketAvg =
+    mtdRevenue != null && mtdAttended != null && mtdAttended > 0
+      ? Math.round(mtdRevenue / mtdAttended)
+      : null
 
   let cmv = 0
   let cmvOk = false
@@ -202,8 +205,9 @@ export async function fetchOpsFinance(
   }
 
   // Conciliação e gap usam receita dos dias com 0081 (pareado), não o MTD cheio.
-  const reconcileBase = mixOk && pairedRevenue > 0 ? pairedRevenue : mtdRevenue
-  const cmvShare = cmvOk && mtdRevenue > 0 ? cmv / mtdRevenue : null
+  const revenueForReconcile = mtdRevenue ?? 0
+  const reconcileBase = mixOk && pairedRevenue > 0 ? pairedRevenue : revenueForReconcile
+  const cmvShare = cmvOk && mtdRevenue != null && mtdRevenue > 0 ? cmv / mtdRevenue : null
   const rawGap = mixOk ? Math.round((paymentsTotal - reconcileBase) * 100) / 100 : null
   // Ruído de centavos/arredondamento — não pintar −R$28 como “dado”.
   const paymentGap =
@@ -222,7 +226,7 @@ export async function fetchOpsFinance(
     paymentReconcile: mixOk ? reconcile(reconcileBase, paymentsTotal) : 'unknown',
     topPaymentMethod: mixOk ? topPaymentMethod : null,
     // Disponível se há qualquer fonte Avec financeira — não inventa CMV/0081 via só MTD.
-    available: cmvOk || mixOk || mtdRevenue > 0,
+    available: cmvOk || mixOk || (mtdRevenue != null && mtdRevenue > 0),
   }
 }
 

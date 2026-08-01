@@ -390,8 +390,16 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const todayGoal = moneyOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
   const goalsConfigured =
     connected.length > 0 && connected.every((u) => u.today.goalSet && u.today.capacitySet)
-  const mtdRevenue = readable.reduce((a, u) => a + u.mtd.revenue, 0)
-  const mtdAttended = readable.reduce((a, u) => a + u.mtd.attended, 0)
+  const mtdRevenueUnits = readable.filter((u) => u.mtd.revenue != null)
+  const mtdAttendedUnits = readable.filter((u) => u.mtd.attended != null)
+  const mtdRevenue =
+    mtdRevenueUnits.length > 0
+      ? mtdRevenueUnits.reduce((a, u) => a + (u.mtd.revenue ?? 0), 0)
+      : null
+  const mtdAttended =
+    mtdAttendedUnits.length > 0
+      ? mtdAttendedUnits.reduce((a, u) => a + (u.mtd.attended ?? 0), 0)
+      : 0
   const mtdGoal = readable.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
   const attended = agendaOps.reduce((a, u) => a + (u.today.attended ?? 0), 0)
   const appointments = agendaOps.reduce((a, u) => a + (u.today.appointments ?? 0), 0)
@@ -410,7 +418,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const mixBase = newClients + returningClients
   const cmvKnownUnits = connected.filter((u) => u.opsFinance.cmvKnown)
   const cmv = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.cmv, 0)
-  const cmvMtd = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.mtdRevenue, 0)
+  const cmvMtd = cmvKnownUnits.reduce((a, u) => a + (u.opsFinance.mtdRevenue ?? 0), 0)
   const stockValue = connected.reduce(
     (a, u) => a + (u.opsStock.valueKnown ? u.opsStock.totalValue : 0),
     0,
@@ -457,8 +465,11 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     mtdRevenue,
     mtdGoal,
     mtdGoalProgress:
-      readable.length > 0 && goalsConfigured && mtdGoal > 0 ? rate(mtdRevenue, mtdGoal) : 0,
-    mtdTicketAvg: mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : null,
+      mtdRevenue != null && readable.length > 0 && goalsConfigured && mtdGoal > 0
+        ? rate(mtdRevenue, mtdGoal)
+        : 0,
+    mtdTicketAvg:
+      mtdRevenue != null && mtdAttended > 0 ? Math.round(mtdRevenue / mtdAttended) : null,
     attendanceRate: rate(attended, appointments),
     noShowRate: rate(noShows, appointments),
     occupancyRate: occupancyConfigured ? ratio(capacityAppointments, capacity) : 0,
@@ -496,7 +507,7 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     goalsConfigured: false,
     todayOpsActive: false,
     todayMoneyActive: false,
-    mtdRevenue: 0,
+    mtdRevenue: null,
     mtdGoal: 0,
     mtdGoalProgress: 0,
     mtdTicketAvg: null,
