@@ -105,31 +105,35 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     !hasTrustedAgenda(u) ||
     !u.today.capacitySet
       ? null
-      : ratio(u.today.appointments, u.today.capacity)
+      : ratio(u.today.appointments ?? 0, u.today.capacity)
 
   const goalPct = (u: UnitSnapshot): number | null => {
     if (!isUnitReadable(u) || !isSalonActiveToday(u) || !u.today.goalSet) return null
     // Sem faturamento/atendido ainda → 0% (gráfico/card preenchido).
-    if (u.today.revenue <= 0 && u.today.attended <= 0) return 0
-    return rate(u.today.revenue, u.today.dailyGoal)
+    if ((u.today.revenue ?? 0) <= 0 && (u.today.attended ?? 0) <= 0) return 0
+    return rate(u.today.revenue ?? 0, u.today.dailyGoal)
   }
 
-  const noShow = (u: UnitSnapshot): number | null =>
-    !isUnitReadable(u) ||
-    !isSalonActiveToday(u) ||
-    !hasTrustedAgenda(u) ||
-    u.today.appointments <= 0
-      ? null
-      : rate(u.today.noShows, u.today.appointments)
+  const noShow = (u: UnitSnapshot): number | null => {
+    if (
+      !isUnitReadable(u) ||
+      !isSalonActiveToday(u) ||
+      !hasTrustedAgenda(u) ||
+      u.today.appointments == null ||
+      u.today.appointments <= 0
+    )
+      return null
+    return rate(u.today.noShows ?? 0, u.today.appointments)
+  }
 
   const lostRevenue = (u: UnitSnapshot): number | null => {
     if (!isUnitReadable(u) || !isSalonActiveToday(u) || !hasTrustedAgenda(u)) return null
-    const lost = u.today.noShows + u.today.cancelled
+    const lost = (u.today.noShows ?? 0) + (u.today.cancelled ?? 0)
     if (lost <= 0) return 0
     // Ticket do dia; se ainda não houve atendimento, usa ticket MTD (proxy honesto).
     const ticket =
-      u.today.ticketAvg > 0
-        ? u.today.ticketAvg
+      (u.today.ticketAvg ?? 0) > 0
+        ? u.today.ticketAvg!
         : u.opsFinance.mtdTicketAvg != null && u.opsFinance.mtdTicketAvg > 0
           ? u.opsFinance.mtdTicketAvg
           : null
@@ -140,8 +144,10 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
   const ticketDay = (u: UnitSnapshot): number | null => {
     if (!isUnitReadable(u) || !isSalonActiveToday(u)) return null
     // Sem atendidos → sem ticket (não forçar R$0).
-    if (u.today.attended <= 0) return null
-    return Number.isFinite(u.today.ticketAvg) ? u.today.ticketAvg : null
+    if (u.today.attended == null || u.today.attended <= 0) return null
+    return u.today.ticketAvg != null && Number.isFinite(u.today.ticketAvg)
+      ? u.today.ticketAvg
+      : null
   }
 
   const paymentGap = (u: UnitSnapshot): number | null => {

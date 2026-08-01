@@ -11,14 +11,17 @@ export interface UnitMeta {
 
 export interface DayMetrics {
   day: string
-  revenue: number
-  appointments: number
-  attended: number
-  noShows: number
-  cancelled: number
-  newClients: number
-  returningClients: number
-  ticketAvg: number
+  /** null when the DB row exists but the field has not been synced yet. */
+  revenue: number | null
+  /** null when unsynced; use capacitySet + appointments for slot math. */
+  appointments: number | null
+  attended: number | null
+  noShows: number | null
+  cancelled: number | null
+  newClients: number | null
+  returningClients: number | null
+  /** null when attended is unknown or zero. */
+  ticketAvg: number | null
   capacity: number
   dailyGoal: number
   /** Meta diária definida no Cérebro (ou env bootstrap). */

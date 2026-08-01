@@ -26,7 +26,10 @@ export function isSyncHardFail(u: UnitSnapshot): boolean {
 export function isMetricsHollow(u: UnitSnapshot): boolean {
   if (isDeadOrAwaiting(u)) return false
   const last30Empty = (u.last30 ?? []).every(
-    (d) => d.revenue === 0 && d.attended === 0 && d.appointments === 0,
+    (d) =>
+      (d.revenue == null || d.revenue === 0) &&
+      (d.attended == null || d.attended === 0) &&
+      (d.appointments == null || d.appointments === 0),
   )
   return u.mtd.revenue === 0 && u.mtd.attended === 0 && last30Empty
 }
@@ -55,8 +58,8 @@ export function isUnitReadable(u: UnitSnapshot): boolean {
  */
 export function isSalonActiveToday(u: UnitSnapshot): boolean {
   if (!isUnitReadable(u)) return false
-  if (u.today.revenue > 0 || u.today.attended > 0) return true
-  return syncUsableForAgenda(u) && u.today.appointments >= 3
+  if ((u.today.revenue ?? 0) > 0 || (u.today.attended ?? 0) > 0) return true
+  return syncUsableForAgenda(u) && (u.today.appointments ?? 0) >= 3
 }
 
 /** KPIs rolling (semana/finance/estoque) com sync ok|partial|stale. */
@@ -77,6 +80,6 @@ export function isDayOperable(u: UnitSnapshot): boolean {
  */
 export function hasTrustedAgenda(u: UnitSnapshot): boolean {
   if (!isSalonActiveToday(u) || !syncUsableForAgenda(u)) return false
-  if (u.today.attended > 0 || u.today.appointments >= 3) return true
-  return u.today.appointments > 0
+  if ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) >= 3) return true
+  return (u.today.appointments ?? 0) > 0
 }

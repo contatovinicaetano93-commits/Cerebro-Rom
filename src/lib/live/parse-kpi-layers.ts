@@ -331,8 +331,8 @@ async function fetchReturnRateFromDailyMix(
         converted: 0,
       }
       sanitizeDayMix(day, 0, false)
-      returning += day.returningClients
-      neu += day.newClients
+      returning += day.returningClients ?? 0
+      neu += day.newClients ?? 0
     }
 
     const denom = returning + neu

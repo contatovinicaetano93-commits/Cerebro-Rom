@@ -131,10 +131,10 @@ function formatCmpSide(row: ComparisonRow, side: 'brasil' | 'iguatemi'): string 
 }
 
 function lostRevenue(u: UnitSnapshot): number | null {
-  const lost = u.today.noShows + u.today.cancelled
+  const lost = (u.today.noShows ?? 0) + (u.today.cancelled ?? 0)
   if (lost <= 0) return 0
-  if (u.today.ticketAvg <= 0) return null
-  return Math.round(lost * u.today.ticketAvg)
+  if ((u.today.ticketAvg ?? 0) <= 0) return null
+  return Math.round(lost * u.today.ticketAvg!)
 }
 
 const LEGEND_ROWS: [string, string][] = [
@@ -460,19 +460,19 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       active ? num(u.today.attended) : '—',
       active ? num(u.today.noShows) : '—',
       active ? num(u.today.cancelled) : '—',
-      (() => {
+        (() => {
         if (!active) return '—'
-        const mix = u.today.newClients + u.today.returningClients
-        if (mix <= 0 && (u.today.attended > 0 || u.today.appointments > 0)) return '—'
-        return num(u.today.newClients)
+        const mix = (u.today.newClients ?? 0) + (u.today.returningClients ?? 0)
+        if (mix <= 0 && ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) > 0)) return '—'
+        return num(u.today.newClients ?? 0)
       })(),
       (() => {
         if (!active) return '—'
-        const mix = u.today.newClients + u.today.returningClients
-        if (mix <= 0 && (u.today.attended > 0 || u.today.appointments > 0)) return '—'
-        return num(u.today.returningClients)
+        const mix = (u.today.newClients ?? 0) + (u.today.returningClients ?? 0)
+        if (mix <= 0 && ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) > 0)) return '—'
+        return num(u.today.returningClients ?? 0)
       })(),
-      active && u.today.attended > 0 ? money(u.today.ticketAvg) : '—',
+      active && (u.today.attended ?? 0) > 0 ? money(u.today.ticketAvg ?? 0) : '—',
       u.today.capacitySet ? num(u.today.capacity) : '—',
       u.today.goalSet ? money(u.today.dailyGoal) : '—',
       (() => {

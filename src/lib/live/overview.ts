@@ -75,8 +75,13 @@ function buildTrend30(units: UnitSnapshot[]): CerebroOverview['trend30'] {
   // Offline / hard-fail → null (gap). Alinha com consolidate / scorecard.
   const brasilLive = units.find((u) => u.unit.slug === 'rom-brasil' && isUnitReadable(u))
   const iguatemiLive = units.find((u) => u.unit.slug === 'rom-iguatemi' && isUnitReadable(u))
-  const brasilByDay = new Map(brasilLive?.last30.map((d) => [d.day, d.revenue]) ?? [])
-  const iguatemiByDay = new Map(iguatemiLive?.last30.map((d) => [d.day, d.revenue]) ?? [])
+  // revenue is number|null; treat null (unsynced) as 0 for the trend chart.
+  const brasilByDay = new Map(
+    brasilLive?.last30.map((d) => [d.day, d.revenue ?? 0]) ?? [],
+  )
+  const iguatemiByDay = new Map(
+    iguatemiLive?.last30.map((d) => [d.day, d.revenue ?? 0]) ?? [],
+  )
   const allDays = [...new Set([...brasilByDay.keys(), ...iguatemiByDay.keys()])].sort()
 
   if (allDays.length === 0) {
@@ -162,28 +167,31 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
     }
 
     const dayOk = isDayOperable(u)
-    if (dayOk && u.today.noShows > 0) {
+    const todayNoShows = u.today.noShows ?? 0
+    const todayCancelled = u.today.cancelled ?? 0
+    const todayTicketAvg = u.today.ticketAvg ?? 0
+    if (dayOk && todayNoShows > 0) {
       const risk =
-        u.today.ticketAvg > 0
-          ? ` · risco ~R$ ${Math.round(u.today.noShows * u.today.ticketAvg)}`
+        todayTicketAvg > 0
+          ? ` · risco ~R$ ${Math.round(todayNoShows * todayTicketAvg)}`
           : ' · ticket ainda indisponível'
       actions.push({
         id: `noshow-${u.unit.slug}`,
-        severity: u.today.noShows >= 3 ? 'critical' : 'warning',
+        severity: todayNoShows >= 3 ? 'critical' : 'warning',
         unit: u.unit.slug,
         title: `No-show — ${u.unit.short}`,
-        detail: `${u.today.noShows} hoje${risk}`,
+        detail: `${todayNoShows} hoje${risk}`,
         action: 'Remarcar + confirmação WhatsApp',
       })
     }
 
-    if (dayOk && u.today.cancelled > 0) {
+    if (dayOk && todayCancelled > 0) {
       actions.push({
         id: `cancel-${u.unit.slug}`,
-        severity: u.today.cancelled >= 3 ? 'warning' : 'info',
+        severity: todayCancelled >= 3 ? 'warning' : 'info',
         unit: u.unit.slug,
         title: `Cancelamentos — ${u.unit.short}`,
-        detail: `${u.today.cancelled} hoje`,
+        detail: `${todayCancelled} hoje`,
         action: 'Encaixe na lista de espera',
       })
     }
@@ -318,11 +326,11 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
 
   // Meta do dia: só unidades com faturamento/atendido (não agenda sem dinheiro).
   const moneyActive = units.filter(
-    (u) => isSalonActiveToday(u) && (u.today.revenue > 0 || u.today.attended > 0),
+    (u) => isSalonActiveToday(u) && ((u.today.revenue ?? 0) > 0 || (u.today.attended ?? 0) > 0),
   )
   if (moneyActive.length > 0 && moneyActive.every((u) => u.today.goalSet)) {
     const activeGoal = moneyActive.reduce((a, u) => a + u.today.dailyGoal, 0)
-    const activeRevenue = moneyActive.reduce((a, u) => a + u.today.revenue, 0)
+    const activeRevenue = moneyActive.reduce((a, u) => a + (u.today.revenue ?? 0), 0)
     const gap = Math.max(0, activeGoal - activeRevenue)
     if (gap > 500) {
       const who =
@@ -374,29 +382,29 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   /** Meta do dia: unidades com movimento. */
   const dayOps = active
   /** % meta / gap: só com receita ou atendido (não agenda sem dinheiro). */
-  const moneyOps = dayOps.filter((u) => u.today.revenue > 0 || u.today.attended > 0)
+  const moneyOps = dayOps.filter((u) => (u.today.revenue ?? 0) > 0 || (u.today.attended ?? 0) > 0)
   /** Ocupação/vagas: só com agenda confiável (não capacity cheia pós-wipe parcial). */
   const agendaOps = dayOps.filter(hasTrustedAgenda)
 
-  const todayRevenue = readable.reduce((a, u) => a + u.today.revenue, 0)
+  const todayRevenue = readable.reduce((a, u) => a + (u.today.revenue ?? 0), 0)
   const todayGoal = moneyOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
   const goalsConfigured =
     connected.length > 0 && connected.every((u) => u.today.goalSet && u.today.capacitySet)
   const mtdRevenue = readable.reduce((a, u) => a + u.mtd.revenue, 0)
   const mtdAttended = readable.reduce((a, u) => a + u.mtd.attended, 0)
   const mtdGoal = readable.reduce((a, u) => a + (u.mtd.goalSet ? u.mtd.goal : 0), 0)
-  const attended = agendaOps.reduce((a, u) => a + u.today.attended, 0)
-  const appointments = agendaOps.reduce((a, u) => a + u.today.appointments, 0)
-  const noShows = agendaOps.reduce((a, u) => a + u.today.noShows, 0)
+  const attended = agendaOps.reduce((a, u) => a + (u.today.attended ?? 0), 0)
+  const appointments = agendaOps.reduce((a, u) => a + (u.today.appointments ?? 0), 0)
+  const noShows = agendaOps.reduce((a, u) => a + (u.today.noShows ?? 0), 0)
   /** Ocupação: só unidades com capacidade definida (não all-or-nothing). */
   const capacityOps = agendaOps.filter((u) => u.today.capacitySet)
   const slots2hOps = capacityOps.filter((u) => u.opsToday.slotsNext2hKnown)
   const capacity = capacityOps.reduce((a, u) => a + u.today.capacity, 0)
-  const capacityAppointments = capacityOps.reduce((a, u) => a + u.today.appointments, 0)
+  const capacityAppointments = capacityOps.reduce((a, u) => a + (u.today.appointments ?? 0), 0)
   const occupancyConfigured = capacityOps.length > 0 && capacity > 0
   const attendanceConfigured = appointments > 0
-  const newClients = moneyOps.reduce((a, u) => a + u.today.newClients, 0)
-  const returningClients = moneyOps.reduce((a, u) => a + u.today.returningClients, 0)
+  const newClients = moneyOps.reduce((a, u) => a + (u.today.newClients ?? 0), 0)
+  const returningClients = moneyOps.reduce((a, u) => a + (u.today.returningClients ?? 0), 0)
   const leads = moneyOps.reduce((a, u) => a + u.today.leads, 0)
   const converted = moneyOps.reduce((a, u) => a + u.today.converted, 0)
   const mixBase = newClients + returningClients
@@ -417,20 +425,20 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const stockAlertsKnown =
     stockUnits.length > 0 && stockUnits.every((u) => u.opsStock.alertsKnown)
   const stockValueKnown = connected.some((u) => u.opsStock.valueKnown)
-  const dayRevenue = moneyOps.reduce((a, u) => a + u.today.revenue, 0)
-  const agendaRevenue = agendaOps.reduce((a, u) => a + u.today.revenue, 0)
+  const dayRevenue = moneyOps.reduce((a, u) => a + (u.today.revenue ?? 0), 0)
+  const agendaRevenue = agendaOps.reduce((a, u) => a + (u.today.revenue ?? 0), 0)
 
   let revenueAtRisk: number | null = 0
   let riskHasUnknown = false
   let riskHasKnown = false
   for (const u of agendaOps) {
-    if (u.today.noShows <= 0) continue
-    if (u.today.ticketAvg <= 0) {
+    if ((u.today.noShows ?? 0) <= 0) continue
+    if ((u.today.ticketAvg ?? 0) <= 0) {
       riskHasUnknown = true
       continue
     }
     riskHasKnown = true
-    revenueAtRisk = (revenueAtRisk ?? 0) + u.today.noShows * u.today.ticketAvg
+    revenueAtRisk = (revenueAtRisk ?? 0) + (u.today.noShows ?? 0) * (u.today.ticketAvg ?? 0)
   }
   // Qualquer no-show sem ticket → risco desconhecido (não apresentar soma parcial como total).
   if (riskHasUnknown) revenueAtRisk = null
@@ -465,8 +473,8 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     openSlotsToday: capacityOps.reduce((a, u) => a + u.opsToday.openSlotsToday, 0),
     openSlotsNext2h: slots2hOps.reduce((a, u) => a + u.opsToday.openSlotsNext2h, 0),
     slotsNext2hConfigured: slots2hOps.length > 0,
-    cancelledToday: dayOps.reduce((a, u) => a + u.today.cancelled, 0),
-    noShowsToday: dayOps.reduce((a, u) => a + u.today.noShows, 0),
+    cancelledToday: dayOps.reduce((a, u) => a + (u.today.cancelled ?? 0), 0),
+    noShowsToday: dayOps.reduce((a, u) => a + (u.today.noShows ?? 0), 0),
     newShare: mixBase > 0 ? newClients / mixBase : 0,
     cmv,
     cmvKnown: cmvKnownUnits.length > 0,

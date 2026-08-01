@@ -70,8 +70,12 @@ export function resolveUnitSyncStatus({
 
   const fullAgeHours =
     full != null ? (nowMs - new Date(full.created_at).getTime()) / 3_600_000 : null
+  // Only count a fast row that had a successful outcome (ok/partial) for fastAge.
+  // Empty-kill errors must not masquerade as a fresh fast and suppress staleness.
   const fastAgeHours =
-    fast != null ? (nowMs - new Date(fast.created_at).getTime()) / 3_600_000 : null
+    fast != null && (fast.status === 'ok' || fast.status === 'partial')
+      ? (nowMs - new Date(fast.created_at).getTime()) / 3_600_000
+      : null
   const fullStale = fullAgeHours != null && fullAgeHours > 24
   // Paridade sync-meta: missing fast ≠ stale por si só (never_synced só se ambos null).
   const fastStale = fastAgeHours != null && fastAgeHours > 1
