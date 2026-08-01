@@ -331,8 +331,9 @@ export async function fetchLiveUnit(
   let slotsNext2hKnown = false
   try {
     // Paridade recompute salon: abertos do dia + concluídos do dia (não só leftovers).
+    // Cabeças (DISTINCT contact_id) — paridade com recomputeSalonMetricsFromRom nas unidades.
     const appt = (await sql`
-      select count(*)::int as n
+      select count(distinct cs.contact_id)::int as n
       from client_services cs
       join contacts c on c.id = cs.contact_id
       where cs.active = true
@@ -374,7 +375,7 @@ export async function fetchLiveUnit(
     // Vagas 2h só no dia corrente (janela wall-clock).
     if (!isHistorical) {
       const next2h = (await sql`
-        select count(*)::int as n
+        select count(distinct contact_id)::int as n
         from client_services
         where active = true
           and scheduled_at is not null
