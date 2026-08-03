@@ -7,6 +7,11 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/__tests__/**/*.test.ts'],
+    // Casos fazem `await import('@/lib/...')` dentro do próprio teste.
+    // O custo de transformar o módulo entra no orçamento do caso, e 5s (padrão)
+    // estoura em máquina carregada.
+    testTimeout: 20000,
+    hookTimeout: 20000,
   },
   resolve: {
     alias: {
