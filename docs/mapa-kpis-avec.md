@@ -4,7 +4,11 @@ Fonte de verdade do mapa UI. Contrato de schema/KPI Cérebro↔unidades: **[cont
 
 ```
 Avec (por unidade)
-  → ROM sync (fast = A · full = A+B+C + estoque) — crons espaçados (~5 / ~30 min)
+  → ROM sync (fast = camada A · full fatiado = ops/agenda/catalog)
+     · fast cron ~20 min (staggered BR/IG) — 0051 ontem→amanhã
+     · full 2×/dia + retry horário — agenda +21d, ops P1–P3, catalog 0004
+     · webhook → fast scope=kpi apenas (não dispara full)
+     · estoque → /api/estoque/sync (fora do Avec)
   → Supabase pooler da unidade
   → Cérebro Promise.allSettled (read-only KPIs; cache overview ~45s)
     · escrita: cerebro_goals (metas nas unidades)
@@ -15,10 +19,10 @@ Avec (por unidade)
 
 | Camada | Sync | IDs | UI |
 |--------|------|-----|-----|
-| **A · Hoje** | fast | 0051, 0002, 0052, revenue (+ 0004 no full) | Comando + Hoje |
-| **B · Semana** | full | 0021, 0126, 0032, 0107, 0003, 0007, 0017, 0088 | Semana + tendência 30d |
-| **C · Comercial** | full | 0056, 0061, 0104, 0001 | Comercial |
-| **D · Financeiro Avec** | full | 0081 (mix) + 0044 (CMV saídas) | Comparativo + comando CMV |
+| **A · Hoje** | fast (+ webhook scope=kpi) | 0051 (ontem→amanhã), 0002, 0052, revenue (+ 0004 no full/catalog) | Comando + Hoje |
+| **B · Semana** | full/ops (+ agenda para +7d Contatos) | 0021, 0126, 0032, 0107, 0003, 0007, 0017, 0088 | Semana + tendência 30d |
+| **C · Comercial** | full/ops | 0056, 0061, 0104, 0001 | Comercial |
+| **D · Financeiro Avec** | full/ops | 0081 (mix) + 0044 (CMV saídas) | Comparativo + comando CMV |
 | **E · Estoque Avec** | stock | 0149 / alertas / 0045 (drift) | Comparativo + alertas |
 
 Comparativo inclui também **receita perdida** (cancel + no-show × ticket) e **conciliação 0081** (totais, gap, status, forma #1).

@@ -1,5 +1,7 @@
 # Preparação até terça (token Avec)
 
+> **Histórico / checklist pré-go-live.** Cadência atual de sync está em [`arquitetura-resiliente.md`](./arquitetura-resiliente.md) e [`contract.md`](./contract.md). Use este arquivo só como referência de onboarding inicial — não espelha os crons de produção.
+
 Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é só colar token e validar.
 
 ## O que já funciona sem token
@@ -13,7 +15,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 ## Sábado — código e deploy
 
 - [x] Push `cerebro-rom` (leitura P1/P2/P3 + merge #10–14)
-- [x] Push `ROM` + `ROM-IGUATEMI` (webhook + crons espaçados: fast ~5 min, full ~30 min)
+- [x] Push `ROM` + `ROM-IGUATEMI` (webhook + crons: fast ~20 min, full fatiado 2×/dia)
 - [ ] Confirmar deploys: cerebro-rom.vercel.app, rom-club, rom-iguatemi
 - [ ] Login Waltter no Cérebro OK
 - [ ] Smoke test: `npm run smoke` e `npm run smoke:full` no cerebro-rom
@@ -32,13 +34,13 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 
 - [ ] Brasil (Supabase): `schema.sql` + deltas P1/P2/P3
 - [ ] Supabase Iguatemi: mesmos deltas (banco **separado**)
-- [ ] Local com mock (opcional): `AVEC_MOCK=1` → POST `/api/avec/sync?mode=full` → conferir Cérebro Semana/Comercial
+- [ ] Local com mock (opcional): `AVEC_MOCK=1` → POST `/api/avec/sync/full/ops` (e demais estágios) → conferir Cérebro Semana/Comercial
 
 ```bash
 # no repo da unidade, com DATABASE_URL / NEON_* configurado
 # Brasil: npm run check:brasil-db-host
 AVEC_MOCK=1 npm run dev
-# Admin → Rodar sync full
+# Admin → Rodar sync full (ops + agenda + catalog)
 # Cérebro local: NEON_*_DATABASE_URL = mesmos poolers Supabase das unidades
 ```
 
@@ -74,7 +76,7 @@ Variáveis já devem estar na Vercel **antes** de terça:
 1. Vercel → `rom-club` → `AVEC_API_TOKEN` = token recebido
 2. Remover `AVEC_MOCK` se existir
 3. Redeploy
-4. Admin → Testar conexão → Rodar sync **full**
+4. Admin → Testar conexão → Rodar sync **full** (ops + agenda + catalog)
 5. Confirmar `salon_daily_metrics` + `salon_p1/p2/p3_daily` com dados
 
 ### ROM Iguatemi
@@ -89,13 +91,14 @@ Variáveis já devem estar na Vercel **antes** de terça:
 2. Comparativo Brasil vs Iguatemi preenchido
 3. Seções Semana e Comercial com dados após full sync
 
-## Cron automático (pós-terça)
+## Cron automático (pós-terça) — ver `contract.md`
 
 | Job | Intervalo | Modo |
 |-----|-----------|------|
-| `/api/avec/sync` | 5 min | fast (Camada A) |
-| `/api/avec/sync?mode=full` | 10 min | full (P1/P2/P3) |
-| Webhook atendimento/cancel | tempo real | fast + full (debounce 2 min) |
+| `/api/avec/sync` | ~20 min (staggered) | fast (camada A; 0051 ontem→amanhã) |
+| `/api/avec/sync/full/{ops,agenda,catalog}` | 2×/dia + retry horário | full fatiado |
+| Webhook atendimento/cancel | tempo real | fast `scope=kpi` apenas (não full) |
+| `/api/estoque/sync` | separado | estoque Avec |
 
 ## Rollback
 
