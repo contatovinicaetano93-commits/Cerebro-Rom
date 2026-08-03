@@ -201,9 +201,9 @@ export function offlineUnitSnapshot(
 }
 
 async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitSnapshot['sync']> {
-  // Paridade com salon loadAvecSyncMeta (sync-meta v2):
+  // Paridade com salon loadAvecSyncMeta (sync-meta v5, full fatiado):
   // - finished: running ≠ true
-  // - ordem: error → partial → age-stale → ok (partial não some sob age)
+  // - full analytics = ops (ou legado all), não catalog
   // - fastStale só se fast finished existe e >1h (não se fast==null)
   // - running mid-flight só ameniza stale dentro de TTL curto
   const empty: UnitSnapshot['sync'] = {
@@ -213,7 +213,27 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
   }
 
   try {
-    const [fullRows, fastRows, runningRows] = await Promise.all([
+    // Full fatiado: Visão/analytics = ops (ou legado all). Catalog fresco
+    // não deve mascarar ops velho (paridade sync-meta v5 nos salões).
+    const [opsRows, legacyFullRows, anyFullRows, fastRows, runningRows] = await Promise.all([
+      sql`
+        select status, created_at, error, kind
+        from avec_sync_runs
+        where kind = 'full'
+          and coalesce(stats->>'running', 'false') <> 'true'
+          and coalesce(stats->>'stage', 'all') = 'ops'
+        order by created_at desc
+        limit 1
+      `,
+      sql`
+        select status, created_at, error, kind
+        from avec_sync_runs
+        where kind = 'full'
+          and coalesce(stats->>'running', 'false') <> 'true'
+          and coalesce(stats->>'stage', 'all') = 'all'
+        order by created_at desc
+        limit 1
+      `,
       sql`
         select status, created_at, error, kind
         from avec_sync_runs
@@ -240,7 +260,11 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
       `,
     ])
 
-    const full = (fullRows as UnitSyncRunRow[])[0] ?? null
+    const full =
+      (opsRows as UnitSyncRunRow[])[0] ??
+      (legacyFullRows as UnitSyncRunRow[])[0] ??
+      (anyFullRows as UnitSyncRunRow[])[0] ??
+      null
     const fast = (fastRows as UnitSyncRunRow[])[0] ?? null
     const runningAt = (runningRows as { created_at: string }[])[0]?.created_at ?? null
     return resolveUnitSyncStatus({ full, fast, runningAt })
