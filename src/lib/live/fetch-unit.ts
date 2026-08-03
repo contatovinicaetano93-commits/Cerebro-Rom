@@ -14,8 +14,6 @@ import { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
 import { resolveUnitSyncStatus, type UnitSyncRunRow } from '@/lib/live/sync-status'
 import type { DayMetrics, OpsToday, UnitMeta, UnitSnapshot } from '@/lib/types'
 
-export { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
-
 function n(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v
   if (typeof v === 'string' && v.trim()) {
@@ -318,15 +316,19 @@ export async function fetchLiveUnit(
   let leadsToday = 0
   let convertedToday = 0
   try {
-    // Só leads ROM reais — dump Avec (clients/appointments/backfill/lake) polui o card.
+    // Paridade Contatos Novos (ROM): channel=avec, sem avec_client_id, exclui dump em massa.
     const leadRows = (await sql`
       select
         count(*)::int as leads,
         count(*) filter (where status = 'convertido')::int as converted
       from contacts
       where (created_at at time zone 'America/Sao_Paulo')::date = ${today}::date
+        and channel = 'avec'
+        and avec_client_id is null
         and status <> 'importado'
-        and coalesce(source, '') not like 'avec_%'
+        and coalesce(source, '') not like 'avec_sync_clients%'
+        and coalesce(source, '') not like 'avec_backfill%'
+        and coalesce(source, '') not like 'avec_lake%'
     `) as { leads: number; converted: number }[]
     leadsToday = n(leadRows[0]?.leads)
     convertedToday = n(leadRows[0]?.converted)
