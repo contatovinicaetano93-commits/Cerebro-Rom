@@ -213,9 +213,9 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
   }
 
   try {
-    // Full fatiado: Visão/analytics = ops (ou legado all). Catalog fresco
-    // não deve mascarar ops velho (paridade sync-meta v5 nos salões).
-    const [opsRows, legacyFullRows, anyFullRows, fastRows, runningRows] = await Promise.all([
+    // Full analytics = ops (ou legado all). Sem ops/legado all → missing full
+    // → stale como salon sync-meta. Catalog nunca entra como fallback.
+    const [opsRows, legacyFullRows, fastRows, runningRows] = await Promise.all([
       sql`
         select status, created_at, error, kind
         from avec_sync_runs
@@ -231,14 +231,6 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
         where kind = 'full'
           and coalesce(stats->>'running', 'false') <> 'true'
           and coalesce(stats->>'stage', 'all') = 'all'
-        order by created_at desc
-        limit 1
-      `,
-      sql`
-        select status, created_at, error, kind
-        from avec_sync_runs
-        where kind = 'full'
-          and coalesce(stats->>'running', 'false') <> 'true'
         order by created_at desc
         limit 1
       `,
@@ -263,7 +255,6 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
     const full =
       (opsRows as UnitSyncRunRow[])[0] ??
       (legacyFullRows as UnitSyncRunRow[])[0] ??
-      (anyFullRows as UnitSyncRunRow[])[0] ??
       null
     const fast = (fastRows as UnitSyncRunRow[])[0] ?? null
     const runningAt = (runningRows as { created_at: string }[])[0]?.created_at ?? null
