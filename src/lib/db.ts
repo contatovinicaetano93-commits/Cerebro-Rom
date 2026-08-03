@@ -17,10 +17,28 @@ export type Sql = {
 
 const clients = new Map<string, PostgresSql>()
 
+/**
+ * O pooler do Supabase atende em duas portas: 5432 (session) e 6543 (transaction).
+ * Em session mode a conexão fica presa ao client até ele encerrar; em serverless,
+ * onde cada invocação abre a sua, isso estoura o limite (EMAXCONNSESSION) e o
+ * painel passa a alternar entre lento e fora do ar. Transaction mode devolve a
+ * conexão a cada query.
+ *
+ * Reescreve SÓ host de pooler Supabase na 5432 — host direto, Neon, localhost e
+ * qualquer outra porta passam intactos. Seguro porque o client já usa
+ * `prepare: false`, que é o requisito do transaction mode.
+ */
+export function resolveDatabaseUrl(raw: string): string {
+  const url = raw.trim()
+  if (!url) return url
+  return url.replace(/(@[^/@\s]*\.pooler\.supabase\.com):5432(?=[/?]|$)/, '$1:6543')
+}
+
 function getClient(databaseUrl: string): PostgresSql {
-  let client = clients.get(databaseUrl)
+  const resolved = resolveDatabaseUrl(databaseUrl)
+  let client = clients.get(resolved)
   if (!client) {
-    client = postgres(databaseUrl, {
+    client = postgres(resolved, {
       ssl: 'require',
       // 2 conexões: overview race + poll seguinte sem serializar tudo em 1 slot.
       max: 2,
@@ -30,14 +48,17 @@ function getClient(databaseUrl: string): PostgresSql {
       // Pooler morto/quota pode aceitar TCP e não responder — não ficar preso.
       connect_timeout: 10,
     })
-    clients.set(databaseUrl, client)
+    // Mesma chave do get acima: usar a URL crua aqui faria o cache nunca acertar
+    // e abrir um client novo por chamada.
+    clients.set(resolved, client)
   }
   return client
 }
 
 /** Descarta client preso (timeout/quota) para a próxima tentativa não herdar hang. */
 export function evictSql(databaseUrl: string): void {
-  const url = databaseUrl.trim()
+  // Precisa resolver igual ao getClient, senão não acha o client para descartar.
+  const url = resolveDatabaseUrl(databaseUrl)
   if (!url) return
   const client = clients.get(url)
   if (!client) return
