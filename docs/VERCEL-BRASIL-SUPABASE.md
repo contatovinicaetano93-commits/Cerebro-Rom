@@ -15,3 +15,5 @@ Nomes das envs são legado; valores são Supabase.
 5. Optional: remove unused Neon-era `DATABASE_URL_UNPOOLED` only if unused (Cérebro app reads `NEON_*` + `CEREBRO_DATABASE_URL`)
 
 Sensitive Production values cannot be decrypted via API — confirm in Vercel UI.
+
+Preferir `UNIT_BRASIL_DATABASE_URL` / `UNIT_IGUATEMI_DATABASE_URL` (aliases). `NEON_*` continua lido por compatibilidade — valores devem ser pooler Supabase.

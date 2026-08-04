@@ -44,7 +44,8 @@ ROM Iguatemi (Supabase pooler)   ─SELECT──┘
 
 ```bash
 cp .env.example .env.local
-# preencher NEON_BRASIL_DATABASE_URL + NEON_IGUATEMI_DATABASE_URL (ambos Supabase pooler)
+# preencher UNIT_BRASIL_DATABASE_URL + UNIT_IGUATEMI_DATABASE_URL (ambos Supabase pooler)
+# (NEON_* ainda funciona como legado)
 # + CEREBRO_ADMIN_PASSWORD
 # npm run check:brasil-db-host  # falha se BR/IG ainda apontarem para neon.tech
 npm install
