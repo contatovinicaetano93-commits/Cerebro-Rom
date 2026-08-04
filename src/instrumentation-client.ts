@@ -14,6 +14,9 @@ if (posthogToken) {
     api_host: '/ingest',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
+    // Painel executivo: receita por unidade e desempenho por profissional na
+    // tela. Session Replay fica desligado no código, não na config do PostHog.
+    disable_session_recording: true,
     capture_exceptions: true,
     debug: process.env.NODE_ENV === 'development',
   })
