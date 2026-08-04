@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import posthog from 'posthog-js'
 import type { CerebroOverview } from '@/lib/types'
 import { Dashboard } from './_components/Dashboard'
 
@@ -48,6 +49,12 @@ export default function HomePage() {
       const next = await fetchOverview({ fresh: opts?.fresh })
       setData(next)
       setError(null)
+      if (!opts?.silent) {
+        posthog.capture('cerebro_overview_loaded', {
+          mode: next.mode,
+          partial: Boolean(next.partial),
+        })
+      }
     } catch (e) {
       // Na atualização em background, mantém o último painel se a rede falhar.
       if (!opts?.silent) setError(String(e))
