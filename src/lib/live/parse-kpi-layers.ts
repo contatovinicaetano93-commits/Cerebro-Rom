@@ -17,6 +17,18 @@ function n(v: unknown): number {
   return 0
 }
 
+/**
+ * Como n(), mas devolve null quando o valor não veio — em vez de 0.
+ * Usar onde 0 é um valor legítimo e indistinguível de "não sei": a UI mostra
+ * "—" para null, e mostraria "0,0%" para o zero inventado.
+ */
+function nOrNull(v: unknown): number | null {
+  if (v == null) return null
+  if (typeof v === 'string' && !v.trim()) return null
+  if (typeof v === 'number' && !Number.isFinite(v)) return null
+  return n(v)
+}
+
 function asArray(v: unknown): Record<string, unknown>[] {
   if (!Array.isArray(v)) return []
   return v.filter((x): x is Record<string, unknown> => x != null && typeof x === 'object')
@@ -52,7 +64,9 @@ function parseProfessionals(raw: unknown): OpsWeek['professionals'] {
         revenue: Math.round(revenue),
         attended,
         ticketAvg: Math.round(ticketRaw > 0 ? ticketRaw : attended > 0 ? revenue / attended : 0),
-        occupancy: n(row.occupancy),
+        // Profissional cuja linha do 0126 não casou não tem ocupação conhecida.
+        // Com n() isso virava 0 e a planilha mostrava "0,0%" como se fosse real.
+        occupancy: nOrNull(row.occupancy),
       }
     })
     .filter((x): x is OpsWeek['professionals'][number] => x != null)

@@ -48,7 +48,14 @@ export interface OpsToday {
 
 /** Gestão — Avec 0021, 0126, 0032, 0107, 0003 + 0007, 0017 */
 export interface OpsWeek {
-  professionals: { name: string; revenue: number; attended: number; ticketAvg: number; occupancy: number }[]
+  professionals: {
+    name: string
+    revenue: number
+    attended: number
+    ticketAvg: number
+    /** null = ocupação desconhecida (linha do 0126 não casou) — a UI mostra "—". */
+    occupancy: number | null
+  }[]
   services: { name: string; quantity: number; revenue: number }[]
   acquisition: { channel: string; clients: number }[]
   reactivationCount: number | null
