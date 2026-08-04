@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { useState } from 'react'
+import posthog from 'posthog-js'
 
 export function LogoutButton() {
   const router = useRouter()
@@ -12,6 +13,8 @@ export function LogoutButton() {
     setLoading(true)
     try {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+      posthog.capture('user_logged_out', { app: 'cerebro' })
+      posthog.reset()
       router.push('/login')
       router.refresh()
     } finally {

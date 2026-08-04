@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Brain } from 'lucide-react'
+import posthog from 'posthog-js'
 import { sanitizeRedirectPath } from '@/lib/auth-redirect'
 
 function LoginForm() {
@@ -30,6 +31,9 @@ function LoginForm() {
         setLoading(false)
         return
       }
+      const who = username.trim()
+      posthog.identify(who, { app: 'cerebro' })
+      posthog.capture('user_logged_in', { app: 'cerebro' })
       // Hard navigation — garante que o cookie da sessão vá na próxima request.
       window.location.assign(next)
     } catch (err) {

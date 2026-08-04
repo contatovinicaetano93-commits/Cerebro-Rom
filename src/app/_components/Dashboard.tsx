@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import { Activity, AlertTriangle, ArrowRight, Brain, RefreshCw } from 'lucide-react'
+import posthog from 'posthog-js'
 import type {
   AlertItem,
   CerebroOverview,
@@ -295,6 +296,7 @@ export function Dashboard({
 
   function setSection(key: SectionKey, open: boolean) {
     setOpenMap((prev) => ({ ...prev, [key]: open }))
+    posthog.capture('cerebro_section_toggled', { section: key, open })
   }
 
   const modeLabel =
