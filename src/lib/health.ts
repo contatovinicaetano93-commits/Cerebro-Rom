@@ -35,38 +35,28 @@ async function probeUnitDb(url: string | null | undefined) {
     await withDbTimeout(sql`select 1 as ok`, PROBE_PING_TIMEOUT_MS, 'ping da unidade')
     let sync: UnitSyncMeta | null = null
     try {
-      // limit 5: pula streak de empty-kill sem carregar histórico inteiro
-      const [fastRows, fullRows, runningRows] = await withDbTimeout(
-        Promise.all([
-          sql`
-          select status, created_at, error
-          from avec_sync_runs
-          where kind = 'fast' and coalesce(stats->>'running', 'false') <> 'true'
-          order by created_at desc limit 5
-        `,
+      // Uma query — Promise.all no pool max:1/2 enfileirava e podia travar o probe.
+      type SyncProbeRow = UnitSyncRunProbeRow & { kind: string; running: string }
+      const recent = (await withDbTimeout(
         sql`
-          select status, created_at, error
+          select
+            status,
+            created_at,
+            error,
+            kind,
+            coalesce(stats->>'running', 'false') as running
           from avec_sync_runs
-          where kind = 'full' and coalesce(stats->>'running', 'false') <> 'true'
-          order by created_at desc limit 5
+          where kind in ('fast', 'full')
+          order by created_at desc
+          limit 40
         `,
-          sql`
-          select 1 as n from avec_sync_runs
-          where kind in ('fast', 'full') and coalesce(stats->>'running', 'false') = 'true'
-          limit 1
-        `,
-        ]),
         PROBE_SYNC_TIMEOUT_MS,
         'leitura de avec_sync_runs',
-      )
-      const fast = pickHealthFinishedRun(
-        fastRows as UnitSyncRunProbeRow[],
-        isEmptyKillError,
-      )
-      const full = pickHealthFinishedRun(
-        fullRows as UnitSyncRunProbeRow[],
-        isEmptyKillError,
-      )
+      )) as SyncProbeRow[]
+      const fastRows = recent.filter((r) => r.kind === 'fast' && r.running !== 'true').slice(0, 5)
+      const fullRows = recent.filter((r) => r.kind === 'full' && r.running !== 'true').slice(0, 5)
+      const fast = pickHealthFinishedRun(fastRows, isEmptyKillError)
+      const full = pickHealthFinishedRun(fullRows, isEmptyKillError)
       const ageMin = (at: string | undefined) =>
         at != null ? Math.round((Date.now() - new Date(at).getTime()) / 60_000) : null
       sync = {
@@ -74,7 +64,7 @@ async function probeUnitDb(url: string | null | undefined) {
         fast_age_min: ageMin(fast?.created_at),
         full_status: full?.status ?? null,
         full_age_min: ageMin(full?.created_at),
-        running: (runningRows as { n: number }[]).length > 0,
+        running: recent.some((r) => r.running === 'true'),
       }
     } catch {
       sync = null

@@ -40,8 +40,8 @@ function getClient(databaseUrl: string): PostgresSql {
   if (!client) {
     client = postgres(resolved, {
       ssl: 'require',
-      // 2 conexões: overview race + poll seguinte sem serializar tudo em 1 slot.
-      max: 2,
+      // 1 conexão por URL: Promise.all>max enfileirava sem bound e travava o overview.
+      max: 1,
       prepare: false,
       idle_timeout: 20,
       max_lifetime: 60 * 5,

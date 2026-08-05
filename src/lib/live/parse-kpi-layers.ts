@@ -365,7 +365,9 @@ export async function fetchOpsWeek(
   today: string,
   monthStart?: string,
 ): Promise<OpsWeek> {
-  const [p1, p3] = await Promise.all([fetchLatestP1(sql, today), fetchLatestP3(sql, today)])
+  // Sequencial — pool max:1; Promise.all só enfileirava e alongava o overview.
+  const p1 = await fetchLatestP1(sql, today)
+  const p3 = await fetchLatestP3(sql, today)
 
   let returnRate =
     p3?.return_rate == null || n(p3.return_rate) <= 0 ? null : n(p3.return_rate)

@@ -216,51 +216,49 @@ async function readUnitSyncStatus(sql: ReturnType<typeof getSql>): Promise<UnitS
   }
 
   try {
-    // Full analytics = ops (ou legado all). Sem ops/legado all → missing full
-    // → stale como salon sync-meta. Catalog nunca entra como fallback.
-    const [opsRows, legacyFullRows, fastRows, runningRows] = await Promise.all([
-      sql`
-        select status, created_at, error, kind
-        from avec_sync_runs
-        where kind = 'full'
-          and coalesce(stats->>'running', 'false') <> 'true'
-          and coalesce(stats->>'stage', 'all') = 'ops'
-        order by created_at desc
-        limit 1
-      `,
-      sql`
-        select status, created_at, error, kind
-        from avec_sync_runs
-        where kind = 'full'
-          and coalesce(stats->>'running', 'false') <> 'true'
-          and coalesce(stats->>'stage', 'all') = 'all'
-        order by created_at desc
-        limit 1
-      `,
-      sql`
-        select status, created_at, error, kind
-        from avec_sync_runs
-        where kind = 'fast'
-          and coalesce(stats->>'running', 'false') <> 'true'
-        order by created_at desc
-        limit 1
-      `,
-      sql`
-        select created_at
-        from avec_sync_runs
-        where kind in ('fast', 'full')
-          and coalesce(stats->>'running', 'false') = 'true'
-        order by created_at desc
-        limit 1
-      `,
-    ])
+    // UMA query — Promise.all de 4 selects no pool max:2 travava o isolate
+    // (fila postgres.js sem bound; overview caía em Timeout 18s / degraded).
+    type SyncPickRow = UnitSyncRunRow & { running: string; stage: string }
+    const recent = (await sql`
+      select
+        status,
+        created_at::text as created_at,
+        error,
+        kind,
+        coalesce(stats->>'running', 'false') as running,
+        coalesce(stats->>'stage', 'all') as stage
+      from avec_sync_runs
+      where kind in ('fast', 'full')
+      order by created_at desc
+      limit 40
+    `) as SyncPickRow[]
 
-    const full =
-      (opsRows as UnitSyncRunRow[])[0] ??
-      (legacyFullRows as UnitSyncRunRow[])[0] ??
-      null
-    const fast = (fastRows as UnitSyncRunRow[])[0] ?? null
-    const runningAt = (runningRows as { created_at: string }[])[0]?.created_at ?? null
+    let ops: UnitSyncRunRow | null = null
+    let legacyAll: UnitSyncRunRow | null = null
+    let fast: UnitSyncRunRow | null = null
+    let runningAt: string | null = null
+    for (const row of recent) {
+      const isRunning = row.running === 'true'
+      if (isRunning) {
+        if (runningAt == null) runningAt = row.created_at
+        continue
+      }
+      if (row.kind === 'full' && row.stage === 'ops' && ops == null) {
+        ops = { status: row.status, created_at: row.created_at, error: row.error, kind: row.kind }
+      } else if (row.kind === 'full' && row.stage === 'all' && legacyAll == null) {
+        legacyAll = {
+          status: row.status,
+          created_at: row.created_at,
+          error: row.error,
+          kind: row.kind,
+        }
+      } else if (row.kind === 'fast' && fast == null) {
+        fast = { status: row.status, created_at: row.created_at, error: row.error, kind: row.kind }
+      }
+      if (ops && legacyAll && fast && runningAt) break
+    }
+
+    const full = ops ?? legacyAll
     return resolveUnitSyncStatus({ full, fast, runningAt })
   } catch {
     return empty
@@ -489,21 +487,16 @@ export async function fetchLiveUnit(
 
   const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, slotsNext2hKnown)
 
-  // Soft-fail por camada: uma query lenta/timeout não zera a unidade inteira.
-  // Sequencial em pares — max:2 no pooler; 4× Promise.all competia consigo mesmo.
-  const [opsWeek, opsCommerce] = await Promise.all([
-    fetchOpsWeek(sql, today, monthStart).catch(() => ({ ...EMPTY_OPS_WEEK })),
-    fetchOpsCommerce(sql, today).catch(() => ({ ...EMPTY_OPS_COMMERCE })),
-  ])
-  const [opsFinance, opsStock] = await Promise.all([
-    fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended).catch(() => ({
-      ...EMPTY_OPS_FINANCE,
-    })),
-    // Estoque é posição live — não rebobina. Em asOf histórico omitimos para não mentir.
-    isHistorical
-      ? Promise.resolve({ ...EMPTY_OPS_STOCK })
-      : fetchOpsStock(sql).catch(() => ({ ...EMPTY_OPS_STOCK })),
-  ])
+  // Soft-fail por camada + sequencial (pool max:1 — evita fila postgres.js sem bound).
+  const opsWeek = await fetchOpsWeek(sql, today, monthStart).catch(() => ({ ...EMPTY_OPS_WEEK }))
+  const opsCommerce = await fetchOpsCommerce(sql, today).catch(() => ({ ...EMPTY_OPS_COMMERCE }))
+  const opsFinance = await fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended).catch(
+    () => ({ ...EMPTY_OPS_FINANCE }),
+  )
+  // Estoque é posição live — não rebobina. Em asOf histórico omitimos para não mentir.
+  const opsStock = isHistorical
+    ? { ...EMPTY_OPS_STOCK }
+    : await fetchOpsStock(sql).catch(() => ({ ...EMPTY_OPS_STOCK }))
 
   let sync = await readUnitSyncStatus(sql)
 
