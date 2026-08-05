@@ -7,7 +7,12 @@ import {
   todayIsoSaoPaulo,
   type UnitRuntimeConfig,
 } from '@/lib/unit-config'
-import { fetchOpsCommerce, fetchOpsWeek } from '@/lib/live/parse-kpi-layers'
+import {
+  EMPTY_OPS_COMMERCE,
+  EMPTY_OPS_WEEK,
+  fetchOpsCommerce,
+  fetchOpsWeek,
+} from '@/lib/live/parse-kpi-layers'
 import { EMPTY_OPS_FINANCE, EMPTY_OPS_STOCK, fetchOpsFinance, fetchOpsStock } from '@/lib/live/fetch-money-stock'
 import { readGoalsFromDb, resolveGoals } from '@/lib/goals'
 import { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
@@ -484,12 +489,20 @@ export async function fetchLiveUnit(
 
   const opsToday = buildOpsToday(todayMetrics, appointmentsNext2h, slotsNext2hKnown)
 
-  const [opsWeek, opsCommerce, opsFinance, opsStock] = await Promise.all([
-    fetchOpsWeek(sql, today, monthStart),
-    fetchOpsCommerce(sql, today),
-    fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended),
+  // Soft-fail por camada: uma query lenta/timeout não zera a unidade inteira.
+  // Sequencial em pares — max:2 no pooler; 4× Promise.all competia consigo mesmo.
+  const [opsWeek, opsCommerce] = await Promise.all([
+    fetchOpsWeek(sql, today, monthStart).catch(() => ({ ...EMPTY_OPS_WEEK })),
+    fetchOpsCommerce(sql, today).catch(() => ({ ...EMPTY_OPS_COMMERCE })),
+  ])
+  const [opsFinance, opsStock] = await Promise.all([
+    fetchOpsFinance(sql, monthStart, today, mtdRevenue, mtdAttended).catch(() => ({
+      ...EMPTY_OPS_FINANCE,
+    })),
     // Estoque é posição live — não rebobina. Em asOf histórico omitimos para não mentir.
-    isHistorical ? Promise.resolve({ ...EMPTY_OPS_STOCK }) : fetchOpsStock(sql),
+    isHistorical
+      ? Promise.resolve({ ...EMPTY_OPS_STOCK })
+      : fetchOpsStock(sql).catch(() => ({ ...EMPTY_OPS_STOCK })),
   ])
 
   let sync = await readUnitSyncStatus(sql)
