@@ -41,6 +41,7 @@ export function unitGerenciaUrl(slug: UnitSlug): string {
  * Unidades (BR/IG) usam Supabase pooler.
  * Host Neon / db.*.supabase.co direto → ausente (placeholder offline), não KPI falso.
  * Env preferida: UNIT_*_DATABASE_URL; legado: NEON_*_DATABASE_URL (mesmo valor Supabase).
+ * Production (Vercel) deve acompanhar `main` — envs UNIT_* são a fonte canônica.
  */
 function unitDatabaseEnvNames(slug: UnitSlug): string[] {
   if (slug === 'rom-brasil') {

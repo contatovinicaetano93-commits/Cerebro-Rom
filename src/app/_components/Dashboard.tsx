@@ -244,6 +244,45 @@ function deltaTone(row: ComparisonRow): string {
   return row.deltaPct > 0 ? 'text-brass' : 'text-teal'
 }
 
+/** Infra/sync/offline — não confundir com dicas operacionais (cancel, vagas, meta). */
+const SYSTEM_ACTION_ID_RE =
+  /^(fetch-|missing-|all-units-offline|partial-units|sync-error-|sync-partial-|sync-stale-|sparse-|no-unit-db)/
+
+function hasUnitSystemIssue(units: UnitSnapshot[]): boolean {
+  return units.some(
+    (u) =>
+      u.sync.offline ||
+      u.sync.status === 'error' ||
+      u.sync.status === 'partial' ||
+      u.sync.status === 'stale',
+  )
+}
+
+function commandWarningCopy(data: CerebroOverview): string {
+  if (data.mode === 'degraded') return 'Live indisponível — sem números inventados.'
+  if (data.units.some((u) => u.sync.offline)) {
+    return 'Totais refletem só unidades ao vivo.'
+  }
+  if (data.units.some((u) => u.sync.status === 'error')) {
+    return 'Sync com erro em alguma unidade — KPIs do dia podem estar incompletos.'
+  }
+  if (data.units.some((u) => !u.sync.offline && u.sync.status === 'stale')) {
+    return 'Sync desatualizado em alguma unidade — confira cron antes de agir.'
+  }
+  if (
+    data.units.some((u) => isMetricsHollow(u)) &&
+    !data.units.some(
+      (u) => !u.sync.offline && (u.sync.status === 'partial' || u.sync.status === 'error'),
+    )
+  ) {
+    return 'Alguma unidade sem histórico de métricas — totais não misturam R$0 fantasma.'
+  }
+  if (data.units.some((u) => !u.sync.offline && u.sync.status === 'partial')) {
+    return 'Sync incompleto em alguma unidade — agenda/vagas só com sync ok.'
+  }
+  return 'Dados incompletos — confira sync antes de agir.'
+}
+
 function formatDeltaCell(row: ComparisonRow): string {
   if (row.format === 'text') return '—'
   if (row.deltaPct != null) {
@@ -299,9 +338,25 @@ export function Dashboard({
     posthog.capture('cerebro_section_toggled', { section: key, open })
   }
 
+  const showCommandWarning = useMemo(() => {
+    if (data.mode === 'live' && !data.partial) return false
+    if (data.mode === 'degraded') return true
+    if (data.nextActions.some((a) => SYSTEM_ACTION_ID_RE.test(a.id))) return true
+    if (hasUnitSystemIssue(data.units)) return true
+    if (
+      data.units.some((u) => isMetricsHollow(u)) &&
+      !data.units.some(
+        (u) => !u.sync.offline && (u.sync.status === 'partial' || u.sync.status === 'error'),
+      )
+    ) {
+      return true
+    }
+    return false
+  }, [data])
+
   const modeLabel =
     data.mode === 'live'
-      ? data.partial
+      ? showCommandWarning
         ? 'Live parcial'
         : 'Live'
       : data.mode === 'degraded'
@@ -413,9 +468,9 @@ export function Dashboard({
             </div>
             <div
               className={`rounded-full border px-3 py-1 text-[0.65rem] uppercase tracking-wider ${
-                data.mode === 'live' && !data.partial
+                data.mode === 'live' && !showCommandWarning
                   ? 'animate-pulse-soft border-success/35 bg-success/10 text-success'
-                  : data.mode === 'degraded' || data.partial
+                  : data.mode === 'degraded' || showCommandWarning
                     ? 'border-warning/40 bg-warning/10 text-warning'
                     : 'border-brass/25 bg-brass/10 text-brass'
               }`}
@@ -432,32 +487,15 @@ export function Dashboard({
           <div>
             <p className="text-[0.65rem] uppercase tracking-[0.25em] text-brass">Comando</p>
             <h1 className="mt-2 font-display text-3xl tracking-tight sm:text-4xl">
-              {data.partial
+              {showCommandWarning
                 ? 'Visão parcial — o que mover agora'
                 : data.units.some((u) => !u.sync.offline)
                   ? 'O que mover agora'
                   : 'Painel offline'}
             </h1>
-            {(data.partial || data.mode === 'degraded') && (
-              <p className="mt-2 text-xs text-warning">
-                {data.mode === 'degraded'
-                  ? 'Live indisponível — sem números inventados.'
-                  : data.units.some((u) => u.sync.offline)
-                    ? 'Totais refletem só unidades ao vivo.'
-                    : data.units.some((u) => u.sync.status === 'error')
-                      ? 'Sync com erro em alguma unidade — KPIs do dia podem estar incompletos.'
-                      : data.units.some((u) => u.sync.status === 'stale')
-                        ? 'Sync desatualizado em alguma unidade — confira cron antes de agir.'
-                      : data.units.some((u) => isMetricsHollow(u)) &&
-                          !data.units.some(
-                            (u) =>
-                              !u.sync.offline &&
-                              (u.sync.status === 'partial' || u.sync.status === 'error'),
-                          )
-                        ? 'Alguma unidade sem histórico de métricas — totais não misturam R$0 fantasma.'
-                        : 'Sync incompleto em alguma unidade — agenda/vagas só com sync ok.'}
-              </p>
-            )}
+            {showCommandWarning ? (
+              <p className="mt-2 text-xs text-warning">{commandWarningCopy(data)}</p>
+            ) : null}
           </div>
           <SectionControls
             allOpen={allOpen}

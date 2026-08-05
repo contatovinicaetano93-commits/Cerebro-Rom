@@ -12,8 +12,12 @@ describe('Smoke Tests', () => {
 
   describe('Environment', () => {
     it('should have required env vars configured', () => {
-      expect(process.env.NEON_BRASIL_DATABASE_URL).toBeDefined()
-      expect(process.env.NEON_IGUATEMI_DATABASE_URL).toBeDefined()
+      const brasilUrl =
+        process.env.UNIT_BRASIL_DATABASE_URL ?? process.env.NEON_BRASIL_DATABASE_URL
+      const iguatemiUrl =
+        process.env.UNIT_IGUATEMI_DATABASE_URL ?? process.env.NEON_IGUATEMI_DATABASE_URL
+      expect(brasilUrl).toBeDefined()
+      expect(iguatemiUrl).toBeDefined()
     })
 
     it('should load without errors', async () => {
