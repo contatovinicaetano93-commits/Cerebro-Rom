@@ -61,4 +61,23 @@ describe('withDbTimeout', () => {
       'password authentication failed',
     )
   })
+
+  it('não deixa rejeição órfã quando o timeout ganha e o work falha depois', async () => {
+    const { withDbTimeout } = await import('@/lib/db')
+    const hang = new Promise<number>((_, reject) => {
+      setTimeout(() => reject(new Error('statement timeout late')), 40)
+    })
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      await expect(withDbTimeout(hang, 8, 'unidade X')).rejects.toThrow(/Timeout/)
+      await new Promise((r) => setTimeout(r, 60))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
 })

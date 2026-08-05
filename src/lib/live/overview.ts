@@ -17,7 +17,7 @@ import {
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
 
 /** Uma unidade lenta (rede/pooler) não pode travar o painel inteiro. */
-const UNIT_FETCH_TIMEOUT_MS = 22_000
+const UNIT_FETCH_TIMEOUT_MS = 18_000
 
 async function fetchUnitBounded(
   config: ReturnType<typeof getUnitConfigs>[number],
@@ -33,7 +33,7 @@ async function fetchUnitBounded(
       config.meta.short,
     )
   } catch (err) {
-    // Timeout ou erro: evict client max:1 preso — próximo poll não herda hang.
+    // Timeout ou erro: evict client preso — próximo poll não herda hang.
     evictSql(url)
     throw err
   }

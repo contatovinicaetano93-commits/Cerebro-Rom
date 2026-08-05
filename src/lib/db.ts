@@ -47,6 +47,11 @@ function getClient(databaseUrl: string): PostgresSql {
       max_lifetime: 60 * 5,
       // Pooler morto/quota pode aceitar TCP e não responder — não ficar preso.
       connect_timeout: 10,
+      // Mata query lenta antes do race 18s do overview — evita statement_timeout
+      // órfão derrubar o isolate (Unhandled Rejection / exit 128).
+      connection: {
+        statement_timeout: 12_000,
+      },
     })
     // Mesma chave do get acima: usar a URL crua aqui faria o cache nunca acertar
     // e abrir um client novo por chamada.
@@ -91,6 +96,12 @@ export async function withDbTimeout<T>(
   })
   try {
     return await Promise.race([work, timeout])
+  } catch (err) {
+    // Timeout (ou outro erro) venceu: a query Postgres ainda pode rejeitar
+    // depois com statement_timeout — sem engolir, vira Unhandled Rejection
+    // e mata o isolate (exit 128 no /api/overview).
+    void work.catch(() => {})
+    throw err
   } finally {
     if (timer) clearTimeout(timer)
   }
