@@ -1,6 +1,6 @@
 import { getUnitConfigs } from '@/lib/unit-config'
 import { isAuthEnabled, isProduction } from '@/lib/auth'
-import { getSql } from '@/lib/db'
+import { evictSql, getSql, withDbTimeout } from '@/lib/db'
 import {
   computeSyncOk,
   pickHealthFinishedRun,
@@ -13,6 +13,14 @@ import { isEmptyKillError } from '@/lib/live/sync-status'
 export type { UnitHealthProbe, UnitSyncMeta }
 export { computeSyncOk }
 
+/**
+ * Tetos curtos de propósito: health precisa RESPONDER quando o banco está ruim.
+ * Sem eles a função pendurava até o limite da plataforma (300s em produção) e o
+ * diagnóstico travava junto com o problema que devia diagnosticar.
+ */
+const PROBE_PING_TIMEOUT_MS = 6_000
+const PROBE_SYNC_TIMEOUT_MS = 8_000
+
 async function probeUnitDb(url: string | null | undefined) {
   if (!url?.trim()) {
     return {
@@ -24,12 +32,13 @@ async function probeUnitDb(url: string | null | undefined) {
   }
   try {
     const sql = getSql(url)
-    await sql`select 1 as ok`
+    await withDbTimeout(sql`select 1 as ok`, PROBE_PING_TIMEOUT_MS, 'ping da unidade')
     let sync: UnitSyncMeta | null = null
     try {
       // limit 5: pula streak de empty-kill sem carregar histórico inteiro
-      const [fastRows, fullRows, runningRows] = await Promise.all([
-        sql`
+      const [fastRows, fullRows, runningRows] = await withDbTimeout(
+        Promise.all([
+          sql`
           select status, created_at, error
           from avec_sync_runs
           where kind = 'fast' and coalesce(stats->>'running', 'false') <> 'true'
@@ -41,12 +50,15 @@ async function probeUnitDb(url: string | null | undefined) {
           where kind = 'full' and coalesce(stats->>'running', 'false') <> 'true'
           order by created_at desc limit 5
         `,
-        sql`
+          sql`
           select 1 as n from avec_sync_runs
           where kind in ('fast', 'full') and coalesce(stats->>'running', 'false') = 'true'
           limit 1
         `,
-      ])
+        ]),
+        PROBE_SYNC_TIMEOUT_MS,
+        'leitura de avec_sync_runs',
+      )
       const fast = pickHealthFinishedRun(
         fastRows as UnitSyncRunProbeRow[],
         isEmptyKillError,
@@ -69,6 +81,8 @@ async function probeUnitDb(url: string | null | undefined) {
     }
     return { configured: true, connected: true, error: null, sync }
   } catch (e) {
+    // Client preso (pooler sem slot) não pode ser herdado pela próxima invocação.
+    evictSql(url)
     return {
       configured: true,
       connected: false,

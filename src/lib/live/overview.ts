@@ -3,7 +3,7 @@ import { fetchLiveUnit, offlineUnitSnapshot } from '@/lib/live/fetch-unit'
 import { getUnitConfigs, todayIsoSaoPaulo, UNIT_META } from '@/lib/unit-config'
 import { rate, ratio, buildComparison } from '@/lib/comparison'
 import { isProduction } from '@/lib/auth'
-import { evictSql } from '@/lib/db'
+import { evictSql, withDbTimeout } from '@/lib/db'
 import {
   hasTrustedAgenda,
   isDayOperable,
@@ -26,21 +26,16 @@ async function fetchUnitBounded(
   const url = config.databaseUrl
   if (!url) throw new Error(`Sem DATABASE_URL para ${config.meta.name}`)
 
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(`Timeout ${UNIT_FETCH_TIMEOUT_MS / 1000}s — ${config.meta.short}`))
-    }, UNIT_FETCH_TIMEOUT_MS)
-  })
-
   try {
-    return await Promise.race([fetchLiveUnit(config, day), timeout])
+    return await withDbTimeout(
+      fetchLiveUnit(config, day),
+      UNIT_FETCH_TIMEOUT_MS,
+      config.meta.short,
+    )
   } catch (err) {
     // Timeout ou erro: evict client max:1 preso — próximo poll não herda hang.
     evictSql(url)
     throw err
-  } finally {
-    if (timer) clearTimeout(timer)
   }
 }
 

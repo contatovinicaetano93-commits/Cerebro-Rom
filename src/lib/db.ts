@@ -66,6 +66,36 @@ export function evictSql(databaseUrl: string): void {
   void client.end({ timeout: 1 }).catch(() => {})
 }
 
+/**
+ * Teto de tempo para qualquer ida ao banco de uma UNIDADE.
+ *
+ * O pooler saturado aceita a conexão e não responde — postgres.js não tem
+ * timeout de query, então a espera é infinita e a função morre no limite da
+ * plataforma (visto em produção: `/api/health` pendurado por 300s). Com teto,
+ * saturação vira erro em segundos e o painel consegue reportar em vez de travar
+ * junto com o problema.
+ *
+ * Quem chama deve `evictSql(url)` no catch: o client que ficou preso não pode
+ * ser reaproveitado pela próxima invocação.
+ */
+export async function withDbTimeout<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`Timeout ${Math.round(timeoutMs / 1000)}s — ${label}`))
+    }, timeoutMs)
+  })
+  try {
+    return await Promise.race([work, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 function wrap(sql: PostgresSql): Sql {
   const tagged = ((strings: TemplateStringsArray, ...values: unknown[]) =>
     sql(strings, ...(values as never[]))) as unknown as Sql
