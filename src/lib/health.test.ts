@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getPublicHealthStatus } from '@/lib/health'
 import {
   computeSyncOk,
   pickHealthFinishedRun,
@@ -29,6 +30,18 @@ function probe(overrides: Partial<UnitHealthProbe> = {}): UnitHealthProbe {
     ...overrides,
   }
 }
+
+describe('getPublicHealthStatus', () => {
+  it('returns minimal public payload without secrets', async () => {
+    const status = await getPublicHealthStatus()
+    expect(status.ok).toBe(true)
+    expect(status.service).toBe('cerebro')
+    expect(typeof status.units_configured).toBe('number')
+    expect(status).not.toHaveProperty('units')
+    expect(status).not.toHaveProperty('readiness')
+    expect(JSON.stringify(status)).not.toMatch(/pooler\.supabase\.com|neon\.tech|postgres:\/\//i)
+  })
+})
 
 describe('computeSyncOk', () => {
   it('ignores disconnected units', () => {

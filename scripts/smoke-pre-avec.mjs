@@ -6,7 +6,7 @@
  *   cd cerebro-rom
  *   node scripts/smoke-pre-avec.mjs
  *
- * Lê .env.local se existir (NEON_*_DATABASE_URL = pooler Supabase).
+ * Lê .env.local se existir (UNIT_*_DATABASE_URL ou NEON_* legado = pooler Supabase).
  */
 
 import { readFileSync, existsSync } from 'node:fs'
@@ -35,10 +35,26 @@ const REQUIRED_TABLES = [
 
 const HTTP_CHECKS = [
   { name: 'Cérebro login', url: 'https://cerebro-rom.vercel.app/login', expect: 200 },
+  { name: 'Cérebro health public', url: 'https://cerebro-waltter.vercel.app/api/health/public', expect: 200 },
   { name: 'Cérebro health (auth)', url: 'https://cerebro-waltter.vercel.app/api/health', expect: 401 },
   { name: 'ROM Brasil health', url: 'https://rom-club.vercel.app/api/health', expect: 200 },
   { name: 'ROM Iguatemi health', url: 'https://rom-iguatemi.vercel.app/api/health', expect: 200 },
 ]
+
+function unitDbUrl(slug) {
+  if (slug === 'brasil') {
+    return (
+      process.env.UNIT_BRASIL_DATABASE_URL?.trim() ||
+      process.env.NEON_BRASIL_DATABASE_URL?.trim() ||
+      undefined
+    )
+  }
+  return (
+    process.env.UNIT_IGUATEMI_DATABASE_URL?.trim() ||
+    process.env.NEON_IGUATEMI_DATABASE_URL?.trim() ||
+    undefined
+  )
+}
 
 function loadEnvLocal() {
   const path = resolve(root, '.env.local')
@@ -163,8 +179,8 @@ async function main() {
 
   const results = [
     await checkHttp(),
-    await checkDb('Brasil', process.env.NEON_BRASIL_DATABASE_URL),
-    await checkDb('Iguatemi', process.env.NEON_IGUATEMI_DATABASE_URL),
+    await checkDb('Brasil', unitDbUrl('brasil')),
+    await checkDb('Iguatemi', unitDbUrl('iguatemi')),
   ]
 
   // overview: use npm run smoke:full

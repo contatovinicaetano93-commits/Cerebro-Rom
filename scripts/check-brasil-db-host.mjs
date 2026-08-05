@@ -1,17 +1,25 @@
 #!/usr/bin/env node
 /**
  * Fail if unit DATABASE_URL envs are not Supabase pooler.
- * Env names NEON_* are legacy; values must be aws-*.pooler.supabase.com.
+ * Env canônica: UNIT_*; NEON_* é alias legado. Valores devem ser aws-*.pooler.supabase.com.
  *
  * Usage:
- *   NEON_BRASIL_DATABASE_URL=... NEON_IGUATEMI_DATABASE_URL=... node scripts/check-brasil-db-host.mjs
+ *   UNIT_BRASIL_DATABASE_URL=... UNIT_IGUATEMI_DATABASE_URL=... node scripts/check-brasil-db-host.mjs
  *   npm run check:brasil-db-host
  */
 
-function check(label, envName) {
-  const url = (process.env[envName] || '').trim()
+function resolveEnvUrl(...envNames) {
+  for (const envName of envNames) {
+    const url = (process.env[envName] || '').trim()
+    if (url) return { envName, url }
+  }
+  return { envName: envNames[0], url: '' }
+}
+
+function check(label, ...envNames) {
+  const { envName, url } = resolveEnvUrl(...envNames)
   if (!url) {
-    console.log(`check-db-host SKIP: ${envName} unset (${label})`)
+    console.log(`check-db-host SKIP: ${envNames.join(' | ')} unset (${label})`)
     return 0
   }
 
@@ -38,12 +46,12 @@ function check(label, envName) {
     return 1
   }
 
-  console.log(`check-db-host OK: ${label} host=${host}`)
+  console.log(`check-db-host OK: ${label} host=${host} (${envName})`)
   return 0
 }
 
 const code =
-  check('Brasil', 'NEON_BRASIL_DATABASE_URL') |
-  check('Iguatemi', 'NEON_IGUATEMI_DATABASE_URL')
+  check('Brasil', 'UNIT_BRASIL_DATABASE_URL', 'NEON_BRASIL_DATABASE_URL') |
+  check('Iguatemi', 'UNIT_IGUATEMI_DATABASE_URL', 'NEON_IGUATEMI_DATABASE_URL')
 
 process.exit(code)
