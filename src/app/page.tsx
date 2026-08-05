@@ -7,7 +7,8 @@ import { Dashboard } from './_components/Dashboard'
 
 /** Ritmo leve: painel aberto não deve martelar os poolers Supabase. */
 const OVERVIEW_POLL_MS = 180_000
-const OVERVIEW_FETCH_TIMEOUT_MS = 25_000
+/** Acima do fetch por unidade (18s) + margem de cold start — abaixo do maxDuration 30s. */
+const OVERVIEW_FETCH_TIMEOUT_MS = 28_000
 
 async function fetchOverview(opts?: { fresh?: boolean }): Promise<CerebroOverview> {
   let res: Response
