@@ -76,8 +76,13 @@ async function probeUnitDb(url: string | null | undefined) {
         full_age_min: ageMin(full?.created_at),
         running: (runningRows as { n: number }[]).length > 0,
       }
-    } catch {
+    } catch (e) {
       sync = null
+      // Timeout abandona queries no client cacheado — próxima invocação não herda hang.
+      // Erro SQL benigno (tabela ausente etc.) não precisa evict; o ping já passou.
+      if (e instanceof Error && e.message.startsWith('Timeout ')) {
+        evictSql(url)
+      }
     }
     return { configured: true, connected: true, error: null, sync }
   } catch (e) {
