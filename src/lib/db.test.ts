@@ -40,3 +40,25 @@ describe('resolveDatabaseUrl', () => {
     expect(resolveDatabaseUrl('   ')).toBe('')
   })
 })
+
+describe('withDbTimeout', () => {
+  it('desiste quando a query nunca responde (pooler sem slot)', async () => {
+    const { withDbTimeout } = await import('@/lib/db')
+    // Promessa que nunca resolve = pooler que aceita TCP e fica mudo.
+    const nunca = new Promise<never>(() => {})
+    await expect(withDbTimeout(nunca, 30, 'unidade X')).rejects.toThrow(/Timeout .* unidade X/)
+  })
+
+  it('devolve o resultado quando a query responde a tempo', async () => {
+    const { withDbTimeout } = await import('@/lib/db')
+    await expect(withDbTimeout(Promise.resolve('ok'), 1000, 'unidade X')).resolves.toBe('ok')
+  })
+
+  it('propaga o erro original em vez de mascarar como timeout', async () => {
+    const { withDbTimeout } = await import('@/lib/db')
+    const falha = Promise.reject(new Error('password authentication failed'))
+    await expect(withDbTimeout(falha, 1000, 'unidade X')).rejects.toThrow(
+      'password authentication failed',
+    )
+  })
+})
