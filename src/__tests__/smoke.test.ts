@@ -8,6 +8,17 @@ describe('Smoke Tests', () => {
       })
       expect(res.status).toBe(401)
     })
+
+    it('should expose public health without auth', async () => {
+      const res = await fetch('http://localhost:3000/api/health/public', {
+        headers: { Accept: 'application/json' },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { ok?: boolean; service?: string }
+      expect(body.ok).toBe(true)
+      expect(body.service).toBe('cerebro')
+      expect(body).not.toHaveProperty('units')
+    })
   })
 
   describe('Environment', () => {

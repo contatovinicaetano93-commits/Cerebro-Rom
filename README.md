@@ -6,12 +6,12 @@ Painel executivo para o **Waltter** conduzir **ROM Brasil** + **ROM Iguatemi** c
 
 | Modo | Quando |
 |------|--------|
-| **Live** | `NEON_BRASIL_DATABASE_URL` e/ou `NEON_IGUATEMI_DATABASE_URL` no `.env.local` |
+| **Live** | `UNIT_BRASIL_DATABASE_URL` e/ou `UNIT_IGUATEMI_DATABASE_URL` no `.env.local` (`NEON_*` legado ainda lido) |
 | **Mock** | Sem URLs, `CEREBRO_FORCE_MOCK=1`, ou falha total do live (fallback) |
 
 Live lê os bancos das unidades via **postgres.js** (`ssl: require`, `prepare: false`):
-- **Brasil** → Supabase pooler (`*.pooler.supabase.com:5432` session ou `:6543` tx). Nome `NEON_BRASIL_*` é legado; valor **não** deve ser Neon.
-- **Iguatemi** → Supabase pooler (mesmo padrão; nome `NEON_IGUATEMI_*` é legado).
+- **Brasil** → Supabase pooler (`*.pooler.supabase.com:5432` session ou `:6543` tx). Env canônica: `UNIT_BRASIL_DATABASE_URL`; `NEON_BRASIL_*` é alias legado — valor **não** deve ser Neon.
+- **Iguatemi** → Supabase pooler (mesmo padrão; `UNIT_IGUATEMI_DATABASE_URL` canônica; `NEON_IGUATEMI_*` legado).
 
 Escritas do Cérebro:
 - `cerebro_goals` em cada banco de unidade (metas no painel)
@@ -61,7 +61,7 @@ Abra [http://localhost:3000](http://localhost:3000) → redireciona para `/login
 | `CEREBRO_ADMIN_USER` | `waltter` |
 | `CEREBRO_ADMIN_PASSWORD` | *(obrigatório em produção; também assina a sessão)* |
 
-Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias), HMAC = senha admin (Edge e Serverless compartilham a mesma chave). `CEREBRO_SESSION_SECRET` não é usado. Login: rate limit 10/15min por IP. `/api/health` exige login.
+Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias), HMAC = senha admin (Edge e Serverless compartilham a mesma chave). `CEREBRO_SESSION_SECRET` não é usado. Login: rate limit 10/15min por IP. `/api/health` exige login; `GET /api/health/public` é probe público mínimo (`{ ok, service, units_configured }`) para uptime.
 
 Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergência).
 

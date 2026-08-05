@@ -17,8 +17,9 @@ Cérebro **nunca** chama Avec/Omie HTTP. Painéis das unidades: `https://rom-clu
 
 | Env | Host esperado |
 |-----|----------------|
-| `NEON_BRASIL_DATABASE_URL` | `*.pooler.supabase.com` (nome legado — **não** Neon) |
-| `NEON_IGUATEMI_DATABASE_URL` | idem |
+| `UNIT_BRASIL_DATABASE_URL` | `*.pooler.supabase.com` (canônico) |
+| `UNIT_IGUATEMI_DATABASE_URL` | idem |
+| `NEON_BRASIL_DATABASE_URL` / `NEON_IGUATEMI_DATABASE_URL` | alias legado — mesmo pooler Supabase, **não** Neon |
 | `CEREBRO_DATABASE_URL` | Neon do Cérebro (report_runs) |
 
 Host `.neon.tech` nas envs de unidade → tratado como offline (sem KPI falso).

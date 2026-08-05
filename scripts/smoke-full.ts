@@ -30,10 +30,18 @@ const REQUIRED_TABLES = [
 
 const HTTP_CHECKS = [
   { name: 'Cérebro login', url: 'https://cerebro-rom.vercel.app/login', expect: 200 },
+  { name: 'Cérebro health public', url: 'https://cerebro-waltter.vercel.app/api/health/public', expect: 200 },
   { name: 'Cérebro health (auth)', url: 'https://cerebro-waltter.vercel.app/api/health', expect: 401 },
   { name: 'ROM Brasil health', url: 'https://rom-club.vercel.app/api/health', expect: 200 },
   { name: 'ROM Iguatemi health', url: 'https://rom-iguatemi.vercel.app/api/health', expect: 200 },
 ]
+
+function unitDbUrl(slug: 'brasil' | 'iguatemi'): string | undefined {
+  if (slug === 'brasil') {
+    return process.env.UNIT_BRASIL_DATABASE_URL ?? process.env.NEON_BRASIL_DATABASE_URL
+  }
+  return process.env.UNIT_IGUATEMI_DATABASE_URL ?? process.env.NEON_IGUATEMI_DATABASE_URL
+}
 
 function loadEnvLocal() {
   const path = resolve(root, '.env.local')
@@ -160,8 +168,8 @@ async function main() {
 
   const ok = [
     await checkHttp(),
-    await checkDb('Brasil', process.env.NEON_BRASIL_DATABASE_URL),
-    await checkDb('Iguatemi', process.env.NEON_IGUATEMI_DATABASE_URL),
+    await checkDb('Brasil', unitDbUrl('brasil')),
+    await checkDb('Iguatemi', unitDbUrl('iguatemi')),
     await checkOverview(),
   ].every(Boolean)
 

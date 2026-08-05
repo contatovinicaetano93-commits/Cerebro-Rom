@@ -37,11 +37,11 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 - [ ] Local com mock (opcional): `AVEC_MOCK=1` → POST `/api/avec/sync/full/ops` (e demais estágios) → conferir Cérebro Semana/Comercial
 
 ```bash
-# no repo da unidade, com DATABASE_URL / NEON_* configurado
+# no repo da unidade, com DATABASE_URL / UNIT_* (ou NEON_* legado) configurado
 # Brasil: npm run check:brasil-db-host
 AVEC_MOCK=1 npm run dev
 # Admin → Rodar sync full (ops + agenda + catalog)
-# Cérebro local: NEON_*_DATABASE_URL = mesmos poolers Supabase das unidades
+# Cérebro local: UNIT_*_DATABASE_URL (ou NEON_* legado) = mesmos poolers Supabase das unidades
 ```
 
 
@@ -55,7 +55,7 @@ Conferir readiness (admin logado):
 
 - ROM Brasil: `GET /api/health` → `readiness.cron_ready`, `webhook_ready`, `avec.kpi_layers`
 - ROM Iguatemi: idem — hoje `last_full` provavelmente null
-- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. Com sessão: BR+IG Supabase `connected`
+- Cérebro: `GET /api/health` → **exige login**; sem cookie → 401. `GET /api/health/public` → 200 sem auth (probe mínimo). Com sessão em `/api/health`: BR+IG Supabase `connected`
 
 | Unidade | URL webhook | Header |
 |---------|-------------|--------|

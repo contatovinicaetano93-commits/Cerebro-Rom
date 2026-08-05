@@ -8,6 +8,8 @@ export async function middleware(req: NextRequest) {
   if (
     pathname === '/login' ||
     pathname.startsWith('/api/auth/') ||
+    pathname === '/api/health/public' ||
+    // Sentry tunnel (next.config tunnelRoute: '/monitoring') — não é página de UI.
     pathname === '/monitoring' ||
     pathname.startsWith('/monitoring/') ||
     pathname === '/ingest' ||

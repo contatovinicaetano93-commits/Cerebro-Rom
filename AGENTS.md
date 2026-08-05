@@ -10,7 +10,7 @@ Leia isto antes de começar qualquer tarefa nestes repos.
 
 ## O sistema
 
-Três apps Next.js na Vercel: **ROM Brasil** e **ROM Iguatemi** (painéis das unidades, ~60 rotas cada, mantidos em paridade) e o **Cérebro** (consolida as duas). Os bancos são **Supabase**, um projeto por unidade — as variáveis ainda se chamam `NEON_*` por herança, ignore o nome. Os dados chegam pelo sync da Avec (cron na Vercel) e caem em `salon_*_daily`, `contacts`, `client_services`, `avec_sync_runs`.
+Três apps Next.js na Vercel: **ROM Brasil** e **ROM Iguatemi** (painéis das unidades, ~60 rotas cada, mantidos em paridade) e o **Cérebro** (consolida as duas). Os bancos são **Supabase**, um projeto por unidade — envs canônicas `UNIT_*_DATABASE_URL`; `NEON_*` é alias legado ainda lido em runtime. Os dados chegam pelo sync da Avec (cron na Vercel) e caem em `salon_*_daily`, `contacts`, `client_services`, `avec_sync_runs`.
 
 Todo PR passa por CI (teste + build bloqueiam, lint é informativo).
 
@@ -37,7 +37,7 @@ Hoje existem grupos inteiros de PRs que são a mesma tarefa refeita do zero — 
 Se a sua tarefa exige quebrar uma destas, tudo bem, mas **escreva no PR que está quebrando e por quê**. Mudar em silêncio é o problema.
 
 - **KPI ausente é `null`, não `0`.** A interface mostra "—" para null. Um `0` falso é pior que um buraco, porque parece medição real. Nunca `coalesce(métrica, 0)`, nunca `Number(x) || 0`, nunca `NOT NULL DEFAULT 0` em coluna de KPI.
-- **Brasil e Iguatemi são Supabase.** Não Neon, apesar dos nomes das variáveis.
+- **Brasil e Iguatemi são Supabase.** Não Neon — use `UNIT_*_DATABASE_URL` (canônico); `NEON_*` é legado.
 - **As duas unidades ficam em paridade.** Mudou numa, ou muda na outra, ou diz no PR que criou drift de propósito.
 - **A equipe usa WhatsApp, não Telegram.**
 - **Concorrência de sync é lock distribuído em Postgres.** Contador em memória não funciona em serverless — cada invocação é um processo novo.
@@ -58,8 +58,3 @@ Antes de mexer, responda três perguntas no PR: **o que acontece se rodar duas v
 
 Qualquer `--force`, `DROP`, `TRUNCATE` ou push direto para `main` precisa de justificativa explícita. Havia aqui um workflow que, com um clique, empurrava à força uma branch congelada por cima do `main` de outro repo — teria apagado onze dias de trabalho.
 
-## O que ainda está quebrado e não foi corrigido
-
-Se for pegar tarefa nova, estes são reais e estão sem dono:
-
-- **Trabalho de PostHog não commitado no Cérebro**, conflitando com o remoto, sem PR que o cubra. Precisa de branch própria ou de decisão de descartar.
