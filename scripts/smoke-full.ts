@@ -38,9 +38,17 @@ const HTTP_CHECKS = [
 
 function unitDbUrl(slug: 'brasil' | 'iguatemi'): string | undefined {
   if (slug === 'brasil') {
-    return process.env.UNIT_BRASIL_DATABASE_URL ?? process.env.NEON_BRASIL_DATABASE_URL
+    return (
+      process.env.UNIT_BRASIL_DATABASE_URL?.trim() ||
+      process.env.NEON_BRASIL_DATABASE_URL?.trim() ||
+      undefined
+    )
   }
-  return process.env.UNIT_IGUATEMI_DATABASE_URL ?? process.env.NEON_IGUATEMI_DATABASE_URL
+  return (
+    process.env.UNIT_IGUATEMI_DATABASE_URL?.trim() ||
+    process.env.NEON_IGUATEMI_DATABASE_URL?.trim() ||
+    undefined
+  )
 }
 
 function loadEnvLocal() {
