@@ -85,10 +85,11 @@ async function probeUnitDb(url: string | null | undefined) {
 /** Monitoramento externo — sem segredos e sem probe de DB (evita recon/DB load anônimo). */
 export async function getPublicHealthStatus() {
   const configs = getUnitConfigs()
+  const units_configured = configs.filter((c) => Boolean(c.databaseUrl?.trim())).length
   return {
-    ok: true,
+    ok: units_configured > 0,
     service: 'cerebro',
-    units_configured: configs.filter((c) => Boolean(c.databaseUrl?.trim())).length,
+    units_configured,
     // Detalhe por unidade (connected/error) só no health autenticado.
   }
 }
@@ -120,7 +121,9 @@ export async function getHealthStatus() {
       sync_ok: syncOk,
       brasil_supabase: Boolean(br?.databaseUrl),
       iguatemi_supabase: Boolean(ig?.databaseUrl),
-      // Aliases Neon: sempre false (unidades não usam mais Neon).
+      unit_brasil: Boolean(br?.databaseUrl),
+      unit_iguatemi: Boolean(ig?.databaseUrl),
+      // Aliases Neon (legado): sempre false — unidades usam Supabase pooler.
       iguatemi_neon: false,
       neon_brasil: false,
       neon_iguatemi: false,

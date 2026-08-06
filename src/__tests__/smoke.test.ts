@@ -14,8 +14,13 @@ describe('Smoke Tests', () => {
         headers: { Accept: 'application/json' },
       })
       expect(res.status).toBe(200)
-      const body = (await res.json()) as { ok?: boolean; service?: string }
-      expect(body.ok).toBe(true)
+      const body = (await res.json()) as {
+        ok?: boolean
+        service?: string
+        units_configured?: number
+      }
+      expect(typeof body.ok).toBe('boolean')
+      expect(body.ok).toBe((body.units_configured ?? 0) > 0)
       expect(body.service).toBe('cerebro')
       expect(body).not.toHaveProperty('units')
     })

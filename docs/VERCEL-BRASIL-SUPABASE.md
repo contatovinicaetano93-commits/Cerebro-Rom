@@ -6,7 +6,7 @@
 ## Production checklist
 
 1. Vercel → cerebro-rom → Env → Production → `UNIT_BRASIL_DATABASE_URL` (ou `NEON_BRASIL_DATABASE_URL` legado)
-   - Host: `aws-*-pooler.supabase.com`
+   - Host: `aws-*.pooler.supabase.com`
    - Port: `5432` (session) ou `6543` (transaction)
    - `sslmode=require`
 2. Idem `UNIT_IGUATEMI_DATABASE_URL` (ou `NEON_IGUATEMI_DATABASE_URL` legado) → pooler Supabase Iguatemi (`ggikztpsfmtpebfyuqah` / `aws-0-us-east-2.pooler.supabase.com`)

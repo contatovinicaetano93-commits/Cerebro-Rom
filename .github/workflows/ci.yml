@@ -38,6 +38,15 @@ jobs:
       - name: Testes
         run: npm test
 
+      - name: Guard db driver (postgres.js, sem neon HTTP)
+        run: npm run check:db-driver
+
+      - name: Guard pooler host (skip se UNIT_* unset no CI)
+        run: npm run check:brasil-db-host
+        env:
+          UNIT_BRASIL_DATABASE_URL: ${{ secrets.UNIT_BRASIL_DATABASE_URL }}
+          UNIT_IGUATEMI_DATABASE_URL: ${{ secrets.UNIT_IGUATEMI_DATABASE_URL }}
+
       - name: Build
         run: npm run build
         env:

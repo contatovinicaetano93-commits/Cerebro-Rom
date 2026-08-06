@@ -61,7 +61,17 @@ Abra [http://localhost:3000](http://localhost:3000) → redireciona para `/login
 | `CEREBRO_ADMIN_USER` | `waltter` |
 | `CEREBRO_ADMIN_PASSWORD` | *(obrigatório em produção; também assina a sessão)* |
 
-Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias), HMAC = senha admin (Edge e Serverless compartilham a mesma chave). `CEREBRO_SESSION_SECRET` não é usado. Login: rate limit 10/15min por IP. `/api/health` exige login; `GET /api/health/public` é probe público mínimo (`{ ok, service, units_configured }`) para uptime.
+Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias), HMAC = senha admin (Edge e Serverless compartilham a mesma chave). `CEREBRO_SESSION_SECRET` não é lido — não configure; rotacione a senha admin se precisar. Login: rate limit 10/15min por IP. `/api/health` exige login; `GET /api/health/public` é probe público mínimo (`{ ok, service, units_configured }`) para uptime — `ok` fica `false` quando nenhuma `UNIT_*` pooler válida está configurada.
+
+### Analytics (PostHog)
+
+Com `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` na Vercel, o client envia via rewrite `/ingest`:
+
+| Evento | Quando |
+|--------|--------|
+| `user_logged_in` / `user_logged_out` | Login e logout |
+| `cerebro_overview_loaded` | Overview carregado |
+| `cerebro_section_toggled` | Seção do dashboard aberta/fechada |
 
 Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergência).
 
