@@ -10,7 +10,7 @@ Leia isto antes de começar qualquer tarefa nestes repos.
 
 ## O sistema
 
-Três apps Next.js na Vercel: **ROM Brasil** e **ROM Iguatemi** (painéis das unidades, ~60 rotas cada, mantidos em paridade) e o **Cérebro** (consolida as duas). Os bancos são **Supabase**, um projeto por unidade — envs canônicas `UNIT_*_DATABASE_URL`; `NEON_*` é alias legado ainda lido em runtime. Os dados chegam pelo sync da Avec (cron na Vercel) e caem em `salon_*_daily`, `contacts`, `client_services`, `avec_sync_runs`.
+Três apps Next.js na Vercel: **ROM Brasil** e **ROM Iguatemi** (painéis das unidades, ~60 rotas cada, mantidos em paridade) e o **Cérebro** (consolida as duas). Os bancos são **Supabase**, um projeto por unidade — envs canônicas `UNIT_*_DATABASE_URL`; `NEON_*` é alias legado ainda lido em runtime. Os dados chegam pelo sync da Avec (cron na Vercel) e caem em `salon_daily_metrics`, `salon_p1_daily`, `salon_p2_daily`, `salon_p3_daily`, `contacts`, `client_services`, `avec_sync_runs`.
 
 Todo PR passa por CI (teste + build bloqueiam, lint é informativo).
 

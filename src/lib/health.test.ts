@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getPublicHealthStatus } from '@/lib/health'
 import {
   computeSyncOk,
@@ -32,14 +32,43 @@ function probe(overrides: Partial<UnitHealthProbe> = {}): UnitHealthProbe {
 }
 
 describe('getPublicHealthStatus', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('returns minimal public payload without secrets', async () => {
     const status = await getPublicHealthStatus()
-    expect(status.ok).toBe(true)
+    expect(status.ok).toBe(status.units_configured > 0)
     expect(status.service).toBe('cerebro')
     expect(typeof status.units_configured).toBe('number')
     expect(status).not.toHaveProperty('units')
     expect(status).not.toHaveProperty('readiness')
     expect(JSON.stringify(status)).not.toMatch(/pooler\.supabase\.com|neon\.tech|postgres:\/\//i)
+  })
+
+  it('returns ok false when no valid unit pooler URLs are configured', async () => {
+    vi.stubEnv('UNIT_BRASIL_DATABASE_URL', '')
+    vi.stubEnv('NEON_BRASIL_DATABASE_URL', '')
+    vi.stubEnv('UNIT_IGUATEMI_DATABASE_URL', '')
+    vi.stubEnv('NEON_IGUATEMI_DATABASE_URL', '')
+
+    const status = await getPublicHealthStatus()
+    expect(status.units_configured).toBe(0)
+    expect(status.ok).toBe(false)
+  })
+
+  it('returns ok true when at least one valid pooler URL is configured', async () => {
+    vi.stubEnv(
+      'UNIT_BRASIL_DATABASE_URL',
+      'postgres://u:p@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
+    )
+    vi.stubEnv('NEON_BRASIL_DATABASE_URL', '')
+    vi.stubEnv('UNIT_IGUATEMI_DATABASE_URL', '')
+    vi.stubEnv('NEON_IGUATEMI_DATABASE_URL', '')
+
+    const status = await getPublicHealthStatus()
+    expect(status.units_configured).toBe(1)
+    expect(status.ok).toBe(true)
   })
 })
 
