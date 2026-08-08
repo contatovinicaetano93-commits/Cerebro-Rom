@@ -39,13 +39,21 @@ const FAST_SYNC_STALE_MIN = 60
 const FULL_SYNC_STALE_MIN = 24 * 60
 
 /**
- * Sync operacional saudável por unidade conectada.
- * Desconectadas não entram (liveness fica em `ok` do health).
+ * Sync operacional saudável por unidade **configurada**.
+ * Unidade configurada mas desconectada → sync_ok falso (não mascarar metade da rede).
+ * Unidade sem URL (não configurada) é ignorada.
  */
-export function computeSyncOk(probes: Pick<UnitHealthProbe, 'connected' | 'sync'>[]): boolean {
-  return probes.every((probe) => {
+export function computeSyncOk(
+  probes: Pick<UnitHealthProbe, 'configured' | 'connected' | 'sync'>[],
+): boolean {
+  const relevant = probes.filter((probe) => probe.configured)
+  if (relevant.length === 0) {
+    return false
+  }
+
+  return relevant.every((probe) => {
     if (!probe.connected) {
-      return true
+      return false
     }
 
     const sync = probe.sync
