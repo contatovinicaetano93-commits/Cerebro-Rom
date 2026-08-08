@@ -53,6 +53,9 @@ jobs:
           # O build não fala com banco; estes valores existem só para satisfazer
           # a leitura de env em tempo de import. Nunca aponte para banco real.
           CEREBRO_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          UNIT_BRASIL_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          UNIT_IGUATEMI_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          # Alias legado ainda lido em runtime — placeholders espelham UNIT_*.
           NEON_BRASIL_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
           NEON_IGUATEMI_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
-          ROM_SESSION_SECRET: ci-placeholder-nao-usar-em-producao
+          CEREBRO_ADMIN_PASSWORD: ci-placeholder-nao-usar-em-producao
