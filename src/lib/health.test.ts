@@ -73,8 +73,21 @@ describe('getPublicHealthStatus', () => {
 })
 
 describe('computeSyncOk', () => {
-  it('ignores disconnected units', () => {
-    expect(computeSyncOk([probe({ connected: false, sync: null })])).toBe(true)
+  it('fails when a configured unit is disconnected', () => {
+    expect(computeSyncOk([probe({ connected: false, sync: null })])).toBe(false)
+  })
+
+  it('ignores units that are not configured', () => {
+    expect(
+      computeSyncOk([
+        probe({ configured: false, connected: false, sync: null }),
+        probe({ slug: 'rom-iguatemi', name: 'ROM Iguatemi' }),
+      ]),
+    ).toBe(true)
+  })
+
+  it('fails when no unit is configured', () => {
+    expect(computeSyncOk([probe({ configured: false, connected: false, sync: null })])).toBe(false)
   })
 
   it('fails when a connected unit has no sync metadata', () => {

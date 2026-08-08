@@ -82,7 +82,8 @@ async function probeUnitDb(url: string | null | undefined) {
   }
 }
 
-/** Monitoramento externo — sem segredos e sem probe de DB (evita recon/DB load anônimo). */
+/** Monitoramento externo — sem segredos e sem probe de DB (evita recon/DB load anônimo).
+ * `ok` só reflete URLs configuradas; conectividade/sync ficam no health autenticado. */
 export async function getPublicHealthStatus() {
   const configs = getUnitConfigs()
   const units_configured = configs.filter((c) => Boolean(c.databaseUrl?.trim())).length
