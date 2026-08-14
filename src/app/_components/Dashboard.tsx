@@ -77,13 +77,13 @@ const LEGEND = {
   vagas2h: 'Estimativa de encaixes nas próximas 2h (capacidade do dia ÷ 8 × 2, menos a agenda nesse intervalo).',
   cancelNoshow: 'Quantos horários foram cancelados ou o cliente faltou hoje.',
   novosRec:
-    'Só o dia de hoje: quantos fizeram a 1ª visita no salão vs quem já vinha (Avec). Não é Contatos → Sem vínculo (cadastro ROM sem cliente Avec).',
+    'Só o dia: 1ª visita = cadastro + 1º atendimento no dia (base ROM), sem visita anterior. Já vinham = resto dos atendidos. Não é Contatos → Sem vínculo.',
   unitHoje: 'Faturamento desta unidade no caixa hoje.',
   unitVagas: 'Horários ainda livres hoje nesta unidade (capacidade − agendados).',
   unit2h: 'Encaixes livres estimados nas próximas 2 horas nesta unidade.',
   unitCancel: 'Cancelamentos e faltas de hoje nesta unidade.',
   unitNovos:
-    'Só o dia de hoje nesta unidade: 1ª visita no salão vs recorrentes (Avec). Não é Contatos → Sem vínculo.',
+    'Só o dia nesta unidade: 1ª visita (cadastro+1º atendimento hoje) vs quem já vinha. Não é Contatos → Sem vínculo.',
 } as const
 
 const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
