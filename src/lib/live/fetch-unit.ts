@@ -436,6 +436,9 @@ export async function fetchLiveUnit(
   }
 
   sanitizeDayMix(todayMetrics, capacity, capacitySet)
+  // 1ª visita/dia ainda sem fonte Avec confiável — não publicar mix inventado.
+  todayMetrics.newClients = null
+  todayMetrics.returningClients = null
 
   const mtdRows: DayMetrics[] = []
   {
@@ -460,8 +463,10 @@ export async function fetchLiveUnit(
         0,
         0,
       )
-      // Sanitiza todos os dias do MTD — dump de novos num dia antigo inflava o mês.
+      // Sanitiza + não publica mix inventado (mesma regra do dia asOf).
       sanitizeDayMix(row, capacity, capacitySet)
+      row.newClients = null
+      row.returningClients = null
       mtdRows.push(row)
     }
   }

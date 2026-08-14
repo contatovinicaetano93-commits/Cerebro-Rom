@@ -299,7 +299,7 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
         ? `${num(c.newClients)} · ${num(c.returningClients)}`
         : '—',
       'qtd',
-      '1ª visita no salão vs quem já vinha, no dia (Avec). Não é Contatos → Sem vínculo.',
+      '1ª visita no dia ainda sem fonte confiável — exporta — até haver dado real.',
     ],
     [
       'Mix novos',
