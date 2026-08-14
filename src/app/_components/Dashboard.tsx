@@ -77,13 +77,13 @@ const LEGEND = {
   vagas2h: 'Estimativa de encaixes nas próximas 2h (capacidade do dia ÷ 8 × 2, menos a agenda nesse intervalo).',
   cancelNoshow: 'Quantos horários foram cancelados ou o cliente faltou hoje.',
   novosRec:
-    'Clientes novos no salão vs quem já vinha, no dia (não é lead do Contatos/CRM). Traço se o mix ainda não chegou do sync.',
+    '1ª visita no salão hoje vs quem já tinha vindo antes (Avec). Não é a fila Contatos → Novos.',
   unitHoje: 'Faturamento desta unidade no caixa hoje.',
   unitVagas: 'Horários ainda livres hoje nesta unidade (capacidade − agendados).',
   unit2h: 'Encaixes livres estimados nas próximas 2 horas nesta unidade.',
   unitCancel: 'Cancelamentos e faltas de hoje nesta unidade.',
   unitNovos:
-    'Novos no salão vs recorrentes hoje nesta unidade (não é lead do Contatos/CRM). Traço se o mix ainda não chegou do sync.',
+    '1ª visita hoje vs recorrentes nesta unidade (Avec). Não é a fila Contatos → Novos.',
 } as const
 
 const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
@@ -981,7 +981,7 @@ export function Dashboard({
                           className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
                           title={LEGEND.unitNovos}
                         >
-                          Novos no salão · Recorrentes
+                          1ª visita · Já vinham
                         </p>
                         <p className="mt-1 font-display text-xl tracking-tight text-foreground sm:text-2xl">
                           {novosRec}
@@ -1090,10 +1090,10 @@ export function Dashboard({
                         </ul>
                         <p
                           className="text-xs text-muted"
-                          title="Novos no salão = primeira visita no período (mês), Avec — não é lead do Contatos/CRM. Sem retorno = sem visita em 90 dias (lista Avec; 5.000+ = truncada)."
+                          title="1ª visita (mês) = clientes que vieram pela 1ª vez no salão no período (Avec). Não é Contatos → Novos. Sem retorno = sem visita em 90 dias (5.000+ = lista truncada)."
                         >
                           Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel} ·
-                          novos no salão (mês){' '}
+                          1ª visita (mês){' '}
                           {w.newClientsPeriod == null ? '—' : formatNumber(w.newClientsPeriod)}
                         </p>
                       </div>
