@@ -77,13 +77,13 @@ const LEGEND = {
   vagas2h: 'Estimativa de encaixes nas próximas 2h (capacidade do dia ÷ 8 × 2, menos a agenda nesse intervalo).',
   cancelNoshow: 'Quantos horários foram cancelados ou o cliente faltou hoje.',
   novosRec:
-    '1ª visita no salão hoje vs quem já tinha vindo antes (Avec). Não é a fila Contatos → Novos.',
+    'Só o dia de hoje: quantos fizeram a 1ª visita no salão vs quem já vinha (Avec). Não é Contatos → Novos (fila ROM de cadastro solto).',
   unitHoje: 'Faturamento desta unidade no caixa hoje.',
   unitVagas: 'Horários ainda livres hoje nesta unidade (capacidade − agendados).',
   unit2h: 'Encaixes livres estimados nas próximas 2 horas nesta unidade.',
   unitCancel: 'Cancelamentos e faltas de hoje nesta unidade.',
   unitNovos:
-    '1ª visita hoje vs recorrentes nesta unidade (Avec). Não é a fila Contatos → Novos.',
+    'Só o dia de hoje nesta unidade: 1ª visita no salão vs recorrentes (Avec). Não é Contatos → Novos.',
 } as const
 
 const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
@@ -1017,7 +1017,6 @@ export function Dashboard({
                   w.services.length === 0 &&
                   w.acquisition.length === 0 &&
                   (w.returnRate == null || w.returnRate === 0) &&
-                  w.newClientsPeriod == null &&
                   (w.reactivationCount == null || w.reactivationCount === 0)
                 // Avec 0107 pagina até ~5000 linhas — 5000 é teto, não o total real.
                 const semRetornoLabel =
@@ -1090,11 +1089,9 @@ export function Dashboard({
                         </ul>
                         <p
                           className="text-xs text-muted"
-                          title="1ª visita (mês) = clientes que vieram pela 1ª vez no salão no período (Avec). Não é Contatos → Novos. Sem retorno = sem visita em 90 dias (5.000+ = lista truncada)."
+                          title="Retorno = % de quem já vinha no mix Avec do período. Sem retorno (90d) = clientes sem visita há 90 dias (5.000+ = lista truncada). 1ª visita do dia fica em Hoje · Ação do dia — não é Contatos → Novos."
                         >
-                          Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel} ·
-                          1ª visita (mês){' '}
-                          {w.newClientsPeriod == null ? '—' : formatNumber(w.newClientsPeriod)}
+                          Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel}
                         </p>
                       </div>
                     )}
