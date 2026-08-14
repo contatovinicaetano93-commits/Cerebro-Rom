@@ -77,13 +77,13 @@ const LEGEND = {
   vagas2h: 'Estimativa de encaixes nas próximas 2h (capacidade do dia ÷ 8 × 2, menos a agenda nesse intervalo).',
   cancelNoshow: 'Quantos horários foram cancelados ou o cliente faltou hoje.',
   novosRec:
-    'Só o dia de hoje: quantos fizeram a 1ª visita no salão vs quem já vinha (Avec). Não é Contatos → Novos (fila ROM de cadastro solto).',
+    'Só o dia de hoje: quantos fizeram a 1ª visita no salão vs quem já vinha (Avec). Não é Contatos → Sem vínculo (cadastro ROM sem cliente Avec).',
   unitHoje: 'Faturamento desta unidade no caixa hoje.',
   unitVagas: 'Horários ainda livres hoje nesta unidade (capacidade − agendados).',
   unit2h: 'Encaixes livres estimados nas próximas 2 horas nesta unidade.',
   unitCancel: 'Cancelamentos e faltas de hoje nesta unidade.',
   unitNovos:
-    'Só o dia de hoje nesta unidade: 1ª visita no salão vs recorrentes (Avec). Não é Contatos → Novos.',
+    'Só o dia de hoje nesta unidade: 1ª visita no salão vs recorrentes (Avec). Não é Contatos → Sem vínculo.',
 } as const
 
 const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
@@ -1089,7 +1089,7 @@ export function Dashboard({
                         </ul>
                         <p
                           className="text-xs text-muted"
-                          title="Retorno = % de quem já vinha no mix Avec do período. Sem retorno (90d) = clientes sem visita há 90 dias (5.000+ = lista truncada). 1ª visita do dia fica em Hoje · Ação do dia — não é Contatos → Novos."
+                          title="Retorno = % de quem já vinha no mix Avec do período. Sem retorno (90d) = clientes sem visita há 90 dias (5.000+ = lista truncada). 1ª visita do dia fica em Hoje · Ação do dia — não é Contatos → Sem vínculo."
                         >
                           Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel}
                         </p>
