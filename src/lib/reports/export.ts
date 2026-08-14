@@ -294,12 +294,12 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
       'Receita ÷ atendidos (unidades com agenda).',
     ],
     [
-      'Novos · Recorrentes (hoje)',
+      'Novos no salão · Recorrentes (hoje)',
       c.todayOpsActive && c.newClients + c.returningClients > 0
         ? `${num(c.newClients)} · ${num(c.returningClients)}`
         : '—',
       'qtd',
-      'Clientes novos vs recorrentes no dia.',
+      'Clientes novos no salão vs recorrentes no dia (não é lead do Contatos/CRM).',
     ],
     [
       'Mix novos',
@@ -397,8 +397,8 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Atendidos',
     'No-shows',
     'Cancelamentos',
-    'Novos',
-    'Recorrentes',
+    'Novos no salão (hoje)',
+    'Recorrentes (hoje)',
     'Ticket (R$)',
     'Capacidade',
     'Meta diária (R$)',
@@ -413,7 +413,7 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Forma #1',
     'Pacotes (R$)',
     'Retorno',
-    'Novos período',
+    'Novos no salão (mês)',
     'Sem retorno (90d)',
     'Estoque (R$)',
     'Alertas estoque',
