@@ -280,7 +280,7 @@ async function fetchLatestP3(sql: Sql, today: string): Promise<P3Row | null> {
         and day >= (${today}::date - interval '30 days')
         and (
           has_return_rate = true
-          or (return_rate is not null and return_rate > 0)
+          or (has_return_rate is null and return_rate is not null and return_rate > 0)
         )
       order by day desc
       limit 1
