@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { DayMetrics } from '../types'
-import { sanitizeDayMix } from './sanitize-day-mix'
+import { sanitizeDayMix, unpublishDayClientMix } from './sanitize-day-mix'
 
 function day(partial: Partial<DayMetrics>): DayMetrics {
   return {
@@ -139,5 +139,22 @@ describe('sanitizeDayMix', () => {
     // mix = 50 <= apptCap = 60 → no change
     expect(d.newClients).toBe(10)
     expect(d.returningClients).toBe(40)
+  })
+})
+
+describe('unpublishDayClientMix', () => {
+  it('missing trusted day source → null (fetch-unit contract; sanitize stays as defense)', () => {
+    const d = day({
+      revenue: 5000,
+      attended: 40,
+      appointments: 50,
+      newClients: 12,
+      returningClients: 28,
+    })
+    sanitizeDayMix(d, 100, true)
+    expect(d.newClients).toBe(12)
+    unpublishDayClientMix(d)
+    expect(d.newClients).toBeNull()
+    expect(d.returningClients).toBeNull()
   })
 })
