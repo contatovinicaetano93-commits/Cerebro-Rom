@@ -1,6 +1,15 @@
 import type { DayMetrics } from '@/lib/types'
 
 /**
+ * 1ª visita/dia ainda sem fonte Avec confiável — não publicar mix inventado.
+ * Chamado depois de `sanitizeDayMix` (sanitize fica como defesa se algo escapar).
+ */
+export function unpublishDayClientMix(day: DayMetrics): void {
+  day.newClients = null
+  day.returningClients = null
+}
+
+/**
  * Mix novos/recorrentes do Avec às vezes conta dump/backfill como "novo"
  * (ex.: 141 novos + 1 retorno com 176 atendidos). Clampeia o impossível e
  * anula o mix quando a proporção é absurda — sem inventar 1ª visita.

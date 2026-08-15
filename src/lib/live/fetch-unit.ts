@@ -15,7 +15,7 @@ import {
 } from '@/lib/live/parse-kpi-layers'
 import { EMPTY_OPS_FINANCE, EMPTY_OPS_STOCK, fetchOpsFinance, fetchOpsStock } from '@/lib/live/fetch-money-stock'
 import { readGoalsFromDb, resolveGoals } from '@/lib/goals'
-import { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
+import { sanitizeDayMix, unpublishDayClientMix } from '@/lib/live/sanitize-day-mix'
 import { resolveUnitSyncStatus, type UnitSyncRunRow } from '@/lib/live/sync-status'
 import type { DayMetrics, OpsToday, UnitMeta, UnitSnapshot } from '@/lib/types'
 
@@ -437,8 +437,7 @@ export async function fetchLiveUnit(
 
   sanitizeDayMix(todayMetrics, capacity, capacitySet)
   // 1ª visita/dia ainda sem fonte Avec confiável — não publicar mix inventado.
-  todayMetrics.newClients = null
-  todayMetrics.returningClients = null
+  unpublishDayClientMix(todayMetrics)
 
   const mtdRows: DayMetrics[] = []
   {
@@ -465,8 +464,7 @@ export async function fetchLiveUnit(
       )
       // Sanitiza + não publica mix inventado (mesma regra do dia asOf).
       sanitizeDayMix(row, capacity, capacitySet)
-      row.newClients = null
-      row.returningClients = null
+      unpublishDayClientMix(row)
       mtdRows.push(row)
     }
   }
