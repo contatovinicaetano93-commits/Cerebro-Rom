@@ -475,11 +475,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.opsFinance.topPaymentMethod || '—',
       u.opsCommerce.packagesKnown ? money(u.opsCommerce.packagesRevenue) : '—',
       pct(u.opsWeek?.returnRate),
-<<<<<<< HEAD
-      // 1ª visita/mês ainda sem fonte Avec confiável — não publicar o mix do dia.
-      '—',
-=======
->>>>>>> 4384c65 (fix(ui): remove 1ª visita · Já vinham do Cérebro)
       u.opsWeek?.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
       u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
       u.opsStock.available ? (u.opsStock.alertsKnown ? num(u.opsStock.activeAlerts) : '—') : '—',

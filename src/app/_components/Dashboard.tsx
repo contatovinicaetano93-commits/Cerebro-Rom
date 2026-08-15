@@ -1066,7 +1066,7 @@ export function Dashboard({
                         </ul>
                         <p
                           className="text-xs text-muted"
-                          title="Retorno = % de quem já vinha no mix Avec do período. Sem retorno (90d) = clientes sem visita há 90 dias (5.000+ = lista truncada)."
+                          title="Retorno = taxa Avec 0007 / cohort local (P3). Sem fonte → —. Sem retorno (90d) = clientes sem visita há 90 dias (5.000+ = lista truncada)."
                         >
                           Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel}
                         </p>
