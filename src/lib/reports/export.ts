@@ -294,20 +294,6 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
       'Receita ÷ atendidos (unidades com agenda).',
     ],
     [
-      '1ª visita · Já vinham (hoje)',
-      c.todayOpsActive && c.newClients + c.returningClients > 0
-        ? `${num(c.newClients)} · ${num(c.returningClients)}`
-        : '—',
-      'qtd',
-      '1ª visita no dia ainda sem fonte confiável — exporta — até haver dado real.',
-    ],
-    [
-      'Mix novos',
-      c.todayOpsActive && c.newClients + c.returningClients > 0 ? pct(c.newShare) : '—',
-      '%',
-      'Novos ÷ (novos + recorrentes).',
-    ],
-    [
       'Conversão leads',
       c.todayOpsActive && c.conversionRate > 0 ? pct(c.conversionRate) : '—',
       '%',
@@ -397,8 +383,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Atendidos',
     'No-shows',
     'Cancelamentos',
-    '1ª visita (hoje)',
-    'Já vinham (hoje)',
     'Ticket (R$)',
     'Capacidade',
     'Meta diária (R$)',
@@ -413,7 +397,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Forma #1',
     'Pacotes (R$)',
     'Retorno',
-    '1ª visita (mês)',
     'Sem retorno (90d)',
     'Estoque (R$)',
     'Alertas estoque',
@@ -459,9 +442,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
         '—',
         '—',
         '—',
-        '—',
-        '—',
-        '—',
         syncCell,
       ]
     }
@@ -473,18 +453,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       active ? num(u.today.attended) : '—',
       active ? num(u.today.noShows) : '—',
       active ? num(u.today.cancelled) : '—',
-        (() => {
-        if (!active) return '—'
-        const mix = (u.today.newClients ?? 0) + (u.today.returningClients ?? 0)
-        if (mix <= 0 && ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) > 0)) return '—'
-        return num(u.today.newClients ?? 0)
-      })(),
-      (() => {
-        if (!active) return '—'
-        const mix = (u.today.newClients ?? 0) + (u.today.returningClients ?? 0)
-        if (mix <= 0 && ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) > 0)) return '—'
-        return num(u.today.returningClients ?? 0)
-      })(),
       active && (u.today.attended ?? 0) > 0 ? money(u.today.ticketAvg ?? 0) : '—',
       u.today.capacitySet ? num(u.today.capacity) : '—',
       u.today.goalSet ? money(u.today.dailyGoal) : '—',
@@ -507,8 +475,11 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.opsFinance.topPaymentMethod || '—',
       u.opsCommerce.packagesKnown ? money(u.opsCommerce.packagesRevenue) : '—',
       pct(u.opsWeek?.returnRate),
+<<<<<<< HEAD
       // 1ª visita/mês ainda sem fonte Avec confiável — não publicar o mix do dia.
       '—',
+=======
+>>>>>>> 4384c65 (fix(ui): remove 1ª visita · Já vinham do Cérebro)
       u.opsWeek?.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
       u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
       u.opsStock.available ? (u.opsStock.alertsKnown ? num(u.opsStock.activeAlerts) : '—') : '—',

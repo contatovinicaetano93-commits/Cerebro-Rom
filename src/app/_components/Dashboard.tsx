@@ -76,14 +76,10 @@ const LEGEND = {
   vagasHoje: 'Quantos horários ainda cabem hoje: capacidade (Metas) − já agendados.',
   vagas2h: 'Estimativa de encaixes nas próximas 2h (capacidade do dia ÷ 8 × 2, menos a agenda nesse intervalo).',
   cancelNoshow: 'Quantos horários foram cancelados ou o cliente faltou hoje.',
-  novosRec:
-    '1ª visita no dia ainda sem fonte confiável (Avec/ROM não separam estreante de cliente antigo). Mostra — até termos dado real. Não é Contatos → Sem vínculo.',
   unitHoje: 'Faturamento desta unidade no caixa hoje.',
   unitVagas: 'Horários ainda livres hoje nesta unidade (capacidade − agendados).',
   unit2h: 'Encaixes livres estimados nas próximas 2 horas nesta unidade.',
   unitCancel: 'Cancelamentos e faltas de hoje nesta unidade.',
-  unitNovos:
-    '1ª visita no dia ainda sem fonte confiável — mostra —. Não é Contatos → Sem vínculo.',
 } as const
 
 const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
@@ -839,7 +835,6 @@ export function Dashboard({
                   !u || !readable || !operable
                     ? dash
                     : `${u.today.cancelled ?? '—'} · ${u.today.noShows ?? '—'}`
-                const novosRec = dash
                 const borderAccent =
                   slug === 'rom-brasil' ? 'border-brass/35' : 'border-teal/35'
 
@@ -969,18 +964,6 @@ export function Dashboard({
                           {cancelNoshow}
                         </p>
                       </div>
-                      <div className="col-span-2">
-                        <p
-                          className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
-                          title={LEGEND.unitNovos}
-                        >
-                          1ª visita · Já vinham
-                        </p>
-                        <p className="mt-1 font-display text-xl tracking-tight text-foreground sm:text-2xl">
-                          {novosRec}
-                        </p>
-                        <p className="mt-0.5 text-[0.65rem] text-muted">sem fonte confiável ainda</p>
-                      </div>
                     </div>
                   </div>
                 )
@@ -1083,7 +1066,7 @@ export function Dashboard({
                         </ul>
                         <p
                           className="text-xs text-muted"
-                          title="Retorno = % de quem já vinha no mix Avec do período. Sem retorno (90d) = clientes sem visita há 90 dias (5.000+ = lista truncada). 1ª visita do dia ainda sem fonte confiável (Hoje mostra —)."
+                          title="Retorno = % de quem já vinha no mix Avec do período. Sem retorno (90d) = clientes sem visita há 90 dias (5.000+ = lista truncada)."
                         >
                           Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel}
                         </p>
