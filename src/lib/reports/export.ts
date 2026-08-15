@@ -507,7 +507,8 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.opsFinance.topPaymentMethod || '—',
       u.opsCommerce.packagesKnown ? money(u.opsCommerce.packagesRevenue) : '—',
       pct(u.opsWeek?.returnRate),
-      u.opsWeek?.newClientsPeriod != null ? num(u.opsWeek.newClientsPeriod) : '—',
+      // 1ª visita/mês ainda sem fonte Avec confiável — não publicar o mix do dia.
+      '—',
       u.opsWeek?.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
       u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
       u.opsStock.available ? (u.opsStock.alertsKnown ? num(u.opsStock.activeAlerts) : '—') : '—',
