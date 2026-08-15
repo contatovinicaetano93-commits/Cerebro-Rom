@@ -62,26 +62,24 @@ const GROUP_LABEL: Record<ComparisonGroup, string> = {
   estoque: 'Estoque Avec',
 }
 
-/** Legendas curtas — hover no rótulo + linha discreta no KPI. */
+/** Legendas curtas — hover no rótulo + linha discreta no KPI (linguagem de salão). */
 const LEGEND = {
   faturamento:
-    'Soma da receita Avec do dia nas unidades ao vivo.',
+    'Quanto o salão faturou hoje no caixa (soma das unidades ao vivo).',
   ocupacao:
-    'Ocupação = agenda ÷ capacidade (Metas). Comparecimento = atendidos ÷ agendados. Risco = no-shows × ticket.',
-  mtd: 'Receita acumulada no mês (MTD). Ticket = receita ÷ atendidos.',
-  cmv: 'Proxy: custo das saídas de estoque no mês (Avec 0044) — não é CMV fiscal.',
-  estoqueValor: 'Valor da posição de estoque sincronizada da Avec.',
+    '1º % = lotação: horários marcados ÷ capacidade do dia (Metas) — pode passar de 100% com overbook. 2º % = quem veio: atendidos ÷ quem tinha horário. Risco = faltas × ticket (receita que não entrou).',
+  mtd: 'Receita somada desde o 1º dia do mês até hoje. Ticket = essa receita ÷ atendidos no mês.',
+  cmv: 'Estimativa pelo custo das saídas de estoque no mês — não é o CMV fiscal da contabilidade.',
+  estoqueValor: 'Valor em reais do estoque sincronizado da Avec.',
   estoqueAlertas:
-    'Alertas ativos Avec. — se alguma unidade com estoque ainda não tem sync de alertas.',
-  vagasHoje: 'Capacidade do dia (Metas) − agendamentos do dia.',
-  vagas2h: 'Estimativa de encaixes nas próximas 2h: (capacidade ÷ 8) × 2 − agenda nesse intervalo.',
-  cancelNoshow: 'Cancelamentos e faltas do dia (Avec).',
-  novosRec: 'Clientes novos vs recorrentes no dia. — se mix ausente/sanitizado com agenda ativa.',
-  unitHoje: 'Faturamento Avec da unidade hoje.',
-  unitVagas: 'Capacidade (Metas) − agendamentos do dia nesta unidade.',
-  unit2h: 'Vagas livres estimadas nas próximas 2 horas nesta unidade.',
-  unitCancel: 'Cancelamentos e no-shows do dia nesta unidade.',
-  unitNovos: 'Clientes novos vs recorrentes no dia. — se mix ausente/sanitizado com agenda ativa.',
+    'Quantos produtos estão em alerta (abaixo do mínimo). Traço se alguma unidade ainda não sincronizou alertas.',
+  vagasHoje: 'Quantos horários ainda cabem hoje: capacidade (Metas) − já agendados.',
+  vagas2h: 'Estimativa de encaixes nas próximas 2h (capacidade do dia ÷ 8 × 2, menos a agenda nesse intervalo).',
+  cancelNoshow: 'Quantos horários foram cancelados ou o cliente faltou hoje.',
+  unitHoje: 'Faturamento desta unidade no caixa hoje.',
+  unitVagas: 'Horários ainda livres hoje nesta unidade (capacidade − agendados).',
+  unit2h: 'Encaixes livres estimados nas próximas 2 horas nesta unidade.',
+  unitCancel: 'Cancelamentos e faltas de hoje nesta unidade.',
 } as const
 
 const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
@@ -144,28 +142,29 @@ function syncSourceLabel(status: string | undefined): 'incompleto' | 'desatualiz
 }
 
 const COMPARISON_LEGEND: Partial<Record<string, string>> = {
-  revenue_today: 'Receita Avec do dia.',
-  goal_pct: 'Receita do dia ÷ meta diária (Metas).',
-  occupancy: 'Agendamentos ÷ capacidade (Metas). Pode passar de 100% se overbook.',
-  noshow: 'No-shows ÷ agendamentos do dia.',
+  revenue_today: 'Quanto a unidade faturou hoje no caixa.',
+  goal_pct: 'Faturamento de hoje ÷ meta do dia (cadastrada em Metas).',
+  occupancy:
+    'Lotação da agenda: horários marcados ÷ capacidade do dia (Metas). Pode passar de 100% com overbook.',
+  noshow: 'Faltas ÷ horários marcados no dia.',
   lost_revenue:
-    '(Cancelamentos + no-shows) × ticket do dia; se ainda sem atendimento, usa ticket MTD.',
-  ticket: 'Receita ÷ atendidos (hoje).',
-  return: 'Taxa de retorno (P3 ou mix MTD se P3 vazio). — = sem taxa nesta base.',
-  packages: 'Receita de pacotes (Avec 0061).',
-  mtd_revenue: 'Receita acumulada no mês.',
-  mtd_ticket: 'Receita MTD ÷ atendidos MTD.',
-  cmv: 'Proxy: custo das saídas de estoque no mês. — = sem saídas/0044 nesta base.',
-  cmv_share: 'CMV proxy ÷ receita MTD.',
-  payments_total: 'Soma das formas de pagamento (Avec 0081).',
+    'Receita que deixou de entrar: (cancelamentos + faltas) × ticket do dia; se ainda sem atendimento, usa o ticket do mês.',
+  ticket: 'Ticket médio de hoje: receita ÷ atendidos.',
+  return: 'Dos clientes do período, quantos % já tinham vindo antes. Traço = sem dado nesta base.',
+  packages: 'Receita de pacotes vendidos no período.',
+  mtd_revenue: 'Receita somada desde o 1º dia do mês até hoje.',
+  mtd_ticket: 'Ticket médio do mês: receita do mês ÷ atendidos do mês.',
+  cmv: 'Estimativa pelo custo das saídas de estoque no mês. Traço = sem saídas nesta base.',
+  cmv_share: 'Essa estimativa de CMV ÷ receita do mês.',
+  payments_total: 'Soma do que entrou por forma de pagamento no período.',
   payment_gap:
-    'Pagamentos 0081 − receita nos mesmos dias (ideal ≈ 0). Δ some se um lado ≈ 0.',
-  payment_reconcile: 'Status da conciliação 0081 vs receita.',
+    'Diferença entre total de pagamentos e receita nos mesmos dias (ideal perto de zero).',
+  payment_reconcile: 'Se pagamentos e receita do período estão alinhados.',
   top_payment: 'Forma de pagamento com maior volume no período.',
-  stock_value: 'Valor em estoque (posição Avec).',
+  stock_value: 'Valor em reais do estoque da unidade.',
   stock_alerts:
-    'Alertas ativos Avec. — = sync de alertas ausente (tabela vazia com catálogo).',
-  stock_zero: 'SKUs com saldo zero.',
+    'Produtos em alerta (abaixo do mínimo). Traço = alertas ainda não sincronizados.',
+  stock_zero: 'Produtos com saldo zero no estoque.',
 }
 
 function severityStyles(severity: 'critical' | 'warning' | 'info') {
@@ -559,7 +558,7 @@ export function Dashboard({
           </Panel>
           <Panel>
             <KpiStat
-              label="Ocupação · Comparec."
+              label="Lotação · Quem veio"
               value={
                 c.occupancyConfigured && c.attendanceConfigured
                   ? `${formatPct(c.occupancyRate)} · ${formatPct(c.attendanceRate)}`
@@ -571,7 +570,7 @@ export function Dashboard({
               }
               hint={
                 c.attendanceConfigured
-                  ? `No-show ${formatPct(c.noShowRate)} · risco ${
+                  ? `Faltas ${formatPct(c.noShowRate)} · receita em risco ${
                       c.revenueAtRisk != null ? formatCurrency(c.revenueAtRisk) : '—'
                     }`
                   : 'Agenda do dia ainda não confiável / sem operação'
@@ -583,7 +582,7 @@ export function Dashboard({
           </Panel>
           <Panel>
             <KpiStat
-              label="MTD · Ticket"
+              label="Receita do mês · Ticket"
               value={
                 !c.networkReadable
                   ? '—'
@@ -619,16 +618,16 @@ export function Dashboard({
           <section className="mt-3 grid gap-3 sm:grid-cols-3">
             <Panel>
               <KpiStat
-                label="CMV rede (MTD)"
+                label="CMV da rede (mês)"
                 value={c.cmvKnown ? formatCurrency(c.cmv) : '—'}
-                hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita` : undefined}
+                hint={c.cmvShare != null ? `${formatPct(c.cmvShare)} da receita do mês` : undefined}
                 source={sourceHint('proxy', 'Avec', networkSyncSource)}
                 legend={LEGEND.cmv}
               />
             </Panel>
             <Panel>
               <KpiStat
-                label="Estoque (valor)"
+                label="Valor em estoque"
                 value={c.stockValueKnown ? formatCurrency(c.stockValue) : '—'}
                 source={sourceHint('Avec', networkSyncSource)}
                 legend={LEGEND.estoqueValor}
@@ -636,7 +635,7 @@ export function Dashboard({
             </Panel>
             <Panel>
               <KpiStat
-                label="Alertas estoque"
+                label="Produtos em alerta"
                 value={c.stockAlertsKnown ? formatNumber(c.stockAlerts) : '—'}
                 tone={
                   !c.stockAlertsKnown
@@ -836,14 +835,6 @@ export function Dashboard({
                   !u || !readable || !operable
                     ? dash
                     : `${u.today.cancelled ?? '—'} · ${u.today.noShows ?? '—'}`
-                const novosRec =
-                  !u || !readable || !active ||
-                  ((u.today.attended ?? 0) <= 0 && (u.today.revenue ?? 0) <= 0)
-                    ? dash
-                    : (u.today.newClients ?? 0) + (u.today.returningClients ?? 0) <= 0 &&
-                        ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) > 0)
-                      ? dash
-                      : `${u.today.newClients ?? '—'} · ${u.today.returningClients ?? '—'}`
                 const borderAccent =
                   slug === 'rom-brasil' ? 'border-brass/35' : 'border-teal/35'
 
@@ -973,17 +964,6 @@ export function Dashboard({
                           {cancelNoshow}
                         </p>
                       </div>
-                      <div className="col-span-2">
-                        <p
-                          className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
-                          title={LEGEND.unitNovos}
-                        >
-                          Novos · Recorrentes
-                        </p>
-                        <p className="mt-1 font-display text-xl tracking-tight text-foreground sm:text-2xl">
-                          {novosRec}
-                        </p>
-                      </div>
                     </div>
                   </div>
                 )
@@ -1014,7 +994,6 @@ export function Dashboard({
                   w.services.length === 0 &&
                   w.acquisition.length === 0 &&
                   (w.returnRate == null || w.returnRate === 0) &&
-                  w.newClientsPeriod == null &&
                   (w.reactivationCount == null || w.reactivationCount === 0)
                 // Avec 0107 pagina até ~5000 linhas — 5000 é teto, não o total real.
                 const semRetornoLabel =
@@ -1087,11 +1066,9 @@ export function Dashboard({
                         </ul>
                         <p
                           className="text-xs text-muted"
-                          title="Sem retorno = clientes sem visita na janela Avec 0107 (90 dias). 5.000+ = lista truncada pela paginação."
+                          title="Retorno = % de quem já vinha no mix Avec do período. Sem retorno (90d) = clientes sem visita há 90 dias (5.000+ = lista truncada)."
                         >
-                          Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel} ·
-                          novos{' '}
-                          {w.newClientsPeriod == null ? '—' : formatNumber(w.newClientsPeriod)}
+                          Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel}
                         </p>
                       </div>
                     )}

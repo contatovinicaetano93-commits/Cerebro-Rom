@@ -1,9 +1,9 @@
 import type { DayMetrics } from '@/lib/types'
 
 /**
- * Mix novos/recorrentes do Avec às vezes conta dump/backfill como "novo".
- * Clampeia o que for impossível/absurdo — sem apagar retornos Avec (0002) válidos
- * só porque `new_clients` veio inflado.
+ * Mix novos/recorrentes do Avec às vezes conta dump/backfill como "novo"
+ * (ex.: 141 novos + 1 retorno com 176 atendidos). Clampeia o impossível e
+ * anula o mix quando a proporção é absurda — sem inventar 1ª visita.
  */
 export function sanitizeDayMix(day: DayMetrics, capacity: number, capacitySet: boolean): void {
   // attended or revenue unknown → don't zero mix (state unknown, not zero-money).
@@ -21,12 +21,32 @@ export function sanitizeDayMix(day: DayMetrics, capacity: number, capacitySet: b
     day.newClients = 0
   }
 
-  const apptCap = Math.max(day.appointments ?? 0, day.attended)
-  if (apptCap <= 0) return
-
   const newC = day.newClients ?? 0
   const retC = day.returningClients ?? 0
   const mix = newC + retC
+  const attended = day.attended
+
+  // Dia cheio com quase zero "já vinha" e a maior parte marcada como 1ª visita:
+  // total_visitas do 0002 veio quebrado — não mostrar como KPI.
+  if (
+    attended >= 25 &&
+    mix >= 20 &&
+    retC <= Math.max(2, Math.floor(attended * 0.05)) &&
+    newC >= attended * 0.4
+  ) {
+    day.newClients = null
+    day.returningClients = null
+    return
+  }
+
+  if (mix >= 30 && retC / mix < 0.1 && newC >= 20) {
+    day.newClients = null
+    day.returningClients = null
+    return
+  }
+
+  const apptCap = Math.max(day.appointments ?? 0, attended)
+  if (apptCap <= 0) return
 
   if (mix > apptCap) {
     // Soft-clamp: preserve returningClients first, then clamp newClients to fit.
