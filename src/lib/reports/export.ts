@@ -138,35 +138,41 @@ function lostRevenue(u: UnitSnapshot): number | null {
 }
 
 const LEGEND_ROWS: [string, string][] = [
-  ['Faturamento hoje', 'Soma da receita Avec do dia nas unidades ao vivo.'],
-  ['Meta hoje', 'Meta diária definida no painel (Metas). Sem meta → progresso vazio.'],
-  ['% meta hoje', 'Faturamento hoje ÷ meta hoje.'],
-  ['MTD', 'Month-to-date: receita acumulada no mês corrente (Avec).'],
-  ['Ticket', 'Receita ÷ atendidos (hoje). — se não houver atendidos.'],
-  ['Ocupação', 'Agendamentos ÷ capacidade (Metas).'],
-  ['Comparecimento', 'Atendidos ÷ agendamentos do dia.'],
-  ['No-show %', 'Faltas ÷ agendamentos do dia.'],
-  ['Receita em risco', 'No-shows × ticket médio (potencial perdido por falta).'],
-  ['Receita perdida', '(Cancelamentos + no-shows) × ticket do dia.'],
-  ['Vagas hoje', 'Capacidade do dia − agendamentos do dia.'],
-  ['Vagas 2h', 'Estimativa: (capacidade÷8)×2 − agenda nas próximas 2h.'],
-  ['CMV', 'Custo das saídas de estoque no mês (Avec 0044) — proxy de CMV.'],
-  ['CMV/receita', 'CMV ÷ receita MTD.'],
-  ['Pagamentos 0081', 'Soma das formas de pagamento (relatório Avec 0081).'],
-  ['Conciliação', 'Status 0081 vs receita MTD (ideal ≈ alinhado).'],
+  ['Faturamento hoje', 'Quanto o salão faturou hoje no caixa (unidades ao vivo).'],
+  ['Meta hoje', 'Meta diária cadastrada no painel (Metas). Sem meta → progresso vazio.'],
+  ['% meta hoje', 'Faturamento de hoje ÷ meta de hoje.'],
+  ['Receita do mês', 'Receita somada desde o 1º dia do mês até hoje.'],
+  ['Ticket', 'Receita ÷ atendidos. Traço se não houver atendidos.'],
+  [
+    'Lotação (Metas)',
+    'Agenda ÷ capacidade cadastrada em Metas (não medida). Pode passar de 100% com overbook. Contagem: agenda live quando coerente; se Avec (metrics) tiver mais marcados (≥ atendidos), prevalece Avec.',
+  ],
+  ['Quem veio', 'Atendidos ÷ quem tinha horário marcado no dia.'],
+  ['Faltas %', 'Clientes que faltaram ÷ horários marcados no dia.'],
+  ['Receita em risco', 'Faltas × ticket médio (receita que não entrou por falta).'],
+  ['Receita perdida', '(Cancelamentos + faltas) × ticket do dia.'],
+  ['Vagas hoje (Metas)', 'Capacidade cadastrada em Metas − horários já marcados.'],
+  [
+    'Vagas 2h (est.)',
+    'Estimativa (não medição): capacidade Metas ÷ 8h × 2 − agenda nas próximas 2h.',
+  ],
+  ['CMV', 'Estimativa pelo custo das saídas de estoque no mês — não é CMV fiscal.'],
+  ['CMV/receita', 'Essa estimativa de CMV ÷ receita do mês.'],
+  ['Pagamentos', 'Soma do que entrou por forma de pagamento no período.'],
+  ['Conciliação', 'Se pagamentos e receita do período estão alinhados.'],
   ['Forma #1', 'Forma de pagamento com maior volume no período.'],
-  ['Pacotes', 'Receita de pacotes (Avec 0061).'],
-  ['Retorno', 'Taxa de retorno de clientes (Avec / P3).'],
-  ['Estoque valor', 'Valor da posição de estoque sincronizada da Avec.'],
-  ['Alertas estoque', 'Produtos abaixo do mínimo (alertas ativos).'],
-  ['Zerados', 'SKUs com saldo zero.'],
-  ['Sync', 'Saúde do sync Avec → DB da unidade (atraso/erro).'],
+  ['Pacotes', 'Receita de pacotes vendidos.'],
+  ['Retorno', 'Dos clientes do período, quantos % já tinham vindo antes.'],
+  ['Estoque valor', 'Valor em reais do estoque sincronizado.'],
+  ['Alertas estoque', 'Produtos abaixo do mínimo (em alerta).'],
+  ['Zerados', 'Produtos com saldo zero.'],
+  ['Sync', 'Se a sincronização Avec → banco da unidade está em dia.'],
   ['Δ%', 'Moeda/contagem: (BR − IG) ÷ |IG| (positivo = Brasil à frente). Taxas: pontos percentuais.'],
   [
     'Modo live',
-    'Números lidos dos DBs das unidades. Zeros podem ser dia sem movimento OU sync fraco.',
+    'Números lidos dos bancos das unidades. Zero pode ser dia quieto ou sync atrasado.',
   ],
-  ['Modo degradado', 'Live indisponível — o Cérebro não inventa KPIs.'],
+  ['Modo degradado', 'Live indisponível — o Cérebro não inventa números.'],
 ]
 
 function capaRows(run: ReportRunDetail): (string | number | null)[][] {
@@ -291,30 +297,16 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
       'Receita ÷ atendidos (unidades com agenda).',
     ],
     [
-      'Novos · Recorrentes (hoje)',
-      c.todayOpsActive && c.newClients + c.returningClients > 0
-        ? `${num(c.newClients)} · ${num(c.returningClients)}`
-        : '—',
-      'qtd',
-      'Clientes novos vs recorrentes no dia.',
-    ],
-    [
-      'Mix novos',
-      c.todayOpsActive && c.newClients + c.returningClients > 0 ? pct(c.newShare) : '—',
-      '%',
-      'Novos ÷ (novos + recorrentes).',
-    ],
-    [
       'Conversão leads',
       c.todayOpsActive && c.conversionRate > 0 ? pct(c.conversionRate) : '—',
       '%',
       'Leads convertidos ÷ leads do dia (quando houver).',
     ],
     [
-      'Ocupação',
+      'Lotação (Metas)',
       c.occupancyConfigured ? pct(c.occupancyRate) : '—',
       '%',
-      'Agenda ÷ capacidade (só unidades em operação).',
+      'Agenda ÷ capacidade cadastrada em Metas (pode >100%). Só unidades em operação.',
     ],
     [
       'Comparecimento',
@@ -335,16 +327,16 @@ function redeMetricRows(o: CerebroOverview): (string | number | null)[][] {
       'No-shows × ticket.',
     ],
     [
-      'Vagas hoje',
+      'Vagas hoje (Metas)',
       c.occupancyConfigured ? num(c.openSlotsToday) : '—',
       'qtd',
-      'Capacidade − agenda (unidades em operação).',
+      'Capacidade Metas − agenda (unidades em operação).',
     ],
     [
-      'Vagas 2h',
+      'Vagas 2h (est.)',
       c.slotsNext2hConfigured ? num(c.openSlotsNext2h) : '—',
       'qtd',
-      'Encaixes estimados nas próximas 2h (agenda live).',
+      'Estimativa: capacidade Metas ÷ 8h × 2 − agenda 2h.',
     ],
     [
       'Cancelamentos (hoje)',
@@ -394,14 +386,12 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Atendidos',
     'No-shows',
     'Cancelamentos',
-    'Novos',
-    'Recorrentes',
     'Ticket (R$)',
-    'Capacidade',
+    'Capacidade (Metas)',
     'Meta diária (R$)',
     'Receita perdida (R$)',
-    'Vagas hoje',
-    'Vagas 2h',
+    'Vagas hoje (Metas)',
+    'Vagas 2h (est.)',
     'MTD (R$)',
     'Ticket MTD (R$)',
     'CMV (R$)',
@@ -410,7 +400,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
     'Forma #1',
     'Pacotes (R$)',
     'Retorno',
-    'Novos período',
     'Sem retorno (90d)',
     'Estoque (R$)',
     'Alertas estoque',
@@ -456,9 +445,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
         '—',
         '—',
         '—',
-        '—',
-        '—',
-        '—',
         syncCell,
       ]
     }
@@ -470,18 +456,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       active ? num(u.today.attended) : '—',
       active ? num(u.today.noShows) : '—',
       active ? num(u.today.cancelled) : '—',
-        (() => {
-        if (!active) return '—'
-        const mix = (u.today.newClients ?? 0) + (u.today.returningClients ?? 0)
-        if (mix <= 0 && ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) > 0)) return '—'
-        return num(u.today.newClients ?? 0)
-      })(),
-      (() => {
-        if (!active) return '—'
-        const mix = (u.today.newClients ?? 0) + (u.today.returningClients ?? 0)
-        if (mix <= 0 && ((u.today.attended ?? 0) > 0 || (u.today.appointments ?? 0) > 0)) return '—'
-        return num(u.today.returningClients ?? 0)
-      })(),
       active && (u.today.attended ?? 0) > 0 ? money(u.today.ticketAvg ?? 0) : '—',
       u.today.capacitySet ? num(u.today.capacity) : '—',
       u.today.goalSet ? money(u.today.dailyGoal) : '—',
@@ -504,7 +478,6 @@ function unitTable(o: CerebroOverview): (string | number | null)[][] {
       u.opsFinance.topPaymentMethod || '—',
       u.opsCommerce.packagesKnown ? money(u.opsCommerce.packagesRevenue) : '—',
       pct(u.opsWeek?.returnRate),
-      u.opsWeek?.newClientsPeriod != null ? num(u.opsWeek.newClientsPeriod) : '—',
       u.opsWeek?.reactivationCount != null ? num(u.opsWeek.reactivationCount) : '—',
       u.opsStock.valueKnown ? money(u.opsStock.totalValue) : '—',
       u.opsStock.available ? (u.opsStock.alertsKnown ? num(u.opsStock.activeAlerts) : '—') : '—',

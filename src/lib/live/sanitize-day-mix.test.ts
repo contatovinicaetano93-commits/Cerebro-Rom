@@ -30,13 +30,13 @@ describe('sanitizeDayMix', () => {
       attended: 134,
       appointments: 97,
       newClients: 317,
-      returningClients: 10,
+      returningClients: 40,
     })
     sanitizeDayMix(d, 227, true)
-    // apptCap = max(97, 134) = 134; mix = 317+10 > 134; ret=10 <= 134
-    // newClients soft-clamped to apptCap - ret = 124
-    expect(d.returningClients).toBe(10)
-    expect(d.newClients).toBe(124)
+    // apptCap = max(97, 134) = 134; mix = 317+40 > 134; ret=40 <= 134
+    // ret/mix ~11% → ainda confiável o bastante para soft-clamp
+    expect(d.returningClients).toBe(40)
+    expect(d.newClients).toBe(94)
   })
 
   it('zera mix quando o dia ainda não tem dinheiro (known zeros)', () => {
@@ -58,6 +58,45 @@ describe('sanitizeDayMix', () => {
     // 400 > 110*1.5=165 → extreme dump → newClients=0; mix=3 <= apptCap=80 → no further clamp
     expect(d.newClients).toBe(0)
     expect(d.returningClients).toBe(3)
+  })
+
+  it('anula mix quando dia cheio vem quase só como 1ª visita (lixo 0002)', () => {
+    const d = day({
+      revenue: 176090,
+      attended: 176,
+      appointments: 245,
+      newClients: 141,
+      returningClients: 1,
+    })
+    sanitizeDayMix(d, 200, true)
+    expect(d.newClients).toBeNull()
+    expect(d.returningClients).toBeNull()
+  })
+
+  it('anula mix BR com returning=0 e novos inflados', () => {
+    const d = day({
+      revenue: 159100,
+      attended: 166,
+      appointments: 226,
+      newClients: 68,
+      returningClients: 0,
+    })
+    sanitizeDayMix(d, 200, true)
+    expect(d.newClients).toBeNull()
+    expect(d.returningClients).toBeNull()
+  })
+
+  it('preserva mix saudável (maioria já vinha)', () => {
+    const d = day({
+      revenue: 87510,
+      attended: 109,
+      appointments: 122,
+      newClients: 32,
+      returningClients: 55,
+    })
+    sanitizeDayMix(d, 200, true)
+    expect(d.newClients).toBe(32)
+    expect(d.returningClients).toBe(55)
   })
 
   it('returns early without zeroing mix when attended is null (unknown state)', () => {

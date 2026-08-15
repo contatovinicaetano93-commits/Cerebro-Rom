@@ -43,7 +43,8 @@ export interface OpsToday {
    * Nesse caso appointmentsNext2h/openSlotsNext2h não são confiáveis.
    */
   slotsNext2hKnown: boolean
-  newShare: number
+  /** null quando mix novos/recorrentes do dia não é conhecido (não inventar 0%). */
+  newShare: number | null
 }
 
 /** Gestão — Avec 0021, 0126, 0032, 0107, 0003 + 0007, 0017 */
@@ -153,8 +154,10 @@ export interface UnitSnapshot {
     attended: number | null
     noShows: number
     appointments: number
-    newClients: number
-    returningClients: number
+    /** null = nenhum dia do mês com mix conhecido (não confundir com 0 novos). */
+    newClients: number | null
+    /** null = nenhum dia do mês com mix conhecido (não confundir com 0 retornos). */
+    returningClients: number | null
     cancelled: number
     goal: number
     goalSet: boolean
@@ -245,8 +248,10 @@ export interface CerebroOverview {
     ticketAvg: number
     /** null quando há no-shows sem ticket (não inventar R$0 em risco). */
     revenueAtRisk: number | null
-    newClients: number
-    returningClients: number
+    /** null quando nenhuma unidade legível publicou mix do dia. */
+    newClients: number | null
+    /** null quando nenhuma unidade legível publicou mix do dia. */
+    returningClients: number | null
     conversionRate: number
     openSlotsToday: number
     openSlotsNext2h: number
@@ -254,7 +259,8 @@ export interface CerebroOverview {
     slotsNext2hConfigured: boolean
     cancelledToday: number
     noShowsToday: number
-    newShare: number
+    /** null quando mix da rede é desconhecido (não inventar 0%). */
+    newShare: number | null
     /** CMV rede (Avec) no MTD. */
     cmv: number
     /** false quando nenhuma unidade tem saídas 0044 no período. */

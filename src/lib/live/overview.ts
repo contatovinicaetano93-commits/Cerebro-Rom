@@ -202,8 +202,8 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
         id: `slots-${u.unit.slug}`,
         severity: 'info',
         unit: u.unit.slug,
-        title: `Vagas nas 2h — ${u.unit.short}`,
-        detail: `${u.opsToday.openSlotsNext2h} livres`,
+        title: `Vagas 2h (est.) — ${u.unit.short}`,
+        detail: `${u.opsToday.openSlotsNext2h} livres · estimativa Metas ÷ 8h × 2`,
         action: 'Campanha rápida de encaixe',
       })
     }
@@ -406,11 +406,18 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   const capacityAppointments = capacityOps.reduce((a, u) => a + (u.today.appointments ?? 0), 0)
   const occupancyConfigured = capacityOps.length > 0 && capacity > 0
   const attendanceConfigured = appointments > 0
-  const newClients = moneyOps.reduce((a, u) => a + (u.today.newClients ?? 0), 0)
-  const returningClients = moneyOps.reduce((a, u) => a + (u.today.returningClients ?? 0), 0)
+  const mixKnown = moneyOps.some(
+    (u) => u.today.newClients != null || u.today.returningClients != null,
+  )
+  const newClients = mixKnown
+    ? moneyOps.reduce((a, u) => a + (u.today.newClients ?? 0), 0)
+    : null
+  const returningClients = mixKnown
+    ? moneyOps.reduce((a, u) => a + (u.today.returningClients ?? 0), 0)
+    : null
   const leads = moneyOps.reduce((a, u) => a + u.today.leads, 0)
   const converted = moneyOps.reduce((a, u) => a + u.today.converted, 0)
-  const mixBase = newClients + returningClients
+  const mixBase = (newClients ?? 0) + (returningClients ?? 0)
   const cmvKnownUnits = connected.filter((u) => u.opsFinance.cmvKnown)
   const cmv = cmvKnownUnits.reduce((a, u) => a + u.opsFinance.cmv, 0)
   const cmvMtd = cmvKnownUnits.reduce((a, u) => a + (u.opsFinance.mtdRevenue ?? 0), 0)
@@ -481,7 +488,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
     slotsNext2hConfigured: slots2hOps.length > 0,
     cancelledToday: dayOps.reduce((a, u) => a + (u.today.cancelled ?? 0), 0),
     noShowsToday: dayOps.reduce((a, u) => a + (u.today.noShows ?? 0), 0),
-    newShare: mixBase > 0 ? newClients / mixBase : 0,
+    newShare: mixKnown ? (mixBase > 0 ? (newClients ?? 0) / mixBase : 0) : null,
     cmv,
     cmvKnown: cmvKnownUnits.length > 0,
     cmvShare: cmvKnownUnits.length > 0 && cmvMtd > 0 ? cmv / cmvMtd : null,
@@ -513,15 +520,15 @@ function emptyConsolidated(): CerebroOverview['consolidated'] {
     attendanceConfigured: false,
     ticketAvg: 0,
     revenueAtRisk: null,
-    newClients: 0,
-    returningClients: 0,
+    newClients: null,
+    returningClients: null,
     conversionRate: 0,
     openSlotsToday: 0,
     openSlotsNext2h: 0,
     slotsNext2hConfigured: false,
     cancelledToday: 0,
     noShowsToday: 0,
-    newShare: 0,
+    newShare: null,
     cmv: 0,
     cmvKnown: false,
     cmvShare: null,
