@@ -1,6 +1,5 @@
 import type { getSql } from '@/lib/db'
-import { sanitizeDayMix } from '@/lib/live/sanitize-day-mix'
-import type { DayMetrics, OpsCommerce, OpsWeek } from '@/lib/types'
+import type { OpsCommerce, OpsWeek } from '@/lib/types'
 
 function n(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -172,6 +171,8 @@ type P3Row = {
   day?: unknown
   return_rate?: unknown
   new_clients_period?: unknown
+  has_return_rate?: unknown
+  has_new_clients?: unknown
 }
 
 function dayIso(v: unknown): string | null {
@@ -265,21 +266,33 @@ async function fetchLatestP2(sql: Sql, today: string): Promise<P2Row | null> {
 async function fetchLatestP3(sql: Sql, today: string): Promise<P3Row | null> {
   if (!(await tableExists(sql, 'salon_p3_daily'))) return null
   try {
-    // Prefere dia com taxa de retorno preenchida (evita zero de sync parcial).
+    // Prefere dia com taxa de retorno marcada como conhecida (has_return_rate).
     // Janela 30d: P3 full costuma ser raro (BR às vezes só no fim de semana).
     const rows = (await sql`
-      select day::text as day, return_rate::float as return_rate, new_clients_period
+      select
+        day::text as day,
+        return_rate::float as return_rate,
+        new_clients_period,
+        has_return_rate,
+        has_new_clients
       from salon_p3_daily
       where day <= ${today}::date
         and day >= (${today}::date - interval '30 days')
-        and return_rate is not null
-        and return_rate > 0
+        and (
+          has_return_rate = true
+          or (has_return_rate is null and return_rate is not null and return_rate > 0)
+        )
       order by day desc
       limit 1
     `) as P3Row[]
     if (rows[0]) return rows[0]
     const fallback = (await sql`
-      select day::text as day, return_rate::float as return_rate, new_clients_period
+      select
+        day::text as day,
+        return_rate::float as return_rate,
+        new_clients_period,
+        has_return_rate,
+        has_new_clients
       from salon_p3_daily
       where day <= ${today}::date
         and day >= (${today}::date - interval '30 days')
@@ -288,102 +301,58 @@ async function fetchLatestP3(sql: Sql, today: string): Promise<P3Row | null> {
     `) as P3Row[]
     return fallback[0] ?? null
   } catch {
-    return null
+    // Schema antigo sem has_* — tenta colunas básicas.
+    try {
+      const rows = (await sql`
+        select day::text as day, return_rate::float as return_rate, new_clients_period
+        from salon_p3_daily
+        where day <= ${today}::date
+          and day >= (${today}::date - interval '30 days')
+          and return_rate is not null
+          and return_rate > 0
+        order by day desc
+        limit 1
+      `) as P3Row[]
+      return rows[0] ?? null
+    } catch {
+      return null
+    }
   }
 }
 
-/**
- * Fallback quando salon_p3_daily.return_rate está vazio (ex.: IG cutover / 0007 lista).
- * Mix MTD: returning / (returning + new) em salon_daily_metrics.
- * Sanitiza dia a dia (dump Avec de “novos”) antes de somar — senão infla o denominador.
- */
-async function fetchReturnRateFromDailyMix(
-  sql: Sql,
-  monthStart: string,
-  today: string,
-): Promise<{ rate: number; newClients: number } | null> {
-  if (!(await tableExists(sql, 'salon_daily_metrics'))) return null
-  try {
-    const rows = (await sql`
-      select
-        day::text as day,
-        coalesce(appointments, 0)::int as appointments,
-        coalesce(attended, 0)::int as attended,
-        coalesce(returning_clients, 0)::int as returning_clients,
-        coalesce(new_clients, 0)::int as new_clients,
-        coalesce(revenue, 0)::float as revenue
-      from salon_daily_metrics
-      where day >= ${monthStart}::date
-        and day <= ${today}::date
-    `) as {
-      day: string
-      appointments: number
-      attended: number
-      returning_clients: number
-      new_clients: number
-      revenue: number
-    }[]
+function p3ReturnRate(p3: P3Row | null): number | null {
+  if (!p3) return null
+  const known =
+    p3.has_return_rate === true ||
+    (p3.has_return_rate == null && p3.return_rate != null && n(p3.return_rate) > 0)
+  if (!known) return null
+  return nOrNull(p3.return_rate)
+}
 
-    let returning = 0
-    let neu = 0
-    for (const row of rows) {
-      const day: DayMetrics = {
-        day: row.day,
-        revenue: n(row.revenue),
-        appointments: n(row.appointments),
-        attended: n(row.attended),
-        noShows: 0,
-        cancelled: 0,
-        newClients: n(row.new_clients),
-        returningClients: n(row.returning_clients),
-        ticketAvg: 0,
-        capacity: 0,
-        dailyGoal: 0,
-        goalSet: false,
-        capacitySet: false,
-        leads: 0,
-        converted: 0,
-      }
-      sanitizeDayMix(day, 0, false)
-      returning += day.returningClients ?? 0
-      neu += day.newClients ?? 0
-    }
-
-    const denom = returning + neu
-    if (denom <= 0 || returning <= 0) return null
-    return {
-      rate: Math.round((returning / denom) * 10000) / 10000,
-      newClients: neu,
-    }
-  } catch {
-    return null
-  }
+function p3NewClientsPeriod(p3: P3Row | null): number | null {
+  if (!p3) return null
+  const known =
+    p3.has_new_clients === true ||
+    (p3.has_new_clients == null &&
+      p3.new_clients_period != null &&
+      n(p3.new_clients_period) > 0)
+  if (!known) return null
+  return nOrNull(p3.new_clients_period)
 }
 
 export async function fetchOpsWeek(
   sql: Sql,
   today: string,
-  monthStart?: string,
+  _monthStart?: string,
 ): Promise<OpsWeek> {
   // Sequencial — pool max:1; Promise.all só enfileirava e alongava o overview.
   const p1 = await fetchLatestP1(sql, today)
   const p3 = await fetchLatestP3(sql, today)
 
-  let returnRate =
-    p3?.return_rate == null || n(p3.return_rate) <= 0 ? null : n(p3.return_rate)
-  let returnAsOfDay = dayIso(p3?.day)
-  let newClientsPeriod =
-    p3 == null || p3.new_clients_period == null ? null : n(p3.new_clients_period)
-
-  // IG: P3 frequentemente null/0 — tentar mix mesmo sem P1/P3 (cutover).
-  if (returnRate == null && monthStart) {
-    const fromMix = await fetchReturnRateFromDailyMix(sql, monthStart, today)
-    if (fromMix != null && fromMix.rate > 0) {
-      returnRate = fromMix.rate
-      returnAsOfDay = today
-      newClientsPeriod = fromMix.newClients
-    }
-  }
+  // Sem fallback de mix dia/mês — new/returning diários não são fonte confiável.
+  const returnRate = p3ReturnRate(p3)
+  const returnAsOfDay = returnRate == null ? null : dayIso(p3?.day)
+  const newClientsPeriod = p3NewClientsPeriod(p3)
 
   if (!p1 && !p3 && returnRate == null) return EMPTY_OPS_WEEK
 
