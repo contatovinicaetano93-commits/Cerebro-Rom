@@ -80,10 +80,11 @@ function buildOpsToday(
     ? Math.max(0, Math.round((today.capacity / SALON_HOURS_PER_DAY) * 2))
     : 0
   const openSlotsNext2h = known ? Math.max(0, capacityNext2h - appointmentsNext2h) : 0
+  const mixKnown = today.newClients != null || today.returningClients != null
   const newC = today.newClients ?? 0
   const retC = today.returningClients ?? 0
   const mixBase = newC + retC
-  const newShare = mixBase > 0 ? newC / mixBase : 0
+  const newShare = mixKnown ? (mixBase > 0 ? newC / mixBase : 0) : null
 
   return {
     openSlotsToday,
@@ -187,8 +188,8 @@ export function offlineUnitSnapshot(
       attended: null,
       noShows: 0,
       appointments: 0,
-      newClients: 0,
-      returningClients: 0,
+      newClients: null,
+      returningClients: null,
       cancelled: 0,
       goal: 0,
       goalSet: false,
@@ -472,19 +473,26 @@ export async function fetchLiveUnit(
   }
   const revenueKnown = mtdRows.some((d) => d.revenue != null)
   const attendedKnown = mtdRows.some((d) => d.attended != null)
+  const mixKnown = mtdRows.some((d) => d.newClients != null || d.returningClients != null)
   const mtdRevenue = revenueKnown
     ? mtdRows.reduce((a, d) => a + (d.revenue ?? 0), 0)
     : null
   const mtdAttended = attendedKnown
     ? mtdRows.reduce((a, d) => a + (d.attended ?? 0), 0)
     : null
+  const mtdNewClients = mixKnown
+    ? mtdRows.reduce((a, d) => a + (d.newClients ?? 0), 0)
+    : null
+  const mtdReturningClients = mixKnown
+    ? mtdRows.reduce((a, d) => a + (d.returningClients ?? 0), 0)
+    : null
   const mtd = {
     revenue: mtdRevenue,
     attended: mtdAttended,
     noShows: mtdRows.reduce((a, d) => a + (d.noShows ?? 0), 0),
     appointments: mtdRows.reduce((a, d) => a + (d.appointments ?? 0), 0),
-    newClients: mtdRows.reduce((a, d) => a + (d.newClients ?? 0), 0),
-    returningClients: mtdRows.reduce((a, d) => a + (d.returningClients ?? 0), 0),
+    newClients: mtdNewClients,
+    returningClients: mtdReturningClients,
     cancelled: mtdRows.reduce((a, d) => a + (d.cancelled ?? 0), 0),
     goal: goalSet ? dailyGoal * dayOfMonth(today) : 0,
     goalSet,
