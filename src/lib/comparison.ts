@@ -206,7 +206,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'occupancy',
-      label: 'Lotação da agenda',
+      label: 'Lotação (Metas)',
       group: 'ops',
       brasil: occ(brasil),
       iguatemi: occ(iguatemi),

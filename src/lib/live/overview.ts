@@ -202,8 +202,8 @@ function buildNextActions(units: UnitSnapshot[], goalsConfigured: boolean): Aler
         id: `slots-${u.unit.slug}`,
         severity: 'info',
         unit: u.unit.slug,
-        title: `Vagas nas 2h — ${u.unit.short}`,
-        detail: `${u.opsToday.openSlotsNext2h} livres`,
+        title: `Vagas 2h (est.) — ${u.unit.short}`,
+        detail: `${u.opsToday.openSlotsNext2h} livres · estimativa Metas ÷ 8h × 2`,
         action: 'Campanha rápida de encaixe',
       })
     }

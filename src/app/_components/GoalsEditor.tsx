@@ -164,7 +164,7 @@ export function GoalsEditor({
                     />
                   </label>
                   <label className="block text-xs text-muted">
-                    Capacidade (atend./dia)
+                    Capacidade Metas (atend./dia)
                     <input
                       type="number"
                       min={0}

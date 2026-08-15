@@ -67,18 +67,20 @@ const LEGEND = {
   faturamento:
     'Quanto o salão faturou hoje no caixa (soma das unidades ao vivo).',
   ocupacao:
-    '1º % = lotação: horários marcados ÷ capacidade do dia (Metas) — pode passar de 100% com overbook. 2º % = quem veio: atendidos ÷ quem tinha horário. Risco = faltas × ticket (receita que não entrou).',
+    '1º % = lotação: agenda ÷ capacidade cadastrada em Metas (não é capacidade medida do salão) — pode passar de 100% com overbook. 2º % = quem veio: atendidos ÷ quem tinha horário. Risco = faltas × ticket. Contagem de horários: agenda live quando coerente; se Avec (metrics) tiver mais marcados (≥ atendidos), prevalece Avec.',
   mtd: 'Receita somada desde o 1º dia do mês até hoje. Ticket = essa receita ÷ atendidos no mês.',
   cmv: 'Estimativa pelo custo das saídas de estoque no mês — não é o CMV fiscal da contabilidade.',
   estoqueValor: 'Valor em reais do estoque sincronizado da Avec.',
   estoqueAlertas:
     'Quantos produtos estão em alerta (abaixo do mínimo). Traço se alguma unidade ainda não sincronizou alertas.',
-  vagasHoje: 'Quantos horários ainda cabem hoje: capacidade (Metas) − já agendados.',
-  vagas2h: 'Estimativa de encaixes nas próximas 2h (capacidade do dia ÷ 8 × 2, menos a agenda nesse intervalo).',
+  vagasHoje: 'Horários que ainda cabem hoje: capacidade cadastrada em Metas − já agendados.',
+  vagas2h:
+    'Estimativa (não medição): capacidade Metas ÷ 8h × 2 − agenda nas próximas 2h.',
   cancelNoshow: 'Quantos horários foram cancelados ou o cliente faltou hoje.',
   unitHoje: 'Faturamento desta unidade no caixa hoje.',
-  unitVagas: 'Horários ainda livres hoje nesta unidade (capacidade − agendados).',
-  unit2h: 'Encaixes livres estimados nas próximas 2 horas nesta unidade.',
+  unitVagas: 'Horários ainda livres hoje: capacidade cadastrada em Metas − agendados.',
+  unit2h:
+    'Estimativa de encaixes nas próximas 2h: capacidade Metas ÷ 8h × 2 − agenda nesse intervalo.',
   unitCancel: 'Cancelamentos e faltas de hoje nesta unidade.',
 } as const
 
@@ -145,7 +147,7 @@ const COMPARISON_LEGEND: Partial<Record<string, string>> = {
   revenue_today: 'Quanto a unidade faturou hoje no caixa.',
   goal_pct: 'Faturamento de hoje ÷ meta do dia (cadastrada em Metas).',
   occupancy:
-    'Lotação da agenda: horários marcados ÷ capacidade do dia (Metas). Pode passar de 100% com overbook.',
+    'Lotação: agenda ÷ capacidade cadastrada em Metas (não medida). Pode passar de 100% com overbook. Contagem de horários: agenda live quando coerente; se Avec (metrics) tiver mais marcados (≥ atendidos), prevalece Avec.',
   noshow: 'Faltas ÷ horários marcados no dia.',
   lost_revenue:
     'Receita que deixou de entrar: (cancelamentos + faltas) × ticket do dia; se ainda sem atendimento, usa o ticket do mês.',
@@ -558,7 +560,7 @@ export function Dashboard({
           </Panel>
           <Panel>
             <KpiStat
-              label="Lotação · Quem veio"
+              label="Lotação (Metas) · Quem veio"
               value={
                 c.occupancyConfigured && c.attendanceConfigured
                   ? `${formatPct(c.occupancyRate)} · ${formatPct(c.attendanceRate)}`
@@ -918,7 +920,7 @@ export function Dashboard({
                           className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
                           title={LEGEND.unitVagas}
                         >
-                          Vagas hoje
+                          Vagas hoje (Metas)
                         </p>
                         <p
                           className={`mt-1 font-display text-xl tracking-tight sm:text-2xl ${
@@ -939,7 +941,7 @@ export function Dashboard({
                           className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
                           title={LEGEND.unit2h}
                         >
-                          Vagas 2h
+                          Vagas 2h (est.)
                         </p>
                         <p className="mt-1 font-display text-xl tracking-tight text-foreground sm:text-2xl">
                           {vagas2h}
