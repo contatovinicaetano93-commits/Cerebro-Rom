@@ -10,7 +10,7 @@ Leia isto antes de começar qualquer tarefa nestes repos.
 
 ## O sistema
 
-Três apps Next.js na Vercel: **ROM Brasil** e **ROM Iguatemi** (painéis das unidades, ~60 rotas cada, mantidos em paridade) e o **Cérebro** (consolida as duas). Os bancos são **Supabase**, um projeto por unidade — envs canônicas `UNIT_*_DATABASE_URL`; `NEON_*` é alias legado ainda lido em runtime. Os dados chegam pelo sync da Avec (cron na Vercel) e caem em `salon_daily_metrics`, `salon_p1_daily`, `salon_p2_daily`, `salon_p3_daily`, `contacts`, `client_services`, `avec_sync_runs`.
+Três apps Next.js na Vercel: **ROM Brasil** e **ROM Iguatemi** (painéis das unidades, ~60 rotas cada, mantidos em paridade) e o **Cérebro** (consolida as duas). Os bancos são **Neon** (Postgres), um projeto por unidade — envs `NEON_*_DATABASE_URL` / `UNIT_*_DATABASE_URL` (aliases lidos em runtime). Os dados chegam pelo sync da Avec (cron na Vercel) e caem em `salon_daily_metrics`, `salon_p1_daily`, `salon_p2_daily`, `salon_p3_daily`, `contacts`, `client_services`, `avec_sync_runs`.
 
 Todo PR passa por CI (teste + build bloqueiam, lint é informativo).
 
@@ -37,7 +37,7 @@ Hoje existem grupos inteiros de PRs que são a mesma tarefa refeita do zero — 
 Se a sua tarefa exige quebrar uma destas, tudo bem, mas **escreva no PR que está quebrando e por quê**. Mudar em silêncio é o problema.
 
 - **KPI ausente é `null`, não `0`.** A interface mostra "—" para null. Um `0` falso é pior que um buraco, porque parece medição real. Nunca `coalesce(métrica, 0)`, nunca `Number(x) || 0`, nunca `NOT NULL DEFAULT 0` em coluna de KPI.
-- **Brasil e Iguatemi são Supabase.** Não Neon — use `UNIT_*_DATABASE_URL` (canônico); `NEON_*` é legado.
+- **Brasil e Iguatemi (e o Cérebro) são Neon (Postgres).** Use `NEON_*` / `UNIT_*_DATABASE_URL`; não assumir Supabase.
 - **As duas unidades ficam em paridade.** Mudou numa, ou muda na outra, ou diz no PR que criou drift de propósito.
 - **A equipe usa WhatsApp, não Telegram.**
 - **Concorrência de sync é lock distribuído em Postgres.** Contador em memória não funciona em serverless — cada invocação é um processo novo.
