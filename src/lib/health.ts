@@ -3,6 +3,7 @@ import { isAuthEnabled, isProduction } from '@/lib/auth'
 import { evictSql, getSql, withDbTimeout } from '@/lib/db'
 import {
   computeSyncOk,
+  isFreshRunningSync,
   pickHealthFinishedRun,
   type UnitHealthProbe,
   type UnitSyncMeta,
@@ -36,7 +37,7 @@ async function probeUnitDb(url: string | null | undefined) {
     let sync: UnitSyncMeta | null = null
     try {
       // Uma query — Promise.all no pool max:1/2 enfileirava e podia travar o probe.
-      type SyncProbeRow = UnitSyncRunProbeRow & { kind: string; running: string }
+      type SyncProbeRow = UnitSyncRunProbeRow & { kind: string; running: string; stage: string }
       const recent = (await withDbTimeout(
         sql`
           select
@@ -44,7 +45,8 @@ async function probeUnitDb(url: string | null | undefined) {
             created_at,
             error,
             kind,
-            coalesce(stats->>'running', 'false') as running
+            coalesce(stats->>'running', 'false') as running,
+            coalesce(stats->>'stage', 'all') as stage
           from avec_sync_runs
           where kind in ('fast', 'full')
           order by created_at desc
@@ -54,17 +56,23 @@ async function probeUnitDb(url: string | null | undefined) {
         'leitura de avec_sync_runs',
       )) as SyncProbeRow[]
       const fastRows = recent.filter((r) => r.kind === 'fast' && r.running !== 'true').slice(0, 5)
-      const fullRows = recent.filter((r) => r.kind === 'full' && r.running !== 'true').slice(0, 5)
+      // Preferir full stage=ops (KPI); catalog/agenda fresco não pode mascarar ops stale.
+      const fullFinished = recent.filter((r) => r.kind === 'full' && r.running !== 'true')
+      const fullOpsOrLegacy = fullFinished.filter((r) => r.stage === 'ops' || r.stage === 'all')
+      const fullRows = (fullOpsOrLegacy.length > 0 ? fullOpsOrLegacy : fullFinished).slice(0, 5)
       const fast = pickHealthFinishedRun(fastRows, isEmptyKillError)
       const full = pickHealthFinishedRun(fullRows, isEmptyKillError)
       const ageMin = (at: string | undefined) =>
         at != null ? Math.round((Date.now() - new Date(at).getTime()) / 60_000) : null
+      const nowMs = Date.now()
       sync = {
         fast_status: fast?.status ?? null,
         fast_age_min: ageMin(fast?.created_at),
         full_status: full?.status ?? null,
         full_age_min: ageMin(full?.created_at),
-        running: recent.some((r) => r.running === 'true'),
+        running: recent.some(
+          (r) => r.running === 'true' && isFreshRunningSync(r.created_at, nowMs),
+        ),
       }
     } catch {
       sync = null

@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getPublicHealthStatus } from '@/lib/health'
 import {
   computeSyncOk,
+  isFreshRunningSync,
   pickHealthFinishedRun,
+  RUNNING_SYNC_TTL_MS,
   type UnitHealthProbe,
   type UnitSyncMeta,
 } from './health-sync'
@@ -107,6 +109,16 @@ describe('computeSyncOk', () => {
         probe({ sync: sync({ fast_age_min: 61, full_age_min: 24 * 60 + 1, running: true }) }),
       ]),
     ).toBe(true)
+  })
+})
+
+describe('isFreshRunningSync', () => {
+  it('expires orphan running beyond TTL', () => {
+    const now = Date.parse('2026-09-23T12:00:00.000Z')
+    expect(isFreshRunningSync(new Date(now - 5 * 60_000).toISOString(), now)).toBe(true)
+    expect(isFreshRunningSync(new Date(now - RUNNING_SYNC_TTL_MS - 1).toISOString(), now)).toBe(
+      false,
+    )
   })
 })
 
