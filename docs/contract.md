@@ -47,7 +47,7 @@ Unidade sem `salon_daily_metrics` → erro de schema / ilegível (não entra R$0
 | Modo | O que preenche | Observação |
 |------|----------------|------------|
 | Avec **fast** | métricas dia (camada A); 0051 ontem→amanhã | Cron ~20 min (staggered BR/IG). Webhook → `scope=kpi` só |
-| Avec **full** fatiado | ops = P1/P2/P3 · agenda = +21d (Contatos +7d) · catalog = 0004 | `/api/avec/sync/full/{ops,agenda,catalog}` — 2×/dia + retry horário |
+| Avec **full** fatiado | ops = P1/P2/P3 · agenda = +21d (Contatos +7d) · catalog = 0004 | `/api/avec/sync/full/{ops,agenda,catalog}` — 2×/dia (10h/22h); retry on-demand (min-gap), sem cron horário |
 | Estoque Avec | posição/alertas de estoque | Cron separado nos painéis das unidades (`/api/estoque/sync`), não faz parte de `/api/avec/sync?mode=full` |
 | Omie sync | `finance_expenses` | Só painel financeiro da unidade |
 | Revenue/analytics backfill | histórico `salon_daily_metrics` | Preciso para Relatórios asOf em 2025 |

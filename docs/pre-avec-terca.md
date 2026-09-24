@@ -96,7 +96,7 @@ Variáveis já devem estar na Vercel **antes** de terça:
 | Job | Intervalo | Modo |
 |-----|-----------|------|
 | `/api/avec/sync` | ~20 min (staggered) | fast (camada A; 0051 ontem→amanhã) |
-| `/api/avec/sync/full/{ops,agenda,catalog}` | 2×/dia + retry horário | full fatiado |
+| `/api/avec/sync/full/{ops,agenda,catalog}` | 2×/dia (10h/22h); retry on-demand (min-gap), sem cron horário | full fatiado |
 | Webhook atendimento/cancel | tempo real | fast `scope=kpi` apenas (não full) |
 | `/api/estoque/sync` | separado | estoque Avec |
 
