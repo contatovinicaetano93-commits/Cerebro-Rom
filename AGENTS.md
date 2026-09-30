@@ -58,3 +58,8 @@ Antes de mexer, responda três perguntas no PR: **o que acontece se rodar duas v
 
 Qualquer `--force`, `DROP`, `TRUNCATE` ou push direto para `main` precisa de justificativa explícita. Havia aqui um workflow que, com um clique, empurrava à força uma branch congelada por cima do `main` de outro repo — teria apagado onze dias de trabalho.
 
+## Host de produção (Cérebro)
+
+Canônico: **https://cerebro-waltter.vercel.app** (login + `/api/health/public`).  
+`cerebro-rom.vercel.app` é alias de projeto — não use para probe de health (hoje 401 em `/api/health/public`). Detalhes em `docs/acesso-waltter.md`.
+
