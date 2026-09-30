@@ -15,6 +15,7 @@ import {
   trustsRollingKpis,
 } from '@/lib/salon-day'
 import type { AlertItem, CerebroOverview, UnitSnapshot } from '@/lib/types'
+import { sumKnownTodayRevenue } from '@/lib/live/today-revenue'
 
 /** Uma unidade lenta (rede/pooler) não pode travar o painel inteiro. */
 const UNIT_FETCH_TIMEOUT_MS = 18_000
@@ -381,7 +382,9 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
   /** Ocupação/vagas: só com agenda confiável (não capacity cheia pós-wipe parcial). */
   const agendaOps = dayOps.filter(hasTrustedAgenda)
 
-  const todayRevenue = readable.reduce((a, u) => a + (u.today.revenue ?? 0), 0)
+  // Paridade mtdRevenue: null quando nenhuma unidade tem caixa do dia conhecido.
+  // Somar com ?? 0 inventava R$ 0 de manhã (agenda syncada, 0088 ainda vazio).
+  const todayRevenue = sumKnownTodayRevenue(readable.map((u) => u.today.revenue))
   const todayGoal = moneyOps.reduce((a, u) => a + (u.today.goalSet ? u.today.dailyGoal : 0), 0)
   const goalsConfigured =
     connected.length > 0 && connected.every((u) => u.today.goalSet && u.today.capacitySet)
@@ -496,7 +499,7 @@ function consolidate(units: UnitSnapshot[]): CerebroOverview['consolidated'] {
 
 function emptyConsolidated(): CerebroOverview['consolidated'] {
   return {
-    todayRevenue: 0,
+    todayRevenue: null,
     todayGoal: 0,
     todayGoalProgress: 0,
     goalsConfigured: false,

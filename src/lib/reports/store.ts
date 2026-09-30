@@ -10,8 +10,8 @@ export interface ReportRunMeta {
   mode: CerebroOverview['mode']
   periodLabel: string
   unitCount: number
-  todayRevenue: number
-  mtdRevenue: number
+  todayRevenue: number | null
+  mtdRevenue: number | null
   /** false quando a captura não tinha unidade legível (não mostrar R$0 como real). */
   networkReadable: boolean
 }
@@ -189,7 +189,7 @@ export async function captureReportSnapshot(
       ${overview.mode},
       ${overview.periodLabel},
       ${unitCount},
-      ${networkReadable ? overview.consolidated.todayRevenue : 0},
+      ${networkReadable ? (overview.consolidated.todayRevenue ?? 0) : 0},
       ${networkReadable ? (overview.consolidated.mtdRevenue ?? 0) : 0},
       ${networkReadable},
       ${overview}
@@ -228,8 +228,8 @@ export async function captureReportSnapshot(
     mode: overview.mode,
     periodLabel: overview.periodLabel,
     unitCount,
-    todayRevenue: networkReadable ? overview.consolidated.todayRevenue : 0,
-    mtdRevenue: networkReadable ? (overview.consolidated.mtdRevenue ?? 0) : 0,
+    todayRevenue: networkReadable ? overview.consolidated.todayRevenue : null,
+    mtdRevenue: networkReadable ? overview.consolidated.mtdRevenue : null,
     networkReadable,
   }
 }

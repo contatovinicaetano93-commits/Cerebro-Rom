@@ -216,7 +216,11 @@ export interface CerebroOverview {
   partial?: boolean
   periodLabel: string
   consolidated: {
-    todayRevenue: number
+    /**
+     * null quando nenhuma unidade legível tem receita do dia conhecida
+     * (ex.: manhã — agenda syncada, 0088 ainda vazio). Não inventar R$ 0.
+     */
+    todayRevenue: number | null
     todayGoal: number
     todayGoalProgress: number
     /** false até Waltter preencher metas no painel (ou env). */
@@ -273,7 +277,7 @@ export interface CerebroOverview {
     stockValueKnown: boolean
     /**
      * true quando há ≥1 unidade legível (não offline / não token morto).
-     * Sem isso, todayRevenue/mtdRevenue=0 seria inventar mês zerado.
+     * Sem isso, totais de rede não devem ser lidos como medição real.
      */
     networkReadable: boolean
   }
