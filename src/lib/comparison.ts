@@ -206,7 +206,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'occupancy',
-      label: 'Ocupação',
+      label: 'Lotação da agenda',
       group: 'ops',
       brasil: occ(brasil),
       iguatemi: occ(iguatemi),
@@ -215,7 +215,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'noshow',
-      label: 'No-show',
+      label: 'Faltas',
       group: 'ops',
       brasil: noShow(brasil),
       iguatemi: noShow(iguatemi),
@@ -264,7 +264,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'mtd_revenue',
-      label: 'Receita MTD',
+      label: 'Receita do mês',
       group: 'financeiro',
       brasil: mtdLive(brasil, brasil.opsFinance.mtdRevenue),
       iguatemi: mtdLive(iguatemi, iguatemi.opsFinance.mtdRevenue),
@@ -273,7 +273,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'mtd_ticket',
-      label: 'Ticket MTD',
+      label: 'Ticket do mês',
       group: 'financeiro',
       brasil: mtdLive(brasil, brasil.opsFinance.mtdTicketAvg),
       iguatemi: mtdLive(iguatemi, iguatemi.opsFinance.mtdTicketAvg),
@@ -282,7 +282,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'cmv',
-      label: 'CMV proxy (saídas)',
+      label: 'CMV estimado (saídas)',
       group: 'financeiro',
       brasil: brasil.opsFinance.cmvKnown ? rolling(brasil, brasil.opsFinance.cmv) : null,
       iguatemi: iguatemi.opsFinance.cmvKnown ? rolling(iguatemi, iguatemi.opsFinance.cmv) : null,
@@ -291,7 +291,7 @@ export function buildComparison(units: UnitSnapshot[]): UnitComparison | undefin
     }),
     row({
       key: 'cmv_share',
-      label: 'CMV / receita',
+      label: 'CMV ÷ receita do mês',
       group: 'financeiro',
       brasil: rolling(brasil, brasil.opsFinance.cmvShare),
       iguatemi: rolling(iguatemi, iguatemi.opsFinance.cmvShare),
