@@ -41,11 +41,12 @@ jobs:
       - name: Guard db driver (postgres.js, sem neon HTTP)
         run: npm run check:db-driver
 
-      - name: Guard pooler host (skip se UNIT_* unset no CI)
+      - name: Guard Neon host das unidades
         run: npm run check:brasil-db-host
         env:
-          UNIT_BRASIL_DATABASE_URL: ${{ secrets.UNIT_BRASIL_DATABASE_URL }}
-          UNIT_IGUATEMI_DATABASE_URL: ${{ secrets.UNIT_IGUATEMI_DATABASE_URL }}
+          # Placeholders CI — só validam o host *.neon.tech (não conectam).
+          UNIT_BRASIL_DATABASE_URL: postgres://ci:ci@ep-ci-brasil.us-east-1.aws.neon.tech/neondb
+          UNIT_IGUATEMI_DATABASE_URL: postgres://ci:ci@ep-ci-iguatemi.us-east-1.aws.neon.tech/neondb
 
       - name: Build
         run: npm run build
@@ -53,6 +54,6 @@ jobs:
           # O build não fala com banco; estes valores existem só para satisfazer
           # a leitura de env em tempo de import. Nunca aponte para banco real.
           CEREBRO_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
-          NEON_BRASIL_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
-          NEON_IGUATEMI_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          NEON_BRASIL_DATABASE_URL: postgres://ci:ci@ep-ci-brasil.us-east-1.aws.neon.tech/neondb
+          NEON_IGUATEMI_DATABASE_URL: postgres://ci:ci@ep-ci-iguatemi.us-east-1.aws.neon.tech/neondb
           ROM_SESSION_SECRET: ci-placeholder-nao-usar-em-producao
