@@ -567,7 +567,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
   const configs = getUnitConfigs()
   const configured = configs.filter((c) => c.databaseUrl)
   if (configured.length === 0) {
-    throw new Error('Nenhuma DATABASE_URL de unidade configurada (BR/IG = pooler Supabase)')
+    throw new Error('Nenhuma DATABASE_URL de unidade configurada (BR/IG = Neon)')
   }
 
   const day = asOf ?? todayIsoSaoPaulo()
@@ -595,8 +595,8 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
           : `DB offline — ${cfg.meta.name}`,
         detail,
         action: schemaGap
-          ? 'Rodar migrations / schema.sql na unidade (Supabase)'
-          : 'Validar connection string (pooler Supabase)',
+          ? 'Rodar migrations / schema.sql na unidade (Neon)'
+          : 'Validar connection string (Neon *.neon.tech)',
       })
       liveBySlug.set(
         cfg.meta.slug,
@@ -615,8 +615,8 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
     const detail = cfg.databaseUrl
       ? 'Sem resposta'
       : cfg.meta.slug === 'rom-brasil'
-        ? 'URL Brasil ausente ou inválida (use pooler Supabase)'
-        : 'URL Iguatemi ausente ou inválida (use pooler Supabase)'
+        ? 'URL Brasil ausente ou inválida (use Neon *.neon.tech)'
+        : 'URL Iguatemi ausente ou inválida (use Neon *.neon.tech)'
     fetchErrors.push({
       id: `missing-${cfg.meta.slug}`,
       severity: 'critical',
@@ -625,8 +625,8 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       detail,
       action:
         cfg.meta.slug === 'rom-brasil'
-          ? 'UNIT_BRASIL_DATABASE_URL (ou NEON_BRASIL_DATABASE_URL legado) = pooler Supabase'
-          : 'UNIT_IGUATEMI_DATABASE_URL (ou NEON_IGUATEMI_DATABASE_URL legado) = pooler Supabase',
+          ? 'UNIT_BRASIL_DATABASE_URL (ou NEON_BRASIL_DATABASE_URL legado) = Neon'
+          : 'UNIT_IGUATEMI_DATABASE_URL (ou NEON_IGUATEMI_DATABASE_URL legado) = Neon',
     })
     liveBySlug.set(cfg.meta.slug, offlineUnitSnapshot(cfg.meta, detail, day))
   }
@@ -653,7 +653,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       unit: 'both',
       title: 'Nenhuma unidade live respondeu',
       detail: 'Brasil e Iguatemi offline ou ilegíveis — painel mostra diagnóstico por unidade',
-      action: 'Validar connection strings (pooler Supabase) e schema das duas unidades',
+      action: 'Validar connection strings (Neon) e schema das duas unidades',
     })
   } else if (liveUnits.length < 2) {
     nextActions.unshift({
@@ -662,7 +662,7 @@ export async function buildLiveOverview(asOf?: string): Promise<CerebroOverview>
       unit: 'both',
       title: 'Consolidado parcial',
       detail: `Só ${liveUnits[0]?.unit.short ?? 'uma unidade'} ao vivo — a outra está no painel como offline`,
-      action: 'Completar DATABASE_URL (Brasil+Iguatemi = pooler Supabase)',
+      action: 'Completar DATABASE_URL (Brasil+Iguatemi = Neon)',
     })
   }
 
@@ -724,8 +724,8 @@ export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
     if (isProd) {
       return {
         ...degradedOverview(
-          'DATABASE_URL das unidades ausente em produção (Brasil+Iguatemi = Supabase)',
-          'Configurar UNIT_BRASIL/IGUATEMI_DATABASE_URL (ou NEON_* legado) = pooler Supabase na Vercel',
+          'DATABASE_URL das unidades ausente em produção (Brasil+Iguatemi = Neon)',
+          'Configurar UNIT_BRASIL/IGUATEMI_DATABASE_URL (ou NEON_* legado) = Neon na Vercel',
           'no-unit-db',
         ),
         nextActions: [
@@ -734,8 +734,8 @@ export async function buildOverview(asOf?: string): Promise<CerebroOverview> {
             severity: 'critical',
             unit: 'both',
             title: 'DBs das unidades não configurados',
-            detail: 'Connection strings ausentes ou inválidas (Brasil+Iguatemi = Supabase)',
-            action: 'Configurar URLs na Vercel (Brasil+Iguatemi=pooler Supabase)',
+            detail: 'Connection strings ausentes ou inválidas (Brasil+Iguatemi = Neon)',
+            action: 'Configurar URLs na Vercel (Brasil+Iguatemi=Neon)',
           },
         ],
       }

@@ -38,9 +38,8 @@ export function unitGerenciaUrl(slug: UnitSlug): string {
 }
 
 /**
- * Unidades (BR/IG) usam Supabase pooler.
- * Host Neon / db.*.supabase.co direto → ausente (placeholder offline), não KPI falso.
- * Env preferida: UNIT_*_DATABASE_URL; legado: NEON_*_DATABASE_URL (mesmo valor Supabase).
+ * Unidades (BR/IG) usam Neon (Postgres). Supabase pooler é legado — rejeitado.
+ * Env preferida: UNIT_*_DATABASE_URL; legado: NEON_*_DATABASE_URL (mesmo valor Neon).
  * Production (Vercel) deve acompanhar `main` — envs UNIT_* são a fonte canônica.
  */
 function unitDatabaseEnvNames(slug: UnitSlug): string[] {
@@ -61,16 +60,16 @@ function readUnitDatabaseRaw(slug: UnitSlug): { envName: string; raw: string | n
 function resolveUnitDatabaseUrl(slug: UnitSlug, raw: string | null | undefined, envName: string): string | null {
   const url = raw?.trim() || null
   if (!url) return null
-  if (/\.neon\.tech\b/i.test(url)) {
+  const host = url.match(/@([^/:?]+)/)?.[1] || ''
+  if (/\.pooler\.supabase\.com$/i.test(host) || /\.supabase\.co$/i.test(host)) {
     console.error(
-      `[cerebro] ${envName} aponta para Neon — use pooler Supabase (aws-*.pooler.supabase.com)`,
+      `[cerebro] ${envName} aponta para Supabase legado (${host || '?'}) — use Neon (*.neon.tech)`,
     )
     return null
   }
-  const host = url.match(/@([^/:?]+)/)?.[1] || ''
-  if (!/\.pooler\.supabase\.com$/i.test(host)) {
+  if (!/\.neon\.tech$/i.test(host)) {
     console.error(
-      `[cerebro] ${envName} host=${host || '?'} — use aws-*.pooler.supabase.com (session :5432 ou tx :6543)`,
+      `[cerebro] ${envName} host=${host || '?'} — use pooler Neon (*.neon.tech)`,
     )
     return null
   }

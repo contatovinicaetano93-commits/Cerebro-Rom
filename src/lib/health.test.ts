@@ -59,10 +59,10 @@ describe('getPublicHealthStatus', () => {
     expect(status.ok).toBe(false)
   })
 
-  it('returns ok true when at least one valid pooler URL is configured', async () => {
+  it('returns ok true when at least one valid Neon URL is configured', async () => {
     vi.stubEnv(
       'UNIT_BRASIL_DATABASE_URL',
-      'postgres://u:p@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
+      'postgres://u:p@ep-cool-sun-123.us-east-1.aws.neon.tech/neondb',
     )
     vi.stubEnv('NEON_BRASIL_DATABASE_URL', '')
     vi.stubEnv('UNIT_IGUATEMI_DATABASE_URL', '')
