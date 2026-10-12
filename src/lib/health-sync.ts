@@ -38,14 +38,33 @@ export type UnitHealthProbe = {
 const FAST_SYNC_STALE_MIN = 60
 const FULL_SYNC_STALE_MIN = 24 * 60
 
+/** Paridade live/sync-status: `running` órfão não pode mascarar stale pra sempre. */
+export const RUNNING_SYNC_TTL_MS = 16 * 60_000
+
+/** true só se o run `running` ainda está dentro do TTL (não orphan antigo). */
+export function isFreshRunningSync(createdAt: string | null | undefined, nowMs = Date.now()): boolean {
+  if (createdAt == null) return false
+  const t = new Date(createdAt).getTime()
+  if (!Number.isFinite(t)) return false
+  return nowMs - t <= RUNNING_SYNC_TTL_MS
+}
+
 /**
- * Sync operacional saudável por unidade conectada.
- * Desconectadas não entram (liveness fica em `ok` do health).
+ * Sync operacional saudável por unidade **configurada**.
+ * Unidade configurada mas desconectada → sync_ok falso (não mascarar metade da rede).
+ * Unidade sem URL (não configurada) é ignorada.
  */
-export function computeSyncOk(probes: Pick<UnitHealthProbe, 'connected' | 'sync'>[]): boolean {
-  return probes.every((probe) => {
+export function computeSyncOk(
+  probes: Pick<UnitHealthProbe, 'configured' | 'connected' | 'sync'>[],
+): boolean {
+  const relevant = probes.filter((probe) => probe.configured)
+  if (relevant.length === 0) {
+    return false
+  }
+
+  return relevant.every((probe) => {
     if (!probe.connected) {
-      return true
+      return false
     }
 
     const sync = probe.sync

@@ -13,8 +13,8 @@ type ReportRunMeta = {
   mode: string
   periodLabel: string
   unitCount: number
-  todayRevenue: number
-  mtdRevenue: number
+  todayRevenue: number | null
+  mtdRevenue: number | null
   networkReadable?: boolean
 }
 

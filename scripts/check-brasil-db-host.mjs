@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Fail if unit DATABASE_URL envs are not Supabase pooler.
- * Env canônica: UNIT_*; NEON_* é alias legado. Valores devem ser aws-*.pooler.supabase.com.
+ * Fail if unit DATABASE_URL envs are not Neon.
+ * Env canônica: UNIT_*; NEON_* é alias legado. Valores devem ser *.neon.tech.
  *
  * Usage:
  *   UNIT_BRASIL_DATABASE_URL=... UNIT_IGUATEMI_DATABASE_URL=... node scripts/check-brasil-db-host.mjs
@@ -31,17 +31,15 @@ function check(label, ...envNames) {
     return 1
   }
 
-  if (/neon\.tech$/i.test(host) || /\.neon\.tech$/i.test(host)) {
-    console.error(`check-db-host FAILED: ${envName} host is Neon (${host}).`)
-    console.error(
-      '  Use Supabase pooler (aws-*.pooler.supabase.com:5432 session or :6543 tx), ssl require, prepare:false.',
-    )
+  if (/\.pooler\.supabase\.com$/i.test(host) || /\.supabase\.co$/i.test(host)) {
+    console.error(`check-db-host FAILED: ${envName} host is Supabase legado (${host}).`)
+    console.error('  Use Neon pooler (*.neon.tech), ssl require, prepare:false.')
     return 1
   }
 
-  if (!/\.pooler\.supabase\.com$/i.test(host)) {
+  if (!/\.neon\.tech$/i.test(host)) {
     console.error(
-      `check-db-host FAILED: ${envName} host=${host} — require *.pooler.supabase.com (not db.*.supabase.co).`,
+      `check-db-host FAILED: ${envName} host=${host} — require *.neon.tech.`,
     )
     return 1
   }

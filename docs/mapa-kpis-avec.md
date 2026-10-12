@@ -6,7 +6,7 @@ Fonte de verdade do mapa UI. Contrato de schema/KPI Cérebro↔unidades: **[cont
 Avec (por unidade)
   → ROM sync (fast = camada A · full fatiado = ops/agenda/catalog)
      · fast cron ~20 min (staggered BR/IG) — 0051 ontem→amanhã
-     · full 2×/dia + retry horário — agenda +21d, ops P1–P3, catalog 0004
+     · full 2×/dia (10h/22h) — agenda +21d, ops P1–P3, catalog 0004 (retry on-demand via min-gap; sem cron horário)
      · webhook → fast scope=kpi apenas (não dispara full)
      · estoque → /api/estoque/sync (fora do Avec)
   → Supabase pooler da unidade

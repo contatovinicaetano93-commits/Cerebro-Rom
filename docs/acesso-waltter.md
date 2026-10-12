@@ -2,8 +2,9 @@
 
 ## Link (Vercel)
 
-**https://cerebro-rom.vercel.app** ← use este  
-Alternativo: https://cerebro-waltter.vercel.app
+**https://cerebro-waltter.vercel.app** ← host canônico (login + `/api/health/public`)
+
+Alias de projeto: `https://cerebro-rom.vercel.app` (mesmo app em alguns deploys; **não** use para probe de health — hoje responde 401 em `/api/health/public`).
 
 Projeto Vercel: `cerebro-rom` · SSO da Vercel desligado (login é só o do app).
 
@@ -36,7 +37,7 @@ Assim o Cérebro abre como app, sem digitar a URL todo dia.
 
 | Sistema | Para quem | Link |
 |---------|-----------|------|
-| **Cérebro ROM** | Waltter (comando) | https://cerebro-rom.vercel.app |
+| **Cérebro ROM** | Waltter (comando) | https://cerebro-waltter.vercel.app |
 | ROM Brasil | Equipe operacional | https://rom-club.vercel.app |
 | ROM Iguatemi | Equipe operacional | https://rom-iguatemi.vercel.app |
 
@@ -45,7 +46,7 @@ Assim o Cérebro abre como app, sem digitar a URL todo dia.
 ```
 Waltter, seu painel Cérebro ROM:
 
-https://cerebro-rom.vercel.app
+https://cerebro-waltter.vercel.app
 
 Usuário: waltter
 Senha: (enviada em canal privado — não colar em grupo)

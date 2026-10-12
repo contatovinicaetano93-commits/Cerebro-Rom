@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getPublicHealthStatus } from '@/lib/health'
 import {
   computeSyncOk,
+  isFreshRunningSync,
   pickHealthFinishedRun,
+  RUNNING_SYNC_TTL_MS,
   type UnitHealthProbe,
   type UnitSyncMeta,
 } from './health-sync'
@@ -57,10 +59,10 @@ describe('getPublicHealthStatus', () => {
     expect(status.ok).toBe(false)
   })
 
-  it('returns ok true when at least one valid pooler URL is configured', async () => {
+  it('returns ok true when at least one valid Neon URL is configured', async () => {
     vi.stubEnv(
       'UNIT_BRASIL_DATABASE_URL',
-      'postgres://u:p@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
+      'postgres://u:p@ep-cool-sun-123.us-east-1.aws.neon.tech/neondb',
     )
     vi.stubEnv('NEON_BRASIL_DATABASE_URL', '')
     vi.stubEnv('UNIT_IGUATEMI_DATABASE_URL', '')
@@ -73,8 +75,21 @@ describe('getPublicHealthStatus', () => {
 })
 
 describe('computeSyncOk', () => {
-  it('ignores disconnected units', () => {
-    expect(computeSyncOk([probe({ connected: false, sync: null })])).toBe(true)
+  it('fails when a configured unit is disconnected', () => {
+    expect(computeSyncOk([probe({ connected: false, sync: null })])).toBe(false)
+  })
+
+  it('ignores units that are not configured', () => {
+    expect(
+      computeSyncOk([
+        probe({ configured: false, connected: false, sync: null }),
+        probe({ slug: 'rom-iguatemi', name: 'ROM Iguatemi' }),
+      ]),
+    ).toBe(true)
+  })
+
+  it('fails when no unit is configured', () => {
+    expect(computeSyncOk([probe({ configured: false, connected: false, sync: null })])).toBe(false)
   })
 
   it('fails when a connected unit has no sync metadata', () => {
@@ -94,6 +109,16 @@ describe('computeSyncOk', () => {
         probe({ sync: sync({ fast_age_min: 61, full_age_min: 24 * 60 + 1, running: true }) }),
       ]),
     ).toBe(true)
+  })
+})
+
+describe('isFreshRunningSync', () => {
+  it('expires orphan running beyond TTL', () => {
+    const now = Date.parse('2026-09-23T12:00:00.000Z')
+    expect(isFreshRunningSync(new Date(now - 5 * 60_000).toISOString(), now)).toBe(true)
+    expect(isFreshRunningSync(new Date(now - RUNNING_SYNC_TTL_MS - 1).toISOString(), now)).toBe(
+      false,
+    )
   })
 })
 
