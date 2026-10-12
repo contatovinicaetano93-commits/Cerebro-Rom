@@ -46,7 +46,7 @@ ROM Iguatemi (Supabase pooler)   ─SELECT──┘
 cp .env.example .env.local
 # preencher UNIT_BRASIL_DATABASE_URL + UNIT_IGUATEMI_DATABASE_URL (ambos Supabase pooler)
 # (NEON_* ainda funciona como legado)
-# + CEREBRO_ADMIN_PASSWORD
+# + CEREBRO_ADMIN_PASSWORD + CEREBRO_SESSION_SECRET
 # npm run check:brasil-db-host  # falha se BR/IG ainda apontarem para neon.tech
 npm install
 npm run dev
@@ -58,10 +58,11 @@ Abra [http://localhost:3000](http://localhost:3000) → redireciona para `/login
 
 | Variável | Padrão |
 |----------|--------|
-| `CEREBRO_ADMIN_USER` | `waltter` |
-| `CEREBRO_ADMIN_PASSWORD` | *(obrigatório em produção; também assina a sessão)* |
+| `CEREBRO_ADMIN_USER` | *(obrigatório — sem default no código)* |
+| `CEREBRO_ADMIN_PASSWORD` | *(obrigatório em preview/prod e com DB URL)* |
+| `CEREBRO_SESSION_SECRET` | *(HMAC da sessão; `openssl rand -hex 32`)* |
 
-Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias), HMAC = senha admin (Edge e Serverless compartilham a mesma chave). `CEREBRO_SESSION_SECRET` não é lido — não configure; rotacione a senha admin se precisar. Login: rate limit 10/15min por IP. `/api/health` exige login; `GET /api/health/public` é probe público mínimo (`{ ok, service, units_configured }`) para uptime — `ok` fica `false` quando nenhuma `UNIT_*` pooler válida está configurada.
+Sessão: cookie `httpOnly` com token `v1.<exp>.<hmac>` (7 dias), HMAC = `CEREBRO_SESSION_SECRET` (não a senha admin). Cookie `Secure` em qualquer deploy Vercel (preview incluso). Fail-closed: sem senha/secret, Preview e Production negam acesso; o mesmo vale se qualquer `UNIT_*` / `CEREBRO_DATABASE_URL` estiver configurada. Handlers sensíveis (`/api/overview`, `/api/goals`, `/api/reports*`) também chamam `requireSession` (middleware sozinho não basta). Login: rate limit 10/15min por IP (Neon `auth_rate_limits` quando `CEREBRO_DATABASE_URL` existe). `/api/health` exige login; `GET /api/health/public` é probe público mínimo (`{ ok, service, units_configured }`) para uptime — `ok` fica `false` quando nenhuma `UNIT_*` pooler válida está configurada.
 
 ### Analytics (PostHog)
 
@@ -73,7 +74,7 @@ Com `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` na Vercel, o client envia via rewrite `/
 | `cerebro_overview_loaded` | Overview carregado |
 | `cerebro_section_toggled` | Seção do dashboard aberta/fechada |
 
-Sem `CEREBRO_ADMIN_PASSWORD`, o auth fica desligado (só use em local de emergência).
+Sem `CEREBRO_ADMIN_PASSWORD` / `CEREBRO_SESSION_SECRET`, o auth só fica aberto em local **sem** URLs de DB (emergência). Preview/prod e ambientes com DB = fechados.
 
 ### Deploy Vercel
 

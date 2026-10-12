@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireSession } from '@/lib/auth'
 import { getSql } from '@/lib/db'
 import { getUnitConfig } from '@/lib/unit-config'
 import { writeGoalsToDb } from '@/lib/goals'
@@ -12,6 +13,9 @@ export const dynamic = 'force-dynamic'
  * Única escrita intencional do Cérebro nos bancos operacionais.
  */
 export async function PUT(req: Request) {
+  const denied = await requireSession(req)
+  if (denied) return denied
+
   let body: unknown
   try {
     body = await req.json()

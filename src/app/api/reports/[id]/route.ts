@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireSession } from '@/lib/auth'
 import { getReportRun } from '@/lib/reports/store'
 import {
   buildComparativoCsv,
@@ -15,6 +16,9 @@ type Params = { params: Promise<{ id: string }> }
 
 /** Exporta captura: ?format=csv|xlsx&scope=full|comparativo */
 export async function GET(req: Request, { params }: Params) {
+  const denied = await requireSession(req)
+  if (denied) return denied
+
   try {
     if (!isCerebroDbConfigured()) {
       return NextResponse.json({ error: 'CEREBRO_DATABASE_URL não configurada' }, { status: 503 })

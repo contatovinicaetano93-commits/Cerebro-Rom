@@ -1,5 +1,5 @@
 import { getUnitConfigs } from '@/lib/unit-config'
-import { isAuthEnabled, isProduction } from '@/lib/auth'
+import { isAuthEnabled, mustEnforceAuth } from '@/lib/auth'
 import { evictSql, getSql, withDbTimeout } from '@/lib/db'
 import {
   computeSyncOk,
@@ -123,7 +123,7 @@ export async function getHealthStatus() {
   const ig = configs.find((c) => c.meta.slug === 'rom-iguatemi')
 
   return {
-    ok: probes.some((p) => p.connected) && (!isProduction() || isAuthEnabled()),
+    ok: probes.some((p) => p.connected) && (!mustEnforceAuth() || isAuthEnabled()),
     sync_ok: syncOk,
     readiness: {
       auth: isAuthEnabled(),

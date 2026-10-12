@@ -1,7 +1,8 @@
 import { getCerebroSql, isCerebroDbConfigured, type Sql } from '@/lib/db'
 import { RateLimiter } from '@/lib/rate-limiter'
 
-const DEFAULT_MAX = 20
+/** Preferir caminho Neon (`auth_rate_limits`) quando CEREBRO_DATABASE_URL existe. */
+const DEFAULT_MAX = 10
 const DEFAULT_WINDOW_SEC = 15 * 60
 
 async function ensureTable(sql: Sql): Promise<void> {
