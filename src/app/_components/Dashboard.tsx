@@ -77,13 +77,13 @@ const LEGEND = {
   vagas2h: 'Estimativa de encaixes nas próximas 2h (capacidade do dia ÷ 8 × 2, menos a agenda nesse intervalo).',
   cancelNoshow: 'Quantos horários foram cancelados ou o cliente faltou hoje.',
   novosRec:
-    'Quantos clientes novos vs quem já vinha ao salão, no dia. Traço se esse mix ainda não chegou do sync.',
+    'Clientes novos no salão vs quem já vinha, no dia (não é lead do Contatos/CRM). Traço se o mix ainda não chegou do sync.',
   unitHoje: 'Faturamento desta unidade no caixa hoje.',
   unitVagas: 'Horários ainda livres hoje nesta unidade (capacidade − agendados).',
   unit2h: 'Encaixes livres estimados nas próximas 2 horas nesta unidade.',
   unitCancel: 'Cancelamentos e faltas de hoje nesta unidade.',
   unitNovos:
-    'Clientes novos vs recorrentes hoje nesta unidade. Traço se o mix ainda não chegou do sync.',
+    'Novos no salão vs recorrentes hoje nesta unidade (não é lead do Contatos/CRM). Traço se o mix ainda não chegou do sync.',
 } as const
 
 const HOJE_UNIT_ORDER: UnitSlug[] = ['rom-brasil', 'rom-iguatemi']
@@ -981,7 +981,7 @@ export function Dashboard({
                           className="cursor-help text-[0.65rem] uppercase tracking-[0.14em] text-muted underline decoration-dotted decoration-muted/40 underline-offset-2"
                           title={LEGEND.unitNovos}
                         >
-                          Novos · Recorrentes
+                          Novos no salão · Recorrentes
                         </p>
                         <p className="mt-1 font-display text-xl tracking-tight text-foreground sm:text-2xl">
                           {novosRec}
@@ -1090,10 +1090,10 @@ export function Dashboard({
                         </ul>
                         <p
                           className="text-xs text-muted"
-                          title="Sem retorno = clientes sem visita na janela Avec 0107 (90 dias). 5.000+ = lista truncada pela paginação."
+                          title="Novos no salão = primeira visita no período (mês), Avec — não é lead do Contatos/CRM. Sem retorno = sem visita em 90 dias (lista Avec; 5.000+ = truncada)."
                         >
                           Retorno {formatPct(w.returnRate)} · sem retorno (90d) {semRetornoLabel} ·
-                          novos{' '}
+                          novos no salão (mês){' '}
                           {w.newClientsPeriod == null ? '—' : formatNumber(w.newClientsPeriod)}
                         </p>
                       </div>
