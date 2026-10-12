@@ -14,6 +14,7 @@ Projeto Vercel: `cerebro-rom` · SSO da Vercel desligado (login é só o do app)
 |-------|-------|
 | Usuário | `waltter` (ou o valor de `CEREBRO_ADMIN_USER` na Vercel) |
 | Senha | Definida em `CEREBRO_ADMIN_PASSWORD` na Vercel — **não compartilhe por WhatsApp ou docs** |
+| Sessão | `CEREBRO_SESSION_SECRET` (HMAC; não é a senha) — obrigatório em Preview/Production |
 
 ## No celular (atalho)
 

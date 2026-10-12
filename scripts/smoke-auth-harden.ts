@@ -4,9 +4,15 @@ for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/)
   if (m && !process.env[m[1]!]) process.env[m[1]!] = m[2]
 }
-// Smoke local — senha só para assinar tokens neste script
+// Smoke local — credenciais só para este script
+if (!process.env.CEREBRO_ADMIN_USER) {
+  process.env.CEREBRO_ADMIN_USER = 'waltter'
+}
 if (!process.env.CEREBRO_ADMIN_PASSWORD) {
   process.env.CEREBRO_ADMIN_PASSWORD = 'smoke-auth-harden-temp'
+}
+if (!process.env.CEREBRO_SESSION_SECRET) {
+  process.env.CEREBRO_SESSION_SECRET = 'smoke-session-secret-high-entropy-32b'
 }
 
 async function main() {

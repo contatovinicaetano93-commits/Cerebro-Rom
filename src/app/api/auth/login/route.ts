@@ -4,11 +4,17 @@ import {
   SESSION_TTL_SECONDS,
   createSessionToken,
   isAuthEnabled,
-  isProduction,
+  isSessionSigningReady,
+  mustEnforceAuth,
+  useSecureCookies,
   validateAdminCredentials,
 } from '@/lib/auth'
 import { isLoginBlocked, recordLoginFailure } from '@/lib/auth-rate-limit'
 import { LoginRequestSchema } from '@/lib/schemas'
+
+/** 10 falhas / 15 min por IP — sucesso não consome cota. */
+const LOGIN_MAX_FAILURES = 10
+const LOGIN_WINDOW_SEC = 15 * 60
 
 function clientKey(req: Request) {
   const forwarded = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -16,19 +22,27 @@ function clientKey(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!isAuthEnabled()) {
-    if (isProduction()) {
+  if (!isAuthEnabled() || !isSessionSigningReady()) {
+    if (mustEnforceAuth()) {
       return NextResponse.json(
-        { error: 'Auth não configurado — defina CEREBRO_ADMIN_PASSWORD' },
+        {
+          error:
+            'Auth não configurado — defina CEREBRO_ADMIN_PASSWORD e CEREBRO_SESSION_SECRET',
+        },
         { status: 503 },
       )
     }
-    return NextResponse.json({ data: { auth: 'disabled' } })
+    if (!isAuthEnabled()) {
+      return NextResponse.json({ data: { auth: 'disabled' } })
+    }
+    return NextResponse.json(
+      { error: 'CEREBRO_SESSION_SECRET não configurado' },
+      { status: 503 },
+    )
   }
 
   const limitKey = clientKey(req)
-  // 20 falhas / 15 min por IP — sucesso não consome cota.
-  if (await isLoginBlocked(limitKey, 20, 15 * 60)) {
+  if (await isLoginBlocked(limitKey, LOGIN_MAX_FAILURES, LOGIN_WINDOW_SEC)) {
     return NextResponse.json(
       { error: 'Muitas tentativas — aguarde cerca de 15 minutos e tente de novo' },
       { status: 429 },
@@ -48,7 +62,7 @@ export async function POST(req: Request) {
   const { username, password } = validation.data
 
   if (!validateAdminCredentials(username, password)) {
-    await recordLoginFailure(limitKey, 20, 15 * 60)
+    await recordLoginFailure(limitKey, LOGIN_MAX_FAILURES, LOGIN_WINDOW_SEC)
     return NextResponse.json({ error: 'Usuário ou senha incorretos' }, { status: 401 })
   }
 
@@ -58,7 +72,7 @@ export async function POST(req: Request) {
     res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: isProduction(),
+      secure: useSecureCookies(),
       path: '/',
       maxAge: SESSION_TTL_SECONDS,
     })

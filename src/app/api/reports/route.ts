@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireSession } from '@/lib/auth'
 import { buildOverview } from '@/lib/live/overview'
 import { getCachedLiveOverview } from '@/lib/overview-cache'
 import { captureReportSnapshot, listReportRuns } from '@/lib/reports/store'
@@ -9,7 +10,10 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 /** Lista capturas recentes. */
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = await requireSession(req)
+  if (denied) return denied
+
   try {
     if (!isCerebroDbConfigured()) {
       return NextResponse.json({
@@ -28,6 +32,9 @@ export async function GET() {
 
 /** Captura sob demanda. Body opcional: `{ "asOf": "YYYY-MM-DD" }` (dia + MTD até a data). */
 export async function POST(req: Request) {
+  const denied = await requireSession(req)
+  if (denied) return denied
+
   try {
     if (!isCerebroDbConfigured()) {
       return NextResponse.json(
