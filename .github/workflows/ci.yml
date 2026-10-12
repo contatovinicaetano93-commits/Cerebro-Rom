@@ -56,4 +56,4 @@ jobs:
           CEREBRO_DATABASE_URL: postgres://ci:ci@localhost:5432/ci
           NEON_BRASIL_DATABASE_URL: postgres://ci:ci@ep-ci-brasil.us-east-1.aws.neon.tech/neondb
           NEON_IGUATEMI_DATABASE_URL: postgres://ci:ci@ep-ci-iguatemi.us-east-1.aws.neon.tech/neondb
-          ROM_SESSION_SECRET: ci-placeholder-nao-usar-em-producao
+          CEREBRO_ADMIN_PASSWORD: ci-placeholder-nao-usar-em-producao

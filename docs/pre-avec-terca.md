@@ -16,7 +16,7 @@ Checklist único — **sábado → segunda** deixa tudo pronto; **terça** é s�
 
 - [x] Push `cerebro-rom` (leitura P1/P2/P3 + merge #10–14)
 - [x] Push `ROM` + `ROM-IGUATEMI` (webhook + crons: fast ~20 min, full fatiado 2×/dia)
-- [ ] Confirmar deploys: cerebro-rom.vercel.app, rom-club, rom-iguatemi
+- [ ] Confirmar deploys: cerebro-waltter.vercel.app (canônico), rom-club, rom-iguatemi
 - [ ] Login Waltter no Cérebro OK
 - [ ] Smoke test: `npm run smoke` e `npm run smoke:full` no cerebro-rom
 
@@ -96,7 +96,7 @@ Variáveis já devem estar na Vercel **antes** de terça:
 | Job | Intervalo | Modo |
 |-----|-----------|------|
 | `/api/avec/sync` | ~20 min (staggered) | fast (camada A; 0051 ontem→amanhã) |
-| `/api/avec/sync/full/{ops,agenda,catalog}` | 2×/dia (10h/22h); retry on-demand (min-gap), sem cron horário | full fatiado |
+| `/api/avec/sync/full/{ops,agenda,catalog}` | 2×/dia + retry horário | full fatiado |
 | Webhook atendimento/cancel | tempo real | fast `scope=kpi` apenas (não full) |
 | `/api/estoque/sync` | separado | estoque Avec |
 
