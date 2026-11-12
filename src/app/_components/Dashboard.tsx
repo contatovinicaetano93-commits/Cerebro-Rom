@@ -1,1 +1,1 @@
-__WILL_REPLACE__
+__LOAD_FROM_FILE__:/tmp/dash-final.tsx
