@@ -1,1 +1,1 @@
-PLACEHOLDER_WILL_FAIL
+__LOAD_FROM_FILE__:/tmp/dash-final.tsx
