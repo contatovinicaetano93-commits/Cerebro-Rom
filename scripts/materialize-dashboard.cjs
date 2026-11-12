@@ -1,0 +1,10 @@
+const fs = require('fs')
+const zlib = require('zlib')
+const path = require('path')
+const dir = __dirname
+const b64 = fs.readFileSync(path.join(dir, 'dashboard.tsx.gz.b64.part0'), 'utf8').trim()
+  + fs.readFileSync(path.join(dir, 'dashboard.tsx.gz.b64.part1'), 'utf8').trim()
+const out = zlib.gunzipSync(Buffer.from(b64, 'base64'))
+const dest = path.join(dir, '../src/app/_components/Dashboard.tsx')
+fs.writeFileSync(dest, out)
+console.log('wrote', dest, out.length, 'bytes')
